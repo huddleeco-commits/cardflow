@@ -176,6 +176,58 @@
       font-weight: 500;
     }
 
+    .user-menu-container {
+      position: relative;
+    }
+
+    .user-dropdown {
+      display: none;
+      position: absolute;
+      top: 100%;
+      right: 0;
+      margin-top: 8px;
+      background: var(--glass);
+      border: 1px solid var(--glass-border);
+      border-radius: 12px;
+      padding: 8px 0;
+      min-width: 180px;
+      backdrop-filter: blur(20px);
+      z-index: 1000;
+    }
+
+    .user-dropdown.open {
+      display: block;
+    }
+
+    .user-dropdown a, .user-dropdown button {
+      display: block;
+      width: 100%;
+      padding: 10px 16px;
+      color: var(--text);
+      text-decoration: none;
+      background: none;
+      border: none;
+      text-align: left;
+      cursor: pointer;
+      font-size: 14px;
+      transition: background 0.2s;
+    }
+
+    .user-dropdown a:hover, .user-dropdown button:hover {
+      background: rgba(255,255,255,0.1);
+    }
+
+    .user-dropdown .admin-link {
+      color: var(--cyan);
+    }
+
+    .user-dropdown .logout-btn {
+      color: #ff6b6b;
+      border-top: 1px solid var(--glass-border);
+      margin-top: 4px;
+      padding-top: 12px;
+    }
+
     .connection-status {
       display: flex;
       align-items: center;
@@ -974,9 +1026,17 @@
         <div class="status-dot" id="ws-status"></div>
         <span id="ws-text">Connecting...</span>
       </div>
-      <div class="user-menu" onclick="toggleUserMenu()">
-        <div class="user-avatar" id="user-avatar">?</div>
-        <span class="user-name" id="user-name">Loading...</span>
+      <div class="user-menu-container">
+        <div class="user-menu" onclick="toggleUserMenu(event)">
+          <div class="user-avatar" id="user-avatar">?</div>
+          <span class="user-name" id="user-name">Loading...</span>
+        </div>
+        <div class="user-dropdown" id="user-dropdown">
+          <a href="#" onclick="showSettingsModal('account'); closeUserMenu();">👤 Account</a>
+          <a href="#" onclick="showSettingsModal('api'); closeUserMenu();">🔑 API Key</a>
+          <a href="/admin" class="admin-link" id="admin-link" style="display:none;">⚡ Admin Panel</a>
+          <button class="logout-btn" onclick="logout()">🚪 Logout</button>
+        </div>
       </div>
     </div>
   </header>
@@ -1153,6 +1213,11 @@
     // Update user display
     document.getElementById('user-name').textContent = user.name || user.email?.split('@')[0] || 'User';
     document.getElementById('user-avatar').textContent = (user.name || user.email || 'U')[0].toUpperCase();
+
+    // Show admin link for admin users
+    if (user.role === 'admin') {
+      document.getElementById('admin-link').style.display = 'block';
+    }
 
     // API helper
     async function api(endpoint, options = {}) {
@@ -1447,6 +1512,24 @@
       localStorage.removeItem('user');
       window.location.href = '/login';
     }
+
+    // User menu
+    function toggleUserMenu(event) {
+      event.stopPropagation();
+      const dropdown = document.getElementById('user-dropdown');
+      dropdown.classList.toggle('open');
+    }
+
+    function closeUserMenu() {
+      document.getElementById('user-dropdown').classList.remove('open');
+    }
+
+    // Close dropdown when clicking outside
+    document.addEventListener('click', (e) => {
+      if (!e.target.closest('.user-menu-container')) {
+        closeUserMenu();
+      }
+    });
 
     // Lightbox
     function openLightbox(src) {
