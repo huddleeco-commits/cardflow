@@ -1,0 +1,182 @@
+#!/usr/bin/env node
+/**
+ * CardFlow - Railway Migration Script
+ *
+ * Runs database migrations on Railway deployment.
+ * Called automatically before server starts via railway.json startCommand.
+ *
+ * Environment variables (injected by Railway):
+ * - DATABASE_URL: PostgreSQL connection string
+ * - JWT_SECRET: Should be set in Railway dashboard
+ */
+
+const { Pool } = require('pg');
+
+// Console colors
+const colors = {
+  reset: '\x1b[0m',
+  green: '\x1b[32m',
+  red: '\x1b[31m',
+  yellow: '\x1b[33m',
+  cyan: '\x1b[36m'
+};
+
+function log(msg, type = 'info') {
+  const icons = {
+    info: `${colors.cyan}[migrate]${colors.reset}`,
+    success: `${colors.green}[migrate]${colors.reset}`,
+    error: `${colors.red}[migrate]${colors.reset}`,
+    warn: `${colors.yellow}[migrate]${colors.reset}`
+  };
+  console.log(`${icons[type] || '[migrate]'} ${msg}`);
+}
+
+// Full database schema
+const SCHEMA_SQL = `
+-- Enable UUID extension
+CREATE EXTENSION IF NOT EXISTS "pgcrypto";
+
+-- Users table
+CREATE TABLE IF NOT EXISTS users (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  email VARCHAR(255) UNIQUE NOT NULL,
+  password_hash VARCHAR(255) NOT NULL,
+  name VARCHAR(255),
+  role VARCHAR(50) DEFAULT 'user',
+  api_key TEXT,
+  subscription_tier VARCHAR(50) DEFAULT 'free',
+  scans_used INTEGER DEFAULT 0,
+  monthly_limit INTEGER DEFAULT 50,
+  reset_token TEXT,
+  reset_token_expires TIMESTAMP,
+  created_at TIMESTAMP DEFAULT NOW(),
+  updated_at TIMESTAMP DEFAULT NOW(),
+  last_login_at TIMESTAMP
+);
+
+-- Cards table (stores all card data as JSONB)
+CREATE TABLE IF NOT EXISTS cards (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+  card_data JSONB NOT NULL,
+  front_image_path TEXT,
+  back_image_path TEXT,
+  status VARCHAR(50) DEFAULT 'identified',
+  session_id UUID,
+  created_at TIMESTAMP DEFAULT NOW(),
+  updated_at TIMESTAMP DEFAULT NOW()
+);
+
+-- API usage tracking
+CREATE TABLE IF NOT EXISTS api_usage (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+  operation VARCHAR(50) NOT NULL,
+  model_used VARCHAR(100),
+  tokens_input INTEGER DEFAULT 0,
+  tokens_output INTEGER DEFAULT 0,
+  cost DECIMAL(10,6) DEFAULT 0,
+  card_id UUID REFERENCES cards(id) ON DELETE SET NULL,
+  metadata JSONB,
+  timestamp TIMESTAMP DEFAULT NOW()
+);
+
+-- Processing sessions
+CREATE TABLE IF NOT EXISTS sessions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+  name VARCHAR(255),
+  card_count INTEGER DEFAULT 0,
+  total_cost DECIMAL(10,4) DEFAULT 0,
+  status VARCHAR(50) DEFAULT 'active',
+  created_at TIMESTAMP DEFAULT NOW(),
+  updated_at TIMESTAMP DEFAULT NOW()
+);
+
+-- Indexes for performance
+CREATE INDEX IF NOT EXISTS idx_cards_user_id ON cards(user_id);
+CREATE INDEX IF NOT EXISTS idx_cards_status ON cards(status);
+CREATE INDEX IF NOT EXISTS idx_cards_session_id ON cards(session_id);
+CREATE INDEX IF NOT EXISTS idx_api_usage_user_id ON api_usage(user_id);
+CREATE INDEX IF NOT EXISTS idx_api_usage_timestamp ON api_usage(timestamp);
+CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id);
+CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
+
+-- Function to update updated_at timestamp
+CREATE OR REPLACE FUNCTION update_updated_at_column()
+RETURNS TRIGGER AS $$
+BEGIN
+  NEW.updated_at = NOW();
+  RETURN NEW;
+END;
+$$ language 'plpgsql';
+
+-- Triggers for updated_at
+DROP TRIGGER IF EXISTS update_users_updated_at ON users;
+CREATE TRIGGER update_users_updated_at BEFORE UPDATE ON users
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+DROP TRIGGER IF EXISTS update_cards_updated_at ON cards;
+CREATE TRIGGER update_cards_updated_at BEFORE UPDATE ON cards
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+DROP TRIGGER IF EXISTS update_sessions_updated_at ON sessions;
+CREATE TRIGGER update_sessions_updated_at BEFORE UPDATE ON sessions
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+`;
+
+async function migrate() {
+  const DATABASE_URL = process.env.DATABASE_URL;
+
+  if (!DATABASE_URL) {
+    log('DATABASE_URL not set - skipping migration (probably local dev)', 'warn');
+    process.exit(0);
+  }
+
+  log('Starting database migration...', 'info');
+  log(`Database: ${DATABASE_URL.split('@')[1]?.split('/')[0] || 'connected'}`, 'info');
+
+  const pool = new Pool({
+    connectionString: DATABASE_URL,
+    ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
+  });
+
+  try {
+    // Test connection
+    await pool.query('SELECT NOW()');
+    log('Database connection successful', 'success');
+
+    // Run schema
+    await pool.query(SCHEMA_SQL);
+    log('Schema migration completed', 'success');
+
+    // Check for admin user
+    const adminCheck = await pool.query("SELECT COUNT(*) FROM users WHERE role = 'admin'");
+    const adminCount = parseInt(adminCheck.rows[0].count);
+
+    if (adminCount === 0) {
+      log('No admin user exists - create one via the register page', 'warn');
+      log('First registered user should be promoted to admin manually', 'info');
+    } else {
+      log(`Found ${adminCount} admin user(s)`, 'info');
+    }
+
+    // Get table stats
+    const stats = await pool.query(`
+      SELECT
+        (SELECT COUNT(*) FROM users) as users,
+        (SELECT COUNT(*) FROM cards) as cards
+    `);
+    log(`Database stats: ${stats.rows[0].users} users, ${stats.rows[0].cards} cards`, 'info');
+
+  } catch (error) {
+    log(`Migration failed: ${error.message}`, 'error');
+    process.exit(1);
+  } finally {
+    await pool.end();
+  }
+
+  log('Migration complete!', 'success');
+}
+
+migrate();

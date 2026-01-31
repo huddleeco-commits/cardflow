@@ -1,0 +1,564 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CardFlow - Create Account</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    :root {
+      --bg-deep: #0a0e1a;
+      --bg-dark: #0d1220;
+      --glass: rgba(255, 255, 255, 0.05);
+      --glass-border: rgba(255, 255, 255, 0.1);
+      --cyan: #00f6ff;
+      --cyan-glow: rgba(0, 246, 255, 0.3);
+      --purple: #7b2ff7;
+      --purple-glow: rgba(123, 47, 247, 0.3);
+      --pink: #ff2e97;
+      --text: #e6edf3;
+      --text-muted: rgba(255, 255, 255, 0.5);
+      --success: #00ff88;
+      --error: #ff4466;
+    }
+
+    body {
+      font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: var(--bg-deep);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+    }
+
+    /* Animated background */
+    .bg-animation {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 0;
+      overflow: hidden;
+    }
+
+    .bg-animation::before {
+      content: '';
+      position: absolute;
+      top: -50%;
+      left: -50%;
+      width: 200%;
+      height: 200%;
+      background:
+        radial-gradient(ellipse at 80% 80%, var(--pink) 0%, transparent 40%),
+        radial-gradient(ellipse at 20% 20%, var(--cyan-glow) 0%, transparent 50%),
+        radial-gradient(ellipse at 50% 50%, rgba(123, 47, 247, 0.15) 0%, transparent 70%);
+      animation: bgPulse 15s ease-in-out infinite;
+      opacity: 0.5;
+    }
+
+    @keyframes bgPulse {
+      0%, 100% { transform: translate(0, 0) rotate(0deg); }
+      33% { transform: translate(-2%, 2%) rotate(1deg); }
+      66% { transform: translate(2%, -2%) rotate(-1deg); }
+    }
+
+    /* Grid overlay */
+    .grid-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background-image:
+        linear-gradient(rgba(0, 246, 255, 0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0, 246, 255, 0.03) 1px, transparent 1px);
+      background-size: 50px 50px;
+      z-index: 1;
+      pointer-events: none;
+    }
+
+    /* Container */
+    .register-container {
+      position: relative;
+      z-index: 10;
+      width: 100%;
+      max-width: 460px;
+      padding: 20px;
+    }
+
+    /* Glass card */
+    .glass-card {
+      background: var(--glass);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border: 1px solid var(--glass-border);
+      border-radius: 24px;
+      padding: 40px;
+      box-shadow:
+        0 0 40px rgba(0, 246, 255, 0.1),
+        0 0 80px rgba(123, 47, 247, 0.05),
+        inset 0 0 60px rgba(255, 255, 255, 0.02);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .glass-card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 1px;
+      background: linear-gradient(90deg, transparent, var(--purple), var(--cyan), transparent);
+      opacity: 0.7;
+    }
+
+    /* Logo */
+    .logo {
+      text-align: center;
+      margin-bottom: 28px;
+    }
+
+    .logo-icon {
+      font-size: 42px;
+      display: block;
+      margin-bottom: 10px;
+      filter: drop-shadow(0 0 20px var(--cyan-glow));
+    }
+
+    .logo-text {
+      font-size: 24px;
+      font-weight: 700;
+      background: linear-gradient(135deg, var(--purple), var(--pink));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      letter-spacing: 2px;
+    }
+
+    .logo-subtitle {
+      font-size: 11px;
+      color: var(--text-muted);
+      letter-spacing: 3px;
+      text-transform: uppercase;
+      margin-top: 4px;
+    }
+
+    /* Form */
+    .form-group {
+      margin-bottom: 20px;
+    }
+
+    .form-label {
+      display: block;
+      font-size: 10px;
+      font-weight: 600;
+      color: var(--cyan);
+      text-transform: uppercase;
+      letter-spacing: 2px;
+      margin-bottom: 6px;
+    }
+
+    .form-input {
+      width: 100%;
+      padding: 14px 18px;
+      background: rgba(0, 0, 0, 0.3);
+      border: 1px solid var(--glass-border);
+      border-radius: 10px;
+      color: var(--text);
+      font-size: 15px;
+      transition: all 0.3s ease;
+      outline: none;
+    }
+
+    .form-input::placeholder {
+      color: var(--text-muted);
+    }
+
+    .form-input:focus {
+      border-color: var(--purple);
+      box-shadow: 0 0 20px var(--purple-glow), inset 0 0 20px rgba(123, 47, 247, 0.05);
+    }
+
+    /* Password strength indicator */
+    .password-strength {
+      height: 3px;
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 3px;
+      margin-top: 8px;
+      overflow: hidden;
+    }
+
+    .password-strength-bar {
+      height: 100%;
+      width: 0%;
+      border-radius: 3px;
+      transition: all 0.3s ease;
+    }
+
+    .password-strength-bar.weak { width: 33%; background: var(--error); }
+    .password-strength-bar.medium { width: 66%; background: #ffa500; }
+    .password-strength-bar.strong { width: 100%; background: var(--success); }
+
+    .password-hint {
+      font-size: 11px;
+      color: var(--text-muted);
+      margin-top: 6px;
+    }
+
+    /* Button */
+    .btn-primary {
+      width: 100%;
+      padding: 16px 32px;
+      background: linear-gradient(135deg, var(--purple), var(--pink));
+      border: none;
+      border-radius: 12px;
+      color: #fff;
+      font-size: 14px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 2px;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      position: relative;
+      overflow: hidden;
+      margin-top: 8px;
+    }
+
+    .btn-primary::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: -100%;
+      width: 100%;
+      height: 100%;
+      background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+      transition: left 0.5s ease;
+    }
+
+    .btn-primary:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 10px 40px var(--purple-glow), 0 0 60px rgba(255, 46, 151, 0.3);
+    }
+
+    .btn-primary:hover::before {
+      left: 100%;
+    }
+
+    .btn-primary:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    /* Messages */
+    .error-message, .success-message {
+      border-radius: 8px;
+      padding: 12px 16px;
+      margin-bottom: 16px;
+      font-size: 13px;
+      display: none;
+    }
+
+    .error-message {
+      background: rgba(255, 68, 102, 0.1);
+      border: 1px solid var(--error);
+      color: var(--error);
+    }
+
+    .success-message {
+      background: rgba(0, 255, 136, 0.1);
+      border: 1px solid var(--success);
+      color: var(--success);
+    }
+
+    .error-message.show, .success-message.show {
+      display: block;
+      animation: fadeIn 0.3s ease;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(-10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* Links */
+    .auth-links {
+      text-align: center;
+      margin-top: 20px;
+      padding-top: 20px;
+      border-top: 1px solid var(--glass-border);
+    }
+
+    .auth-links a {
+      color: var(--purple);
+      text-decoration: none;
+      font-size: 14px;
+      transition: all 0.3s ease;
+    }
+
+    .auth-links a:hover {
+      color: var(--cyan);
+      text-shadow: 0 0 20px var(--purple-glow);
+    }
+
+    /* Features list */
+    .features {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 10px;
+      margin-bottom: 20px;
+      padding: 16px;
+      background: rgba(0, 0, 0, 0.2);
+      border-radius: 12px;
+    }
+
+    .feature {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    .feature-icon {
+      color: var(--success);
+    }
+
+    /* Spinner */
+    .spinner {
+      display: inline-block;
+      width: 16px;
+      height: 16px;
+      border: 2px solid transparent;
+      border-top-color: currentColor;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      margin-right: 8px;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    /* Floating particles */
+    .particles {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 2;
+      pointer-events: none;
+    }
+
+    .particle {
+      position: absolute;
+      width: 4px;
+      height: 4px;
+      background: var(--purple);
+      border-radius: 50%;
+      opacity: 0.3;
+      animation: float 15s infinite linear;
+    }
+
+    @keyframes float {
+      0% { transform: translateY(100vh) rotate(0deg); opacity: 0; }
+      10% { opacity: 0.3; }
+      90% { opacity: 0.3; }
+      100% { transform: translateY(-100vh) rotate(720deg); opacity: 0; }
+    }
+  </style>
+</head>
+<body>
+  <div class="bg-animation"></div>
+  <div class="grid-overlay"></div>
+  <div class="particles" id="particles"></div>
+
+  <div class="register-container">
+    <div class="glass-card">
+      <div class="logo">
+        <span class="logo-icon">🃏</span>
+        <div class="logo-text">JOIN CARDFLOW</div>
+        <div class="logo-subtitle">Create Your Account</div>
+      </div>
+
+      <div class="features">
+        <div class="feature">
+          <span class="feature-icon">✓</span>
+          <span>AI Card Identification</span>
+        </div>
+        <div class="feature">
+          <span class="feature-icon">✓</span>
+          <span>Real-time Pricing</span>
+        </div>
+        <div class="feature">
+          <span class="feature-icon">✓</span>
+          <span>50 Free Scans/Month</span>
+        </div>
+        <div class="feature">
+          <span class="feature-icon">✓</span>
+          <span>Export to SlabTrack</span>
+        </div>
+      </div>
+
+      <div class="error-message" id="error-message"></div>
+      <div class="success-message" id="success-message"></div>
+
+      <form id="register-form">
+        <div class="form-group">
+          <label class="form-label">Full Name</label>
+          <input type="text" class="form-input" id="name" placeholder="Your name (optional)" autocomplete="name">
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Email</label>
+          <input type="email" class="form-input" id="email" placeholder="your@email.com" required autocomplete="email">
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Password</label>
+          <input type="password" class="form-input" id="password" placeholder="Create a password" required autocomplete="new-password">
+          <div class="password-strength">
+            <div class="password-strength-bar" id="password-strength-bar"></div>
+          </div>
+          <div class="password-hint" id="password-hint">Minimum 6 characters</div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Confirm Password</label>
+          <input type="password" class="form-input" id="confirm-password" placeholder="Confirm your password" required autocomplete="new-password">
+        </div>
+
+        <button type="submit" class="btn-primary" id="submit-btn">
+          <span id="btn-text">Create Account</span>
+        </button>
+      </form>
+
+      <div class="auth-links">
+        <span style="color: var(--text-muted);">Already have an account?</span>
+        <a href="/login">Sign In</a>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const API_URL = '/api';
+
+    // Create floating particles
+    function createParticles() {
+      const container = document.getElementById('particles');
+      for (let i = 0; i < 20; i++) {
+        const particle = document.createElement('div');
+        particle.className = 'particle';
+        particle.style.left = Math.random() * 100 + '%';
+        particle.style.animationDelay = Math.random() * 15 + 's';
+        particle.style.animationDuration = (15 + Math.random() * 10) + 's';
+        if (Math.random() > 0.5) {
+          particle.style.background = 'var(--cyan)';
+        }
+        container.appendChild(particle);
+      }
+    }
+    createParticles();
+
+    // Check if already logged in
+    const token = localStorage.getItem('token');
+    if (token) {
+      window.location.href = '/';
+    }
+
+    // Password strength indicator
+    document.getElementById('password').addEventListener('input', (e) => {
+      const password = e.target.value;
+      const bar = document.getElementById('password-strength-bar');
+      const hint = document.getElementById('password-hint');
+
+      bar.className = 'password-strength-bar';
+
+      if (password.length === 0) {
+        bar.style.width = '0%';
+        hint.textContent = 'Minimum 6 characters';
+      } else if (password.length < 6) {
+        bar.classList.add('weak');
+        hint.textContent = 'Too short';
+      } else if (password.length < 10 || !/[A-Z]/.test(password) || !/[0-9]/.test(password)) {
+        bar.classList.add('medium');
+        hint.textContent = 'Good - add uppercase and numbers for stronger';
+      } else {
+        bar.classList.add('strong');
+        hint.textContent = 'Strong password';
+      }
+    });
+
+    // Form submission
+    document.getElementById('register-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+
+      const name = document.getElementById('name').value;
+      const email = document.getElementById('email').value;
+      const password = document.getElementById('password').value;
+      const confirmPassword = document.getElementById('confirm-password').value;
+      const errorEl = document.getElementById('error-message');
+      const successEl = document.getElementById('success-message');
+      const submitBtn = document.getElementById('submit-btn');
+      const btnText = document.getElementById('btn-text');
+
+      errorEl.classList.remove('show');
+      successEl.classList.remove('show');
+
+      // Validation
+      if (password.length < 6) {
+        errorEl.textContent = 'Password must be at least 6 characters';
+        errorEl.classList.add('show');
+        return;
+      }
+
+      if (password !== confirmPassword) {
+        errorEl.textContent = 'Passwords do not match';
+        errorEl.classList.add('show');
+        return;
+      }
+
+      submitBtn.disabled = true;
+      btnText.innerHTML = '<span class="spinner"></span>Creating Account...';
+
+      try {
+        const response = await fetch(`${API_URL}/auth/register`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, password, name })
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error(data.error || 'Registration failed');
+        }
+
+        // Store token and user data
+        localStorage.setItem('token', data.token);
+        localStorage.setItem('user', JSON.stringify(data.user));
+
+        successEl.textContent = 'Account created! Redirecting...';
+        successEl.classList.add('show');
+
+        // Redirect to dashboard after short delay
+        setTimeout(() => {
+          window.location.href = '/';
+        }, 1500);
+
+      } catch (error) {
+        errorEl.textContent = error.message;
+        errorEl.classList.add('show');
+        submitBtn.disabled = false;
+        btnText.textContent = 'Create Account';
+      }
+    });
+  </script>
+</body>
+</html>

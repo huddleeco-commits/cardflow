@@ -1,0 +1,54 @@
+# Dependencies
+node_modules/
+
+# Test images
+*.jpg
+*.png
+*.jpeg
+*.gif
+*.webp
+
+# Processed reports
+processed/
+comparison-report.xlsx
+comparisons.json
+
+# Claude Code local settings
+.claude/
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Data files (keep structure, ignore content)
+cards.json
+cards.backup.json
+costs.json
+config.json
+
+# Upload directories
+uploads/
+1-new/
+2-identified/
+3-priced/
+4-exported/
+rejected/
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Build artifacts
+dist/
+build/

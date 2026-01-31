@@ -1,0 +1,38 @@
+{
+  "name": "cardflow",
+  "version": "2.0.0",
+  "description": "Multi-user SaaS for bulk card identification and pricing using Claude Vision API",
+  "type": "commonjs",
+  "scripts": {
+    "identify": "node scripts/identify.js",
+    "price": "node scripts/price.js",
+    "export": "node scripts/export.js",
+    "dashboard": "node web/server.js",
+    "start": "node scripts/railway-migrate.js && node web/server.js",
+    "dev": "node web/server.js",
+    "compare": "node scripts/compare.js",
+    "test-models": "node scripts/test-models.js",
+    "free": "node scripts/free-mode.js",
+    "free:watch": "node scripts/free-mode.js watch",
+    "migrate": "node scripts/railway-migrate.js",
+    "setup": "node scripts/setup-local.js",
+    "setup:db": "node scripts/setup-db.js"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.52.0",
+    "axios": "^1.13.4",
+    "bcrypt": "^5.1.1",
+    "cheerio": "^1.2.0",
+    "chokidar": "^3.5.3",
+    "cloudinary": "^1.41.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.3.1",
+    "express": "^4.18.2",
+    "jsonwebtoken": "^9.0.2",
+    "nodemailer": "^6.9.0",
+    "pg": "^8.11.3",
+    "sharp": "^0.33.0",
+    "ws": "^8.14.0",
+    "xlsx": "^0.18.5"
+  }
+}
