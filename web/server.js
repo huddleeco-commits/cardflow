@@ -1056,23 +1056,21 @@ app.get('/', (req, res) => {
 // START SERVER
 // ============================================
 
-server.listen(PORT, () => {
+const HOST = process.env.NODE_ENV === 'production' ? '0.0.0.0' : 'localhost';
+
+server.listen(PORT, HOST, () => {
   console.log(`
 ══════════════════════════════════════════════════
   CARDFLOW v2.0 - Multi-User SaaS
 ══════════════════════════════════════════════════
 
+  Server:    http://${HOST}:${PORT}
   Dashboard: http://localhost:${PORT}
   Login:     http://localhost:${PORT}/login
   Register:  http://localhost:${PORT}/register
   Admin:     http://localhost:${PORT}/admin
 
   Database:  ${dbAvailable ? 'PostgreSQL' : 'File-based (fallback)'}
-
-  Commands:
-  - npm run identify  (identify cards)
-  - npm run price     (get pricing)
-  - npm run export    (export cards)
 
 ══════════════════════════════════════════════════
   `);
