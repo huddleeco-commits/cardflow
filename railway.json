@@ -5,7 +5,7 @@
     "dockerfilePath": "Dockerfile"
   },
   "deploy": {
-    "startCommand": "node scripts/railway-migrate.js && node web/server.js",
+    "startCommand": "node scripts/start.js",
     "healthcheckPath": "/api/health",
     "healthcheckTimeout": 60,
     "startTimeout": 120,
