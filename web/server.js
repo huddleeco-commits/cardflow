@@ -34,11 +34,14 @@ const JWT_SECRET = process.env.JWT_SECRET || 'cardflow-dev-secret-change-in-prod
 const JWT_EXPIRY = '7d';
 
 // Database connection
+// Railway internal connections don't use SSL
+const dbUrl = process.env.DATABASE_URL || 'postgresql://localhost/cardflow';
+const isInternalConnection = dbUrl.includes('.railway.internal');
 const pool = new Pool({
-  connectionString: process.env.DATABASE_URL || 'postgresql://localhost/cardflow',
-  ssl: process.env.DATABASE_URL && process.env.NODE_ENV === 'production'
+  connectionString: dbUrl,
+  ssl: isInternalConnection ? false : (process.env.DATABASE_URL && process.env.NODE_ENV === 'production'
     ? { rejectUnauthorized: false }
-    : false
+    : false)
 });
 
 // Check if database is available

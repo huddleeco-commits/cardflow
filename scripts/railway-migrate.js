@@ -136,9 +136,11 @@ async function migrate() {
   log('Starting database migration...', 'info');
   log(`Database: ${DATABASE_URL.split('@')[1]?.split('/')[0] || 'connected'}`, 'info');
 
+  // Railway internal connections don't use SSL
+  const isInternalConnection = DATABASE_URL.includes('.railway.internal');
   const pool = new Pool({
     connectionString: DATABASE_URL,
-    ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
+    ssl: isInternalConnection ? false : (process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false)
   });
 
   try {
