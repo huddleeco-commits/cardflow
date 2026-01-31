@@ -410,6 +410,22 @@
       transform: translateY(-1px);
     }
 
+    .btn-accent {
+      background: linear-gradient(135deg, var(--purple), var(--cyan));
+      color: #fff;
+    }
+
+    .btn-accent:hover {
+      box-shadow: 0 0 30px var(--purple-glow);
+      transform: translateY(-1px);
+    }
+
+    .btn-accent:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+      transform: none;
+    }
+
     .btn-danger {
       background: linear-gradient(135deg, var(--error), #cc3355);
       color: #fff;
@@ -1077,6 +1093,8 @@
       </select>
     </div>
     <div class="action-buttons">
+      <button class="btn btn-accent" id="identify-btn" onclick="runIdentify()">🔍 Identify</button>
+      <button class="btn btn-accent" id="price-btn" onclick="runPrice()">💰 Price</button>
       <button class="btn btn-secondary" onclick="showSettingsModal()">⚙️ Settings</button>
       <button class="btn btn-success" onclick="approveAll()">✓ Approve All</button>
       <button class="btn btn-primary" onclick="showExportModal()">📤 Export</button>
@@ -1254,6 +1272,42 @@
 
       ws.onmessage = (event) => {
         const data = JSON.parse(event.data);
+
+        // Identify progress
+        if (data.type === 'identify_progress') {
+          document.getElementById('identify-btn').innerHTML = `🔍 ${data.current}/${data.total}`;
+        }
+        if (data.type === 'identify_complete') {
+          document.getElementById('identify-btn').disabled = false;
+          document.getElementById('identify-btn').innerHTML = '🔍 Identify';
+          showToast(`Identified ${data.processed} cards ($${data.cost?.toFixed(4) || '0'})`, 'success');
+          loadCards();
+          loadStatus();
+        }
+        if (data.type === 'identify_error') {
+          document.getElementById('identify-btn').disabled = false;
+          document.getElementById('identify-btn').innerHTML = '🔍 Identify';
+          showToast('Identify error: ' + data.error, 'error');
+        }
+
+        // Price progress
+        if (data.type === 'price_progress') {
+          document.getElementById('price-btn').innerHTML = `💰 ${data.current}/${data.total}`;
+        }
+        if (data.type === 'price_complete') {
+          document.getElementById('price-btn').disabled = false;
+          document.getElementById('price-btn').innerHTML = '💰 Price';
+          showToast(`Priced ${data.processed} cards - Total: $${data.totalValue?.toFixed(2) || '0'}`, 'success');
+          loadCards();
+          loadStatus();
+        }
+        if (data.type === 'price_error') {
+          document.getElementById('price-btn').disabled = false;
+          document.getElementById('price-btn').innerHTML = '💰 Price';
+          showToast('Price error: ' + data.error, 'error');
+        }
+
+        // Existing handlers
         if (data.type === 'card_updated' || data.type === 'cards_imported' || data.type === 'reset') {
           loadCards();
           loadStatus();
@@ -1530,6 +1584,57 @@
         closeUserMenu();
       }
     });
+
+    // Processing functions
+    async function runIdentify() {
+      const btn = document.getElementById('identify-btn');
+      const originalText = btn.innerHTML;
+      btn.disabled = true;
+      btn.innerHTML = '⏳ Identifying...';
+
+      try {
+        const response = await api('/process/identify', { method: 'POST' });
+
+        if (response.error) {
+          showToast(response.error, 'error');
+        } else {
+          showToast(`Processing ${response.count} images...`, 'success');
+        }
+      } catch (e) {
+        showToast('Failed to start identification: ' + e.message, 'error');
+      }
+
+      // Re-enable after a delay (actual completion comes via WebSocket)
+      setTimeout(() => {
+        btn.disabled = false;
+        btn.innerHTML = originalText;
+      }, 3000);
+    }
+
+    async function runPrice() {
+      const btn = document.getElementById('price-btn');
+      const originalText = btn.innerHTML;
+      btn.disabled = true;
+      btn.innerHTML = '⏳ Pricing...';
+
+      try {
+        const response = await api('/process/price', { method: 'POST' });
+
+        if (response.error) {
+          showToast(response.error, 'error');
+        } else {
+          showToast(`Pricing ${response.count} cards...`, 'success');
+        }
+      } catch (e) {
+        showToast('Failed to start pricing: ' + e.message, 'error');
+      }
+
+      // Re-enable after a delay (actual completion comes via WebSocket)
+      setTimeout(() => {
+        btn.disabled = false;
+        btn.innerHTML = originalText;
+      }, 3000);
+    }
 
     // Lightbox
     function openLightbox(src) {

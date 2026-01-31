@@ -951,6 +951,317 @@ app.post('/api/import/identify', authenticateToken, async (req, res) => {
 });
 
 // ============================================
+// PROCESSING ENDPOINTS (Identify & Price)
+// ============================================
+
+// Get user's API key
+async function getUserApiKey(userId) {
+  try {
+    const result = await pool.query('SELECT api_key FROM users WHERE id = $1', [userId]);
+    if (result.rows.length > 0 && result.rows[0].api_key) {
+      return result.rows[0].api_key;
+    }
+  } catch (e) {}
+  return process.env.ANTHROPIC_API_KEY || null;
+}
+
+// Convert image to base64
+function imageToBase64(imagePath) {
+  const buffer = fs.readFileSync(imagePath);
+  const ext = path.extname(imagePath).toLowerCase();
+  const mediaTypes = {
+    '.jpg': 'image/jpeg',
+    '.jpeg': 'image/jpeg',
+    '.png': 'image/png',
+    '.webp': 'image/webp'
+  };
+  return {
+    type: 'base64',
+    media_type: mediaTypes[ext] || 'image/jpeg',
+    data: buffer.toString('base64')
+  };
+}
+
+// Identify cards endpoint
+app.post('/api/process/identify', authenticateToken, async (req, res) => {
+  const userId = req.user.id;
+
+  try {
+    // Get API key
+    const apiKey = await getUserApiKey(userId);
+    if (!apiKey) {
+      return res.status(400).json({ error: 'No API key configured. Add your Anthropic API key in Settings.' });
+    }
+
+    // Find images in 1-new folder
+    const imageExts = ['.jpg', '.jpeg', '.png', '.webp'];
+    let images = [];
+    try {
+      images = fs.readdirSync(FOLDERS.new).filter(f =>
+        imageExts.includes(path.extname(f).toLowerCase())
+      );
+    } catch (e) {}
+
+    if (images.length === 0) {
+      return res.status(400).json({ error: 'No images found in 1-new folder' });
+    }
+
+    // Initialize Anthropic
+    const Anthropic = require('@anthropic-ai/sdk');
+    const anthropic = new Anthropic({ apiKey });
+
+    // Send initial response
+    res.json({
+      success: true,
+      message: `Processing ${images.length} images...`,
+      count: images.length
+    });
+
+    // Process each image
+    let processed = 0;
+    let totalCost = 0;
+
+    for (const filename of images) {
+      try {
+        const imagePath = path.join(FOLDERS.new, filename);
+
+        broadcast({
+          type: 'identify_progress',
+          current: processed + 1,
+          total: images.length,
+          filename,
+          userId
+        });
+
+        // Build content with image
+        const content = [
+          { type: 'image', source: imageToBase64(imagePath) },
+          { type: 'text', text: `Analyze this sports card image and identify it.
+
+Return ONLY a JSON object with these fields (no other text):
+{
+  "player": "Full player name",
+  "year": 2024,
+  "set_name": "Full set name (e.g., Topps Chrome, Panini Prizm)",
+  "card_number": "Card number",
+  "parallel": "Parallel type if any (Base, Refractor, Silver, Gold, etc.)",
+  "numbered": "Serial numbering if any (/99, /25, etc.) or null",
+  "team": "Team name",
+  "sport": "Sport (Baseball, Basketball, Football, Hockey, Soccer, Pokemon)",
+  "is_graded": true,
+  "grading_company": "PSA, BGS, SGC, CGC, or null if raw",
+  "grade": "Grade number (10, 9.5, 9, etc.) or null",
+  "cert_number": "Certification number or null",
+  "condition": "mint, near_mint, excellent, good, fair, poor",
+  "confidence": "high, medium, or low",
+  "notes": "Any special observations"
+}` }
+        ];
+
+        const response = await anthropic.messages.create({
+          model: 'claude-sonnet-4-20250514',
+          max_tokens: 1024,
+          messages: [{ role: 'user', content }]
+        });
+
+        const textContent = response.content.find(c => c.type === 'text');
+        const jsonMatch = textContent?.text?.match(/\{[\s\S]*\}/);
+
+        if (jsonMatch) {
+          const cardData = JSON.parse(jsonMatch[0]);
+
+          // Calculate cost
+          const inputTokens = response.usage?.input_tokens || 0;
+          const outputTokens = response.usage?.output_tokens || 0;
+          const cost = (inputTokens / 1000000) * 3 + (outputTokens / 1000000) * 15;
+          totalCost += cost;
+
+          // Save to database
+          await pool.query(`
+            INSERT INTO cards (user_id, card_data, front_image_path, status)
+            VALUES ($1, $2, $3, 'identified')
+          `, [userId, JSON.stringify(cardData), filename]);
+
+          // Track API usage
+          await pool.query(`
+            INSERT INTO api_usage (user_id, operation, model_used, tokens_input, tokens_output, cost)
+            VALUES ($1, 'identify', 'sonnet4', $2, $3, $4)
+          `, [userId, inputTokens, outputTokens, cost]);
+
+          // Move image to identified folder
+          const srcPath = path.join(FOLDERS.new, filename);
+          const dstPath = path.join(FOLDERS.identified, filename);
+          if (fs.existsSync(srcPath)) {
+            try { fs.renameSync(srcPath, dstPath); } catch (e) {}
+          }
+        }
+
+        processed++;
+      } catch (e) {
+        console.error(`Error identifying ${filename}:`, e.message);
+      }
+    }
+
+    broadcast({
+      type: 'identify_complete',
+      processed,
+      total: images.length,
+      cost: totalCost,
+      userId
+    });
+
+  } catch (e) {
+    console.error('Identify error:', e);
+    broadcast({ type: 'identify_error', error: e.message, userId });
+  }
+});
+
+// Price cards endpoint
+app.post('/api/process/price', authenticateToken, async (req, res) => {
+  const userId = req.user.id;
+
+  try {
+    // Get cards to price
+    const cardsResult = await pool.query(`
+      SELECT * FROM cards
+      WHERE user_id = $1 AND status IN ('identified', 'approved')
+      ORDER BY created_at
+    `, [userId]);
+
+    if (cardsResult.rows.length === 0) {
+      return res.status(400).json({ error: 'No cards ready for pricing. Identify cards first.' });
+    }
+
+    const cards = cardsResult.rows;
+
+    res.json({
+      success: true,
+      message: `Pricing ${cards.length} cards...`,
+      count: cards.length
+    });
+
+    const axios = require('axios');
+    const cheerio = require('cheerio');
+
+    const BROWSER_HEADERS = {
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+      'Accept-Language': 'en-US,en;q=0.5'
+    };
+
+    let processed = 0;
+    let totalValue = 0;
+
+    for (const row of cards) {
+      const card = row.card_data;
+
+      broadcast({
+        type: 'price_progress',
+        current: processed + 1,
+        total: cards.length,
+        player: card.player,
+        userId
+      });
+
+      try {
+        // Build search query
+        const parts = [card.year, card.set_name, card.player, card.card_number].filter(Boolean);
+        const query = parts.join(' ');
+        const ebayUrl = `https://www.ebay.com/sch/i.html?_nkw=${encodeURIComponent(query)}&LH_Complete=1&LH_Sold=1&_sop=13`;
+
+        // Scrape eBay
+        let ebayPrices = [];
+        try {
+          const response = await axios.get(ebayUrl, {
+            headers: BROWSER_HEADERS,
+            timeout: 15000
+          });
+
+          const $ = cheerio.load(response.data);
+          $('.s-item').each((idx, el) => {
+            if (idx === 0) return;
+            const priceText = $(el).find('.s-item__price').text().trim();
+            if (priceText && !priceText.includes(' to ')) {
+              const price = parseFloat(priceText.replace(/[^0-9.]/g, ''));
+              if (price > 0.5 && price < 50000) {
+                ebayPrices.push(price);
+              }
+            }
+          });
+        } catch (e) {
+          console.error('eBay scrape error:', e.message);
+        }
+
+        // Calculate price
+        let recommendedPrice = null;
+        let confidence = 'none';
+        let pricingMethod = 'manual';
+
+        if (ebayPrices.length >= 3) {
+          ebayPrices.sort((a, b) => a - b);
+          recommendedPrice = ebayPrices.reduce((a, b) => a + b, 0) / ebayPrices.length;
+          recommendedPrice = Math.round(recommendedPrice * 100) / 100;
+          confidence = 'high';
+          pricingMethod = 'scraped';
+          totalValue += recommendedPrice;
+        } else if (ebayPrices.length > 0) {
+          recommendedPrice = ebayPrices.reduce((a, b) => a + b, 0) / ebayPrices.length;
+          recommendedPrice = Math.round(recommendedPrice * 100) / 100;
+          confidence = 'medium';
+          pricingMethod = 'scraped';
+          totalValue += recommendedPrice;
+        }
+
+        // Update card in database
+        const updatedData = {
+          ...card,
+          recommended_price: recommendedPrice,
+          confidence,
+          pricing_method: pricingMethod,
+          ebay_url: ebayUrl,
+          sample_size: ebayPrices.length,
+          priced_at: new Date().toISOString()
+        };
+
+        await pool.query(`
+          UPDATE cards SET card_data = $1, status = 'priced'
+          WHERE id = $2
+        `, [JSON.stringify(updatedData), row.id]);
+
+        // Move image if exists
+        if (row.front_image_path) {
+          const srcPath = path.join(FOLDERS.identified, row.front_image_path);
+          const dstPath = path.join(FOLDERS.priced, row.front_image_path);
+          if (fs.existsSync(srcPath)) {
+            try { fs.renameSync(srcPath, dstPath); } catch (e) {}
+          }
+        }
+
+        processed++;
+
+        // Rate limiting
+        await new Promise(r => setTimeout(r, 1000));
+
+      } catch (e) {
+        console.error(`Error pricing card:`, e.message);
+      }
+    }
+
+    broadcast({
+      type: 'price_complete',
+      processed,
+      total: cards.length,
+      totalValue,
+      userId
+    });
+
+  } catch (e) {
+    console.error('Price error:', e);
+    broadcast({ type: 'price_error', error: e.message, userId });
+  }
+});
+
+// ============================================
 // WEBSOCKET
 // ============================================
 
