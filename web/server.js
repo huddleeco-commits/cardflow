@@ -3367,7 +3367,7 @@ const HOST = process.env.NODE_ENV === 'production' ? '0.0.0.0' : 'localhost';
 server.listen(PORT, HOST, () => {
   console.log(`
 ══════════════════════════════════════════════════
-  CARDFLOW v2.0 - Multi-User SaaS
+  CARDFLOW v2.0 - Multi-User SaaS (Build 0201a)
 ══════════════════════════════════════════════════
 
   Server:    http://${HOST}:${PORT}
