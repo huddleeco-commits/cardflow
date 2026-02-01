@@ -452,6 +452,12 @@
       background: var(--glass-hover);
     }
 
+    .btn-sm {
+      padding: 6px 10px;
+      font-size: 14px;
+      min-width: auto;
+    }
+
     /* Upload Zone */
     .upload-zone {
       margin: 20px 24px;
@@ -793,16 +799,26 @@
     /* Card Actions */
     .card-actions {
       display: flex;
-      gap: 8px;
-      padding: 16px 20px;
+      flex-wrap: wrap;
+      gap: 6px;
+      padding: 12px 16px;
       background: rgba(0, 0, 0, 0.2);
       border-top: 1px solid var(--glass-border);
     }
 
     .card-actions .btn {
-      flex: 1;
       justify-content: center;
-      padding: 12px;
+      padding: 8px 12px;
+    }
+
+    .card-actions .btn-sm {
+      flex: 0 0 auto;
+      padding: 6px 8px;
+    }
+
+    .card-actions .btn:not(.btn-sm) {
+      flex: 1;
+      min-width: 60px;
     }
 
     /* Empty State */
@@ -1219,6 +1235,164 @@
       padding: 8px;
     }
 
+    /* Price Search Panel */
+    .price-search-panel {
+      margin: 0 24px 20px;
+      background: linear-gradient(135deg, rgba(0, 246, 255, 0.05), rgba(123, 47, 247, 0.05));
+      border: 1px solid var(--glass-border);
+      border-radius: 16px;
+      overflow: hidden;
+    }
+
+    .price-search-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 16px 20px;
+      background: var(--glass);
+      cursor: pointer;
+    }
+
+    .price-search-header:hover {
+      background: var(--glass-hover);
+    }
+
+    .price-search-icon {
+      font-size: 24px;
+    }
+
+    .price-search-title {
+      flex: 1;
+      font-size: 16px;
+      font-weight: 600;
+      background: linear-gradient(135deg, var(--cyan), var(--purple));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .price-search-toggle {
+      background: none;
+      border: none;
+      color: var(--text-muted);
+      font-size: 14px;
+      cursor: pointer;
+      transition: transform 0.3s;
+    }
+
+    .price-search-panel.collapsed .price-search-toggle {
+      transform: rotate(-90deg);
+    }
+
+    .price-search-panel.collapsed .price-search-body {
+      display: none;
+    }
+
+    .price-search-body {
+      padding: 20px;
+    }
+
+    .price-search-input-row {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+
+    .price-search-input-row input {
+      flex: 1;
+      padding: 14px 18px;
+      background: var(--bg-deep);
+      border: 1px solid var(--glass-border);
+      border-radius: 10px;
+      color: var(--text);
+      font-size: 15px;
+      transition: all 0.2s;
+    }
+
+    .price-search-input-row input:focus {
+      outline: none;
+      border-color: var(--cyan);
+      box-shadow: 0 0 20px var(--cyan-glow);
+    }
+
+    .price-search-input-row input::placeholder {
+      color: var(--text-muted);
+    }
+
+    .price-source-buttons {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
+    .source-btn {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 12px 18px;
+      background: var(--glass);
+      border: 1px solid var(--glass-border);
+      border-radius: 10px;
+      color: var(--text);
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .source-btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+    }
+
+    .source-btn.ebay:hover {
+      border-color: #e53238;
+      background: rgba(229, 50, 56, 0.1);
+    }
+
+    .source-btn.comc:hover {
+      border-color: #ff6b00;
+      background: rgba(255, 107, 0, 0.1);
+    }
+
+    .source-btn.scp:hover {
+      border-color: #4CAF50;
+      background: rgba(76, 175, 80, 0.1);
+    }
+
+    .source-btn.pokemon:hover {
+      border-color: #ffcb05;
+      background: rgba(255, 203, 5, 0.1);
+    }
+
+    .source-btn.google:hover {
+      border-color: #4285f4;
+      background: rgba(66, 133, 244, 0.1);
+    }
+
+    .source-icon {
+      font-size: 18px;
+    }
+
+    .price-search-tip {
+      margin-top: 16px;
+      padding: 12px 16px;
+      background: rgba(255, 170, 0, 0.1);
+      border: 1px solid rgba(255, 170, 0, 0.2);
+      border-radius: 8px;
+      font-size: 12px;
+      color: var(--warning);
+    }
+
+    /* Price Check Button on Cards */
+    .btn-price-check {
+      background: linear-gradient(135deg, #e53238, #ff6b00) !important;
+      color: #fff !important;
+    }
+
+    .btn-price-check:hover {
+      box-shadow: 0 0 20px rgba(229, 50, 56, 0.3);
+    }
+
     /* Responsive */
     @media (max-width: 768px) {
       .cards-grid {
@@ -1337,6 +1511,50 @@
       <div class="upload-progress" id="upload-progress" style="display:none;">
         <div class="progress-bar"><div class="progress-fill" id="upload-fill"></div></div>
         <span id="upload-status">Uploading...</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- Price Search Panel -->
+  <section class="price-search-panel" id="price-search-panel">
+    <div class="price-search-header">
+      <span class="price-search-icon">🔍</span>
+      <span class="price-search-title">Quick Price Search</span>
+      <button class="price-search-toggle" onclick="togglePricePanel()">▼</button>
+    </div>
+    <div class="price-search-body" id="price-search-body">
+      <div class="price-search-input-row">
+        <input type="text" id="price-search-input" placeholder="2023 Topps Chrome Shohei Ohtani PSA 10" onkeypress="if(event.key==='Enter')searchPriceSource('ebay-sold')">
+        <button class="btn btn-primary" onclick="searchAllSources()">Search All</button>
+      </div>
+      <div class="price-source-buttons">
+        <button class="source-btn ebay" onclick="searchPriceSource('ebay-sold')">
+          <span class="source-icon">🏷️</span>
+          <span>eBay Sold</span>
+        </button>
+        <button class="source-btn ebay" onclick="searchPriceSource('ebay-bin')">
+          <span class="source-icon">💰</span>
+          <span>eBay BIN</span>
+        </button>
+        <button class="source-btn comc" onclick="searchPriceSource('comc')">
+          <span class="source-icon">📦</span>
+          <span>COMC</span>
+        </button>
+        <button class="source-btn scp" onclick="searchPriceSource('scp')">
+          <span class="source-icon">📊</span>
+          <span>SportsCardsPro</span>
+        </button>
+        <button class="source-btn pokemon" onclick="searchPriceSource('pricecharting')">
+          <span class="source-icon">🎮</span>
+          <span>PriceCharting</span>
+        </button>
+        <button class="source-btn google" onclick="searchPriceSource('google')">
+          <span class="source-icon">🔎</span>
+          <span>Google</span>
+        </button>
+      </div>
+      <div class="price-search-tip">
+        Tip: Click "Price Check" on any card below to auto-fill the search
       </div>
     </div>
   </section>
@@ -1939,16 +2157,18 @@
               ${pricingHtml}
             </div>
             <div class="card-actions">
+              <button class="btn btn-secondary btn-sm" onclick="priceCheckCard('${card.id}')" title="Quick Price Check">🔍</button>
+              <button class="btn btn-secondary btn-sm" onclick="setCardPrice('${card.id}')" title="Set Price">💲</button>
               <button class="btn btn-secondary" onclick="editCard('${card.id}')">Edit</button>
               ${card.status === 'listed' ? `
                 <button class="btn btn-accent" onclick="window.open(cards.find(c=>c.id==='${card.id}')?.ebay_listing_url || 'https://ebay.com', '_blank')">View on eBay</button>
               ` : card.status === 'identified' || card.status === 'priced' || card.status === 'approved' ? `
                 <button class="btn btn-accent" onclick="listOnEbay('${card.id}')">List</button>
-                <button class="btn btn-success" onclick="showAuctionModal('${card.id}')" title="Auction">Auction</button>
+                <button class="btn btn-success" onclick="showAuctionModal('${card.id}')" title="Auction">🔨</button>
               ` : `
                 <button class="btn btn-success" onclick="approveCard('${card.id}')">Ready</button>
               `}
-              <button class="btn btn-secondary" onclick="deleteCard('${card.id}')">Delete</button>
+              <button class="btn btn-secondary btn-sm" onclick="deleteCard('${card.id}')" title="Delete">🗑️</button>
             </div>
           </div>
         `;
@@ -2875,6 +3095,123 @@
         closeLightbox();
       }
     });
+
+    // ==========================================
+    // PRICE SEARCH FUNCTIONS
+    // ==========================================
+
+    function togglePricePanel() {
+      document.getElementById('price-search-panel').classList.toggle('collapsed');
+    }
+
+    function getPriceSearchQuery() {
+      return document.getElementById('price-search-input').value.trim();
+    }
+
+    function searchPriceSource(source) {
+      const query = getPriceSearchQuery();
+      if (!query) {
+        document.getElementById('price-search-input').focus();
+        showToast('Enter a card to search', 'error');
+        return;
+      }
+
+      const q = encodeURIComponent(query);
+      const qPlus = query.replace(/\s+/g, '+');
+
+      const urls = {
+        'ebay-sold': `https://www.ebay.com/sch/i.html?_nkw=${q}&LH_Complete=1&LH_Sold=1&_sop=13`,
+        'ebay-bin': `https://www.ebay.com/sch/i.html?_nkw=${q}&LH_BIN=1&_sop=15`,
+        'comc': `https://www.comc.com/Cards,sr,=${qPlus},fb,i100`,
+        'scp': `https://www.sportscardspro.com/search?q=${q}`,
+        'pricecharting': `https://www.pricecharting.com/search-products?q=${q}&type=prices`,
+        'google': `https://www.google.com/search?q=${q}+card+price`
+      };
+
+      if (urls[source]) {
+        window.open(urls[source], '_blank');
+      }
+    }
+
+    function searchAllSources() {
+      const query = getPriceSearchQuery();
+      if (!query) {
+        document.getElementById('price-search-input').focus();
+        showToast('Enter a card to search', 'error');
+        return;
+      }
+
+      const q = encodeURIComponent(query);
+      const qPlus = query.replace(/\s+/g, '+');
+
+      const urls = [
+        `https://www.ebay.com/sch/i.html?_nkw=${q}&LH_Complete=1&LH_Sold=1&_sop=13`,
+        `https://www.ebay.com/sch/i.html?_nkw=${q}&LH_BIN=1&_sop=15`,
+        `https://www.comc.com/Cards,sr,=${qPlus},fb,i100`,
+        `https://www.sportscardspro.com/search?q=${q}`
+      ];
+
+      urls.forEach((url, i) => {
+        setTimeout(() => window.open(url, '_blank'), i * 200);
+      });
+
+      showToast('Opened 4 pricing sources', 'success');
+    }
+
+    function priceCheckCard(cardId) {
+      const card = cards.find(c => c.id === cardId);
+      if (!card) return;
+
+      // Build search query from card data
+      const parts = [];
+      if (card.year) parts.push(card.year);
+      if (card.set_name) parts.push(card.set_name);
+      if (card.player) parts.push(card.player);
+      if (card.card_number) parts.push('#' + card.card_number);
+      if (card.is_graded && card.grading_company && card.grade) {
+        parts.push(card.grading_company + ' ' + card.grade);
+      }
+
+      const query = parts.join(' ');
+      document.getElementById('price-search-input').value = query;
+
+      // Scroll to price panel and focus
+      document.getElementById('price-search-panel').scrollIntoView({ behavior: 'smooth' });
+      document.getElementById('price-search-panel').classList.remove('collapsed');
+
+      // Auto-search eBay sold
+      setTimeout(() => {
+        const q = encodeURIComponent(query);
+        window.open(`https://www.ebay.com/sch/i.html?_nkw=${q}&LH_Complete=1&LH_Sold=1&_sop=13`, '_blank');
+      }, 300);
+    }
+
+    function setCardPrice(cardId) {
+      const card = cards.find(c => c.id === cardId);
+      if (!card) return;
+
+      const currentPrice = card.recommended_price || '';
+      const newPrice = prompt('Enter price for this card ($):', currentPrice ? currentPrice.toFixed(2) : '');
+
+      if (newPrice === null) return;
+
+      const price = parseFloat(newPrice);
+      if (isNaN(price) || price < 0) {
+        showToast('Invalid price', 'error');
+        return;
+      }
+
+      // Update card price
+      api(`/cards/${cardId}`, {
+        method: 'PUT',
+        body: JSON.stringify({ recommended_price: price })
+      }).then(result => {
+        if (result) {
+          showToast(`Price set to $${price.toFixed(2)}`, 'success');
+          loadCards();
+        }
+      });
+    }
 
     // Initialize
     loadStatus();
