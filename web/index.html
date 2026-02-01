@@ -2196,8 +2196,7 @@
       }
 
       grid.innerHTML = cards.map(card => {
-        const folder = getCardFolder(card);
-        const frontSrc = card.front ? `/images/${folder}/${card.front}` : '';
+        const frontSrc = getImageUrl(card.front, card);
         const gradeInfo = card.is_graded ? `${card.grading_company} ${card.grade}` : '';
         const parallelInfo = card.parallel && card.parallel !== 'Base' ? card.parallel : '';
 
@@ -2265,6 +2264,18 @@
         case 'exported': return '4-exported';
         default: return '2-identified';
       }
+    }
+
+    // Get image URL - handles both Cloudinary URLs and local filenames
+    function getImageUrl(imagePath, card) {
+      if (!imagePath) return '';
+      // If it's already a full URL (Cloudinary), use it directly
+      if (imagePath.startsWith('http://') || imagePath.startsWith('https://')) {
+        return imagePath;
+      }
+      // Otherwise, construct local path
+      const folder = getCardFolder(card);
+      return `/images/${folder}/${imagePath}`;
     }
 
     function setFilter(status) {
@@ -2532,7 +2543,7 @@
 
       // Populate card preview
       const folder = getCardFolder(card);
-      document.getElementById('single-card-image').src = card.front ? `/images/${folder}/${card.front}` : '';
+      document.getElementById('single-card-image').src = getImageUrl(card.front, card);
       document.getElementById('single-card-player').textContent = card.player || 'Unknown';
       document.getElementById('single-card-set').textContent = `${card.year || ''} ${card.set_name || ''}`;
       document.getElementById('single-card-grade').textContent = card.is_graded ? `${card.grading_company} ${card.grade}` : '';
@@ -2641,6 +2652,7 @@
         price: c.recommended_price,
         customPrice: c.recommended_price,
         front: c.front,
+        frontUrl: getImageUrl(c.front, c),
         selected: true,
         shippingMethod: 'calculated'
       }));
@@ -2663,7 +2675,7 @@
         <div class="bulk-card-row" style="display: flex; align-items: center; gap: 12px; padding: 12px; background: var(--glass); border-radius: 8px; margin-bottom: 8px;">
           <input type="checkbox" ${card.selected ? 'checked' : ''} onchange="toggleBulkCard(${idx})" style="width: 18px; height: 18px;">
           <div style="width: 50px; height: 70px; background: var(--bg-deep); border-radius: 4px; overflow: hidden;">
-            <img src="/images/3-priced/${card.front}" style="width: 100%; height: 100%; object-fit: cover;" onerror="this.style.display='none'">
+            <img src="${card.frontUrl || ''}" style="width: 100%; height: 100%; object-fit: cover;" onerror="this.style.display='none'">
           </div>
           <div style="flex: 1;">
             <div style="font-weight: 600;">${card.player}</div>
@@ -2794,6 +2806,7 @@
         sport: c.sport,
         price: c.recommended_price,
         front: c.front,
+        frontUrl: getImageUrl(c.front, c),
         selected: true
       }));
 
@@ -2813,7 +2826,7 @@
         <div style="display: flex; align-items: center; gap: 12px; padding: 10px; background: var(--glass); border-radius: 8px; margin-bottom: 6px;">
           <input type="checkbox" ${card.selected ? 'checked' : ''} onchange="toggleLotCard(${idx})" style="width: 16px; height: 16px;">
           <div style="width: 40px; height: 56px; background: var(--bg-deep); border-radius: 4px; overflow: hidden;">
-            <img src="/images/3-priced/${card.front}" style="width: 100%; height: 100%; object-fit: cover;" onerror="this.style.display='none'">
+            <img src="${card.frontUrl || ''}" style="width: 100%; height: 100%; object-fit: cover;" onerror="this.style.display='none'">
           </div>
           <div style="flex: 1; font-size: 13px;">
             <div style="font-weight: 500;">${card.player}</div>
@@ -2922,7 +2935,7 @@
       auctionCardId = cardId;
       const folder = getCardFolder(card);
 
-      document.getElementById('auction-card-img').src = card.front ? `/images/${folder}/${card.front}` : '';
+      document.getElementById('auction-card-img').src = getImageUrl(card.front, card);
       document.getElementById('auction-card-player').textContent = card.player || 'Unknown';
       document.getElementById('auction-card-set').textContent = `${card.year || ''} ${card.set_name || ''}`;
       document.getElementById('auction-card-price').textContent = card.recommended_price ? `Market: $${card.recommended_price.toFixed(2)}` : '';

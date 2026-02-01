@@ -92,20 +92,38 @@ Object.values(FOLDERS).forEach(folder => {
   }
 });
 
-// Configure multer for file uploads
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, FOLDERS.new);
-  },
-  filename: (req, file, cb) => {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    const ext = path.extname(file.originalname);
-    cb(null, file.fieldname + '-' + uniqueSuffix + ext);
-  }
+// Configure Cloudinary for persistent image storage
+const cloudinary = require('cloudinary').v2;
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET
 });
 
+// Helper: Upload buffer to Cloudinary
+async function uploadToCloudinary(buffer, folder = 'cards') {
+  return new Promise((resolve, reject) => {
+    const uploadStream = cloudinary.uploader.upload_stream(
+      {
+        folder: `cardflow/${folder}`,
+        resource_type: 'image',
+        format: 'jpg',
+        quality: 'auto:good'
+      },
+      (error, result) => {
+        if (error) reject(error);
+        else resolve(result);
+      }
+    );
+    uploadStream.end(buffer);
+  });
+}
+
+// Configure multer for memory storage (upload to Cloudinary)
+const memoryStorage = multer.memoryStorage();
+
 const upload = multer({
-  storage: storage,
+  storage: memoryStorage,
   limits: { fileSize: 20 * 1024 * 1024 }, // 20MB limit
   fileFilter: (req, file, cb) => {
     const allowed = ['.jpg', '.jpeg', '.png', '.webp'];
@@ -965,9 +983,9 @@ app.post('/api/upload', authenticateToken, upload.single('image'), async (req, r
   }
 });
 
-// Upload front/back pair
+// Upload front/back pair with Cloudinary storage
 const pairUpload = multer({
-  storage: storage,
+  storage: memoryStorage,
   limits: { fileSize: 20 * 1024 * 1024 },
   fileFilter: (req, file, cb) => {
     const allowed = ['.jpg', '.jpeg', '.png', '.webp'];
@@ -997,35 +1015,74 @@ app.post('/api/upload-pair', authenticateToken, (req, res) => {
         return res.status(400).json({ error: 'Front image required' });
       }
 
-      // Store pending pair in database (status: pending)
+      // Check if Cloudinary is configured
+      const useCloudinary = process.env.CLOUDINARY_CLOUD_NAME &&
+                            process.env.CLOUDINARY_API_KEY &&
+                            process.env.CLOUDINARY_API_SECRET;
+
+      let frontUrl, backUrl;
+
+      if (useCloudinary) {
+        // Upload to Cloudinary for persistent storage
+        console.log('[Upload] Uploading to Cloudinary...');
+
+        const frontResult = await uploadToCloudinary(frontFile.buffer, `user-${req.user.id}`);
+        frontUrl = frontResult.secure_url;
+        console.log('[Upload] Front uploaded:', frontUrl);
+
+        if (backFile) {
+          const backResult = await uploadToCloudinary(backFile.buffer, `user-${req.user.id}`);
+          backUrl = backResult.secure_url;
+          console.log('[Upload] Back uploaded:', backUrl);
+        }
+      } else {
+        // Fallback to local storage (won't persist on Railway restart)
+        console.log('[Upload] WARNING: Cloudinary not configured, using local storage');
+        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+
+        const frontFilename = `front-${uniqueSuffix}.jpg`;
+        const frontPath = path.join(FOLDERS.new, frontFilename);
+        await fs.writeFile(frontPath, frontFile.buffer);
+        frontUrl = frontFilename;
+
+        if (backFile) {
+          const backFilename = `back-${uniqueSuffix}.jpg`;
+          const backPath = path.join(FOLDERS.new, backFilename);
+          await fs.writeFile(backPath, backFile.buffer);
+          backUrl = backFilename;
+        }
+      }
+
+      // Store in database
       await pool.query(`
         INSERT INTO cards (user_id, card_data, front_image_path, back_image_path, status)
         VALUES ($1, $2, $3, $4, 'pending')
       `, [
         req.user.id,
-        JSON.stringify({ uploaded_at: new Date().toISOString() }),
-        frontFile.filename,
-        backFile ? backFile.filename : null
+        JSON.stringify({ uploaded_at: new Date().toISOString(), cloudinary: useCloudinary }),
+        frontUrl,
+        backUrl || null
       ]);
 
-      console.log(`[Upload] Pair: ${frontFile.filename}${backFile ? ' + ' + backFile.filename : ' (single)'}`);
+      console.log(`[Upload] Pair saved: ${frontUrl}${backUrl ? ' + ' + backUrl : ' (single)'}`);
 
       broadcast({
         type: 'pair_uploaded',
-        front: frontFile.filename,
-        back: backFile ? backFile.filename : null,
+        front: frontUrl,
+        back: backUrl || null,
         userId: req.user.id
       });
 
       res.json({
         success: true,
-        front: frontFile.filename,
-        back: backFile ? backFile.filename : null
+        front: frontUrl,
+        back: backUrl || null,
+        cloudinary: useCloudinary
       });
 
     } catch (e) {
       console.error('Pair upload error:', e);
-      res.status(500).json({ error: 'Upload failed' });
+      res.status(500).json({ error: 'Upload failed: ' + e.message });
     }
   });
 });
@@ -2499,14 +2556,7 @@ app.post('/api/ebay/bulk-create', authenticateToken, async (req, res) => {
 // ============================================
 
 const sharp = require('sharp');
-const cloudinary = require('cloudinary').v2;
-
-// Configure Cloudinary
-cloudinary.config({
-  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-  api_key: process.env.CLOUDINARY_API_KEY,
-  api_secret: process.env.CLOUDINARY_API_SECRET
-});
+// Note: cloudinary already configured at top of file
 
 // Grid presets (matching SlabTrack)
 const GRID_PRESETS = {
