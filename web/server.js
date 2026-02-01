@@ -1261,6 +1261,7 @@ Return ONLY a JSON object with these fields (no other text):
 // Price cards endpoint
 app.post('/api/process/price', authenticateToken, async (req, res) => {
   const userId = req.user.id;
+  console.log(`[Price] Starting pricing for user ${userId}`);
 
   try {
     // Get cards to price
@@ -1269,6 +1270,8 @@ app.post('/api/process/price', authenticateToken, async (req, res) => {
       WHERE user_id = $1 AND status IN ('identified', 'approved')
       ORDER BY created_at
     `, [userId]);
+
+    console.log(`[Price] Found ${cardsResult.rows.length} cards to price`);
 
     if (cardsResult.rows.length === 0) {
       return res.status(400).json({ error: 'No cards ready for pricing. Identify cards first.' });
@@ -1311,6 +1314,8 @@ app.post('/api/process/price', authenticateToken, async (req, res) => {
         const query = parts.join(' ');
         const ebayUrl = `https://www.ebay.com/sch/i.html?_nkw=${encodeURIComponent(query)}&LH_Complete=1&LH_Sold=1&_sop=13`;
 
+        console.log(`[Price] Searching: "${query}"`);
+
         // Scrape eBay
         let ebayPrices = [];
         try {
@@ -1318,6 +1323,8 @@ app.post('/api/process/price', authenticateToken, async (req, res) => {
             headers: BROWSER_HEADERS,
             timeout: 15000
           });
+
+          console.log(`[Price] eBay response: ${response.status}, ${response.data.length} bytes`);
 
           const $ = cheerio.load(response.data);
           $('.s-item').each((idx, el) => {
@@ -1330,8 +1337,10 @@ app.post('/api/process/price', authenticateToken, async (req, res) => {
               }
             }
           });
+
+          console.log(`[Price] Found ${ebayPrices.length} prices for "${card.player}"`);
         } catch (e) {
-          console.error('eBay scrape error:', e.message);
+          console.error(`[Price] eBay scrape error for "${query}":`, e.message);
         }
 
         // Calculate price
