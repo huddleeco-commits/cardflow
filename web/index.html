@@ -2189,6 +2189,447 @@
     <img id="lightbox-img" src="" alt="Full size">
   </div>
 
+  <!-- Card Edit Panel (Slide-out) -->
+  <div id="edit-panel-overlay" class="edit-panel-overlay" onclick="closeEditPanel()"></div>
+  <div id="edit-panel" class="edit-panel">
+    <div class="edit-panel-header">
+      <h2>Edit Card</h2>
+      <button class="edit-panel-close" onclick="closeEditPanel()">&times;</button>
+    </div>
+    <div class="edit-panel-body">
+      <!-- Card Preview -->
+      <div class="edit-preview">
+        <div class="edit-img-container" onclick="openLightbox(document.getElementById('edit-front-img').src)">
+          <img id="edit-front-img" src="" alt="Front">
+          <span>Front</span>
+        </div>
+        <div class="edit-img-container" onclick="openLightbox(document.getElementById('edit-back-img').src)">
+          <img id="edit-back-img" src="" alt="Back">
+          <span>Back</span>
+        </div>
+      </div>
+
+      <!-- Edit Form -->
+      <form id="edit-form" class="edit-form" onsubmit="event.preventDefault(); saveCardEdit();">
+        <input type="hidden" id="edit-card-id">
+
+        <div class="edit-section">
+          <h3>Card Details</h3>
+          <div class="edit-grid">
+            <div class="edit-field full">
+              <label>Player / Subject</label>
+              <input type="text" id="edit-player" placeholder="Shohei Ohtani">
+            </div>
+            <div class="edit-field">
+              <label>Year</label>
+              <input type="text" id="edit-year" placeholder="2023">
+            </div>
+            <div class="edit-field">
+              <label>Sport</label>
+              <select id="edit-sport">
+                <option value="baseball">Baseball</option>
+                <option value="basketball">Basketball</option>
+                <option value="football">Football</option>
+                <option value="hockey">Hockey</option>
+                <option value="soccer">Soccer</option>
+                <option value="other">Other</option>
+              </select>
+            </div>
+            <div class="edit-field full">
+              <label>Set Name</label>
+              <input type="text" id="edit-set" placeholder="Topps Chrome">
+            </div>
+            <div class="edit-field">
+              <label>Card Number</label>
+              <input type="text" id="edit-number" placeholder="1">
+            </div>
+            <div class="edit-field">
+              <label>Parallel / Variant</label>
+              <input type="text" id="edit-parallel" placeholder="Refractor">
+            </div>
+            <div class="edit-field">
+              <label>Numbered (/xxx)</label>
+              <input type="text" id="edit-numbered" placeholder="/99">
+            </div>
+            <div class="edit-field">
+              <label>Team</label>
+              <input type="text" id="edit-team" placeholder="Los Angeles Angels">
+            </div>
+          </div>
+        </div>
+
+        <div class="edit-section">
+          <h3>Grading</h3>
+          <div class="edit-grid">
+            <div class="edit-field full">
+              <label>Graded?</label>
+              <div class="toggle-buttons">
+                <button type="button" class="toggle-btn" id="graded-no" onclick="setGraded(false)">Raw Card</button>
+                <button type="button" class="toggle-btn" id="graded-yes" onclick="setGraded(true)">Graded</button>
+              </div>
+            </div>
+            <div class="edit-field grade-field">
+              <label>Grading Company</label>
+              <select id="edit-grading-company">
+                <option value="">Select...</option>
+                <option value="PSA">PSA</option>
+                <option value="BGS">BGS</option>
+                <option value="SGC">SGC</option>
+                <option value="CGC">CGC</option>
+                <option value="CSG">CSG</option>
+                <option value="HGA">HGA</option>
+                <option value="GMA">GMA</option>
+                <option value="Other">Other</option>
+              </select>
+            </div>
+            <div class="edit-field grade-field">
+              <label>Grade</label>
+              <select id="edit-grade">
+                <option value="">Select...</option>
+                <option value="10">10 (Gem Mint)</option>
+                <option value="9.5">9.5</option>
+                <option value="9">9 (Mint)</option>
+                <option value="8.5">8.5</option>
+                <option value="8">8 (NM-MT)</option>
+                <option value="7.5">7.5</option>
+                <option value="7">7 (NM)</option>
+                <option value="6">6 (EX-MT)</option>
+                <option value="5">5 (EX)</option>
+                <option value="4">4 (VG-EX)</option>
+                <option value="3">3 (VG)</option>
+                <option value="2">2 (Good)</option>
+                <option value="1">1 (Poor)</option>
+                <option value="A">Authentic</option>
+              </select>
+            </div>
+            <div class="edit-field grade-field">
+              <label>Cert Number</label>
+              <input type="text" id="edit-cert" placeholder="12345678">
+            </div>
+            <div class="edit-field raw-field">
+              <label>Condition (Raw)</label>
+              <select id="edit-condition">
+                <option value="Near Mint">Near Mint</option>
+                <option value="Excellent">Excellent</option>
+                <option value="Very Good">Very Good</option>
+                <option value="Good">Good</option>
+                <option value="Fair">Fair</option>
+                <option value="Poor">Poor</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <div class="edit-section">
+          <h3>Pricing</h3>
+          <div class="edit-grid">
+            <div class="edit-field">
+              <label>Your Price ($)</label>
+              <input type="number" id="edit-price" step="0.01" min="0" placeholder="0.00">
+            </div>
+            <div class="edit-field">
+              <label>Status</label>
+              <select id="edit-status">
+                <option value="pending">Pending</option>
+                <option value="identified">Identified</option>
+                <option value="priced">Priced</option>
+                <option value="approved">Approved</option>
+                <option value="listed">Listed</option>
+                <option value="sold">Sold</option>
+              </select>
+            </div>
+            <div class="edit-field">
+              <label>eBay Low</label>
+              <input type="text" id="edit-ebay-low" readonly class="readonly-field">
+            </div>
+            <div class="edit-field">
+              <label>eBay Avg</label>
+              <input type="text" id="edit-ebay-avg" readonly class="readonly-field">
+            </div>
+            <div class="edit-field">
+              <label>eBay High</label>
+              <input type="text" id="edit-ebay-high" readonly class="readonly-field">
+            </div>
+            <div class="edit-field">
+              <label>Sample Size</label>
+              <input type="text" id="edit-sample-size" readonly class="readonly-field">
+            </div>
+          </div>
+        </div>
+
+        <div class="edit-section">
+          <h3>Notes</h3>
+          <div class="edit-field full">
+            <textarea id="edit-notes" rows="3" placeholder="Any additional notes about this card..."></textarea>
+          </div>
+        </div>
+      </form>
+    </div>
+    <div class="edit-panel-footer">
+      <button class="btn btn-danger" onclick="deleteFromEditPanel()">Delete</button>
+      <div style="display: flex; gap: 8px;">
+        <button class="btn btn-secondary" onclick="closeEditPanel()">Cancel</button>
+        <button class="btn btn-primary" onclick="saveCardEdit()">Save Changes</button>
+      </div>
+    </div>
+  </div>
+
+  <style>
+    /* Edit Panel Styles */
+    .edit-panel-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.7);
+      backdrop-filter: blur(4px);
+      z-index: 1500;
+      opacity: 0;
+      visibility: hidden;
+      transition: all 0.3s ease;
+    }
+
+    .edit-panel-overlay.open {
+      opacity: 1;
+      visibility: visible;
+    }
+
+    .edit-panel {
+      position: fixed;
+      top: 0;
+      right: -550px;
+      width: 520px;
+      height: 100vh;
+      background: var(--bg-dark);
+      border-left: 1px solid var(--glass-border);
+      z-index: 1600;
+      display: flex;
+      flex-direction: column;
+      transition: right 0.3s ease;
+      box-shadow: -10px 0 50px rgba(0, 0, 0, 0.5);
+    }
+
+    .edit-panel.open {
+      right: 0;
+    }
+
+    .edit-panel-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 20px 24px;
+      background: linear-gradient(135deg, rgba(0, 246, 255, 0.1), rgba(123, 47, 247, 0.1));
+      border-bottom: 1px solid var(--glass-border);
+    }
+
+    .edit-panel-header h2 {
+      font-size: 20px;
+      background: linear-gradient(135deg, var(--cyan), var(--purple));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .edit-panel-close {
+      background: none;
+      border: none;
+      color: var(--text-muted);
+      font-size: 32px;
+      cursor: pointer;
+      width: 44px;
+      height: 44px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 8px;
+      transition: all 0.2s;
+    }
+
+    .edit-panel-close:hover {
+      background: rgba(255, 68, 102, 0.1);
+      color: var(--error);
+    }
+
+    .edit-panel-body {
+      flex: 1;
+      overflow-y: auto;
+      padding: 24px;
+    }
+
+    .edit-preview {
+      display: flex;
+      gap: 16px;
+      margin-bottom: 24px;
+      justify-content: center;
+    }
+
+    .edit-img-container {
+      width: 140px;
+      height: 196px;
+      background: var(--glass);
+      border: 1px solid var(--glass-border);
+      border-radius: 12px;
+      overflow: hidden;
+      position: relative;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .edit-img-container:hover {
+      border-color: var(--cyan);
+      box-shadow: 0 0 20px var(--cyan-glow);
+    }
+
+    .edit-img-container img {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+    }
+
+    .edit-img-container span {
+      position: absolute;
+      bottom: 8px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(0, 0, 0, 0.8);
+      padding: 4px 12px;
+      border-radius: 12px;
+      font-size: 10px;
+      color: var(--cyan);
+      text-transform: uppercase;
+    }
+
+    .edit-form {
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+    }
+
+    .edit-section {
+      background: var(--glass);
+      border: 1px solid var(--glass-border);
+      border-radius: 12px;
+      padding: 20px;
+    }
+
+    .edit-section h3 {
+      font-size: 12px;
+      color: var(--cyan);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      margin-bottom: 16px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid var(--glass-border);
+    }
+
+    .edit-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+
+    .edit-field {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .edit-field.full {
+      grid-column: span 2;
+    }
+
+    .edit-field label {
+      font-size: 11px;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .edit-field input,
+    .edit-field select,
+    .edit-field textarea {
+      padding: 12px 14px;
+      background: var(--bg-deep);
+      border: 1px solid var(--glass-border);
+      border-radius: 8px;
+      color: var(--text);
+      font-size: 14px;
+      transition: all 0.2s;
+    }
+
+    .edit-field input:focus,
+    .edit-field select:focus,
+    .edit-field textarea:focus {
+      outline: none;
+      border-color: var(--cyan);
+      box-shadow: 0 0 0 3px var(--cyan-glow);
+    }
+
+    .edit-field textarea {
+      resize: vertical;
+      min-height: 80px;
+    }
+
+    .readonly-field {
+      background: rgba(0, 0, 0, 0.3) !important;
+      color: var(--text-muted) !important;
+      cursor: not-allowed;
+    }
+
+    .toggle-buttons {
+      display: flex;
+      gap: 8px;
+    }
+
+    .toggle-btn {
+      flex: 1;
+      padding: 12px;
+      background: var(--bg-deep);
+      border: 1px solid var(--glass-border);
+      border-radius: 8px;
+      color: var(--text-muted);
+      font-size: 13px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .toggle-btn:hover {
+      border-color: var(--cyan);
+    }
+
+    .toggle-btn.active {
+      background: linear-gradient(135deg, var(--cyan), var(--cyan-dim));
+      border-color: var(--cyan);
+      color: #000;
+      font-weight: 600;
+    }
+
+    .grade-field, .raw-field {
+      transition: opacity 0.2s, visibility 0.2s;
+    }
+
+    .grade-field.hidden, .raw-field.hidden {
+      opacity: 0.3;
+      pointer-events: none;
+    }
+
+    .edit-panel-footer {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 16px 24px;
+      background: var(--glass);
+      border-top: 1px solid var(--glass-border);
+    }
+
+    @media (max-width: 600px) {
+      .edit-panel {
+        width: 100%;
+        right: -100%;
+      }
+    }
+  </style>
+
   <script>
     const API_URL = '/api';
     let cards = [];
@@ -3571,8 +4012,11 @@
     // Keyboard shortcuts
     document.addEventListener('keydown', (e) => {
       if (e.key === 'Escape') {
+        closeEditPanel();
         closeSettingsModal();
         closeLightbox();
+        closeExportModal();
+        closeSalesModal();
       }
     });
 
@@ -3693,54 +4137,134 @@
       });
     }
 
+    // ==========================================
+    // EDIT PANEL FUNCTIONS
+    // ==========================================
+    let currentEditCard = null;
+    let isGraded = false;
+
     function editCard(cardId) {
       const card = cards.find(c => c.id === cardId);
       if (!card) return;
 
-      // For now, open a simple prompt-based editor
-      const fields = [
-        { key: 'player', label: 'Player Name', value: card.player || '' },
-        { key: 'year', label: 'Year', value: card.year || '' },
-        { key: 'set_name', label: 'Set Name', value: card.set_name || '' },
-        { key: 'card_number', label: 'Card Number', value: card.card_number || '' },
-        { key: 'parallel', label: 'Parallel', value: card.parallel || '' },
-        { key: 'recommended_price', label: 'Price ($)', value: card.recommended_price || '' },
-        { key: 'notes', label: 'Notes', value: card.notes || '' }
-      ];
+      currentEditCard = card;
 
-      let msg = 'Edit Card (format: field=value, one per line):\n\n';
-      fields.forEach(f => {
-        msg += `${f.key}=${f.value}\n`;
+      // Populate form fields
+      document.getElementById('edit-card-id').value = card.id;
+      document.getElementById('edit-player').value = card.player || '';
+      document.getElementById('edit-year').value = card.year || '';
+      document.getElementById('edit-set').value = card.set_name || '';
+      document.getElementById('edit-number').value = card.card_number || '';
+      document.getElementById('edit-parallel').value = card.parallel || '';
+      document.getElementById('edit-numbered').value = card.numbered || '';
+      document.getElementById('edit-team').value = card.team || '';
+      document.getElementById('edit-sport').value = card.sport || 'baseball';
+
+      // Grading
+      setGraded(card.is_graded || false);
+      document.getElementById('edit-grading-company').value = card.grading_company || '';
+      document.getElementById('edit-grade').value = card.grade || '';
+      document.getElementById('edit-cert').value = card.cert_number || '';
+      document.getElementById('edit-condition').value = card.condition || 'Near Mint';
+
+      // Pricing
+      document.getElementById('edit-price').value = card.recommended_price || '';
+      document.getElementById('edit-status').value = card.status || 'identified';
+      document.getElementById('edit-ebay-low').value = card.ebay_low ? '$' + card.ebay_low.toFixed(2) : '-';
+      document.getElementById('edit-ebay-avg').value = card.ebay_avg ? '$' + card.ebay_avg.toFixed(2) : '-';
+      document.getElementById('edit-ebay-high').value = card.ebay_high ? '$' + card.ebay_high.toFixed(2) : '-';
+      document.getElementById('edit-sample-size').value = card.sample_size || '-';
+
+      // Notes
+      document.getElementById('edit-notes').value = card.notes || '';
+
+      // Images
+      document.getElementById('edit-front-img').src = getImageUrl(card.front, card) || '';
+      document.getElementById('edit-back-img').src = card.back ? getImageUrl(card.back, card) : '';
+
+      // Open panel
+      document.getElementById('edit-panel').classList.add('open');
+      document.getElementById('edit-panel-overlay').classList.add('open');
+      document.body.style.overflow = 'hidden';
+    }
+
+    function closeEditPanel() {
+      document.getElementById('edit-panel').classList.remove('open');
+      document.getElementById('edit-panel-overlay').classList.remove('open');
+      document.body.style.overflow = '';
+      currentEditCard = null;
+    }
+
+    function setGraded(graded) {
+      isGraded = graded;
+
+      // Update toggle buttons
+      document.getElementById('graded-yes').classList.toggle('active', graded);
+      document.getElementById('graded-no').classList.toggle('active', !graded);
+
+      // Show/hide fields
+      document.querySelectorAll('.grade-field').forEach(el => {
+        el.classList.toggle('hidden', !graded);
       });
-
-      const input = prompt(msg);
-      if (!input) return;
-
-      // Parse input
-      const updates = {};
-      input.split('\n').forEach(line => {
-        const [key, ...valueParts] = line.split('=');
-        const value = valueParts.join('=').trim();
-        if (key && value) {
-          const cleanKey = key.trim();
-          if (cleanKey === 'recommended_price') {
-            updates[cleanKey] = parseFloat(value) || 0;
-          } else {
-            updates[cleanKey] = value;
-          }
-        }
+      document.querySelectorAll('.raw-field').forEach(el => {
+        el.classList.toggle('hidden', graded);
       });
+    }
 
-      if (Object.keys(updates).length > 0) {
-        api(`/cards/${cardId}`, {
+    async function saveCardEdit() {
+      const cardId = document.getElementById('edit-card-id').value;
+      if (!cardId) return;
+
+      const updates = {
+        player: document.getElementById('edit-player').value,
+        year: document.getElementById('edit-year').value,
+        set_name: document.getElementById('edit-set').value,
+        card_number: document.getElementById('edit-number').value,
+        parallel: document.getElementById('edit-parallel').value,
+        numbered: document.getElementById('edit-numbered').value,
+        team: document.getElementById('edit-team').value,
+        sport: document.getElementById('edit-sport').value,
+        is_graded: isGraded,
+        grading_company: isGraded ? document.getElementById('edit-grading-company').value : null,
+        grade: isGraded ? document.getElementById('edit-grade').value : null,
+        cert_number: isGraded ? document.getElementById('edit-cert').value : null,
+        condition: !isGraded ? document.getElementById('edit-condition').value : null,
+        recommended_price: parseFloat(document.getElementById('edit-price').value) || null,
+        status: document.getElementById('edit-status').value,
+        notes: document.getElementById('edit-notes').value
+      };
+
+      try {
+        const result = await api(`/cards/${cardId}`, {
           method: 'PUT',
           body: JSON.stringify(updates)
-        }).then(result => {
-          if (result) {
-            showToast('Card updated', 'success');
-            loadCards();
-          }
         });
+
+        if (result) {
+          showToast('Card saved!', 'success');
+          closeEditPanel();
+          loadCards();
+          loadStatus();
+        }
+      } catch (e) {
+        showToast('Failed to save: ' + e.message, 'error');
+      }
+    }
+
+    async function deleteFromEditPanel() {
+      const cardId = document.getElementById('edit-card-id').value;
+      if (!cardId) return;
+
+      if (!confirm('Delete this card? This cannot be undone.')) return;
+
+      try {
+        await api(`/cards/${cardId}`, { method: 'DELETE' });
+        showToast('Card deleted', 'success');
+        closeEditPanel();
+        loadCards();
+        loadStatus();
+      } catch (e) {
+        showToast('Failed to delete: ' + e.message, 'error');
       }
     }
 
