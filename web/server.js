@@ -2137,6 +2137,7 @@ app.post('/api/ebay/list/:cardId', authenticateToken, async (req, res) => {
     const sku = `CF${cardId.replace(/-/g, '').substring(0, 20)}${Date.now().toString().slice(-8)}`;
 
     console.log('[eBay] Listing title:', title);
+    console.log('[eBay] SKU:', sku, 'Length:', sku.length);
 
     // Step 1: Create inventory item
     const inventoryPayload = {
