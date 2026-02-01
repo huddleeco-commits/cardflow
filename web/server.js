@@ -1856,9 +1856,8 @@ async function autoCreateEbayPolicies(userId, accessToken) {
 
     const headers = {
       'Authorization': `Bearer ${accessToken}`,
-      'Content-Type': 'application/json',
-      'Content-Language': 'en-US'
-    };
+      'Content-Type': 'application/json'
+};
 
     let paymentPolicyId = null;
     let returnPolicyId = null;
@@ -2171,8 +2170,7 @@ app.post('/api/ebay/list/:cardId', authenticateToken, async (req, res) => {
       {
         headers: {
           'Authorization': `Bearer ${accessToken}`,
-          'Content-Type': 'application/json',
-          'Content-Language': 'en-US'
+          'Content-Type': 'application/json'
         }
       }
     );
@@ -2570,9 +2568,8 @@ app.post('/api/ebay/bulk-create', authenticateToken, async (req, res) => {
           {
             headers: {
               'Authorization': `Bearer ${accessToken}`,
-              'Content-Type': 'application/json',
-              'Content-Language': 'en-US'
-            }
+              'Content-Type': 'application/json'
+                }
           }
         );
 
@@ -2929,8 +2926,7 @@ app.post('/api/ebay/create-lot', authenticateToken, async (req, res) => {
       {
         headers: {
           'Authorization': `Bearer ${accessToken}`,
-          'Content-Type': 'application/json',
-          'Content-Language': 'en-US'
+          'Content-Type': 'application/json'
         }
       }
     );
@@ -3114,8 +3110,7 @@ app.post('/api/ebay/create-auction', authenticateToken, async (req, res) => {
       {
         headers: {
           'Authorization': `Bearer ${accessToken}`,
-          'Content-Type': 'application/json',
-          'Content-Language': 'en-US'
+          'Content-Type': 'application/json'
         }
       }
     );
