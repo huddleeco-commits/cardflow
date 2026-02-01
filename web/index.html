@@ -1755,6 +1755,85 @@
     <img id="lightbox-img" src="">
   </div>
 
+  <!-- Single Card Listing Modal -->
+  <div class="modal" id="single-listing-modal">
+    <div class="modal-content" style="max-width: 500px;">
+      <div class="modal-header">
+        <h2>List on eBay</h2>
+        <button class="modal-close" onclick="closeSingleListingModal()">&times;</button>
+      </div>
+      <div class="modal-body">
+        <!-- eBay Connection Status -->
+        <div id="single-ebay-status" style="margin-bottom: 20px;">
+          <div id="single-ebay-connected" style="display: none;">
+            <div style="display: flex; align-items: center; gap: 8px; padding: 12px; background: rgba(0,200,83,0.1); border: 1px solid rgba(0,200,83,0.3); border-radius: 8px;">
+              <span style="width: 10px; height: 10px; background: var(--success); border-radius: 50%;"></span>
+              <span style="color: var(--success);">eBay Connected</span>
+              <span id="single-ebay-user" style="color: var(--text-muted); margin-left: auto; font-size: 12px;"></span>
+            </div>
+          </div>
+          <div id="single-ebay-not-connected" style="display: none;">
+            <div style="padding: 16px; background: rgba(255,77,77,0.1); border: 1px solid rgba(255,77,77,0.3); border-radius: 8px; text-align: center;">
+              <div style="font-size: 32px; margin-bottom: 8px;">🔗</div>
+              <div style="color: var(--error); margin-bottom: 12px;">eBay Not Connected</div>
+              <p style="color: var(--text-muted); font-size: 13px; margin-bottom: 16px;">Connect your eBay seller account to list cards</p>
+              <button class="btn btn-accent" onclick="connectEbay()">Connect to eBay</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Card Preview -->
+        <div id="single-card-preview" style="display: flex; gap: 16px; margin-bottom: 20px; padding: 16px; background: var(--glass); border-radius: 12px;">
+          <div style="width: 80px; height: 110px; background: var(--bg-deep); border-radius: 8px; overflow: hidden;">
+            <img id="single-card-image" src="" style="width: 100%; height: 100%; object-fit: cover;">
+          </div>
+          <div style="flex: 1;">
+            <div id="single-card-player" style="font-size: 16px; font-weight: 600; margin-bottom: 4px;"></div>
+            <div id="single-card-set" style="font-size: 13px; color: var(--text-muted); margin-bottom: 4px;"></div>
+            <div id="single-card-grade" style="font-size: 12px; color: var(--cyan);"></div>
+          </div>
+        </div>
+
+        <!-- Listing Options -->
+        <div id="single-listing-options">
+          <div class="form-group" style="margin-bottom: 16px;">
+            <label style="display: block; margin-bottom: 8px; font-size: 12px; color: var(--text-muted); text-transform: uppercase;">Price ($)</label>
+            <input type="number" id="single-listing-price" step="0.01" min="0.99" placeholder="9.99" style="width: 100%; padding: 12px; background: var(--bg-deep); border: 1px solid var(--glass-border); border-radius: 8px; color: var(--text); font-size: 18px;">
+          </div>
+
+          <div class="form-group" style="margin-bottom: 16px;">
+            <label style="display: block; margin-bottom: 8px; font-size: 12px; color: var(--text-muted); text-transform: uppercase;">Shipping Method</label>
+            <select id="single-shipping-method" style="width: 100%; padding: 12px; background: var(--bg-deep); border: 1px solid var(--glass-border); border-radius: 8px; color: var(--text);">
+              <option value="standard_envelope">Standard Envelope - $1.32 (single cards under $20)</option>
+              <option value="calculated" selected>Calculated - USPS based on location</option>
+              <option value="flat_rate">Flat Rate - $4.99</option>
+              <option value="free">Free Shipping (built into price)</option>
+            </select>
+          </div>
+
+          <div style="padding: 12px; background: rgba(0,246,255,0.05); border-radius: 8px; margin-bottom: 16px;">
+            <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+              <span style="color: var(--text-muted);">Listing Price:</span>
+              <span id="single-display-price">$0.00</span>
+            </div>
+            <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+              <span style="color: var(--text-muted);">Est. eBay Fees (~13%):</span>
+              <span id="single-display-fees" style="color: var(--error);">-$0.00</span>
+            </div>
+            <div style="display: flex; justify-content: space-between; padding-top: 8px; border-top: 1px solid var(--glass-border);">
+              <span style="font-weight: 600;">Net Profit:</span>
+              <span id="single-display-profit" style="color: var(--success); font-weight: 600;">$0.00</span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer" style="border-top: 1px solid var(--glass-border); padding: 16px; display: flex; gap: 12px;">
+        <button class="btn btn-secondary" onclick="closeSingleListingModal()" style="flex: 1;">Cancel</button>
+        <button class="btn btn-success" id="single-list-btn" onclick="submitSingleListing()" style="flex: 2;">List on eBay</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Bulk Listing Modal -->
   <div class="modal" id="bulk-listing-modal">
     <div class="modal-content" style="max-width: 1000px; max-height: 90vh; display: flex; flex-direction: column;">
@@ -2419,35 +2498,110 @@
       }
     }
 
-    // Single card listing with modal options
+    // Single card listing with modal
+    let currentListingCardId = null;
+    let ebayConnected = false;
+
     async function listOnEbay(cardId) {
       const card = cards.find(c => c.id === cardId);
       if (!card) return;
 
-      const price = prompt('Enter listing price (USD):', card.recommended_price?.toFixed(2) || '9.99');
-      if (!price) return;
+      currentListingCardId = cardId;
 
-      const priceNum = parseFloat(price);
-      if (isNaN(priceNum) || priceNum <= 0) {
-        showToast('Invalid price', 'error');
+      // Check eBay status first
+      try {
+        const status = await api('/ebay/status');
+        ebayConnected = status?.connected || false;
+
+        // Update modal UI based on connection status
+        document.getElementById('single-ebay-connected').style.display = ebayConnected ? 'block' : 'none';
+        document.getElementById('single-ebay-not-connected').style.display = ebayConnected ? 'none' : 'block';
+        document.getElementById('single-listing-options').style.display = ebayConnected ? 'block' : 'none';
+        document.getElementById('single-list-btn').style.display = ebayConnected ? 'block' : 'none';
+
+        if (ebayConnected && status.ebayUserId) {
+          document.getElementById('single-ebay-user').textContent = status.ebayUserId;
+        }
+      } catch (e) {
+        ebayConnected = false;
+        document.getElementById('single-ebay-connected').style.display = 'none';
+        document.getElementById('single-ebay-not-connected').style.display = 'block';
+        document.getElementById('single-listing-options').style.display = 'none';
+        document.getElementById('single-list-btn').style.display = 'none';
+      }
+
+      // Populate card preview
+      const folder = getCardFolder(card);
+      document.getElementById('single-card-image').src = card.front ? `/images/${folder}/${card.front}` : '';
+      document.getElementById('single-card-player').textContent = card.player || 'Unknown';
+      document.getElementById('single-card-set').textContent = `${card.year || ''} ${card.set_name || ''}`;
+      document.getElementById('single-card-grade').textContent = card.is_graded ? `${card.grading_company} ${card.grade}` : '';
+
+      // Set initial price
+      const priceInput = document.getElementById('single-listing-price');
+      priceInput.value = card.recommended_price?.toFixed(2) || card.price?.toFixed(2) || '9.99';
+      updateSingleListingCalculations();
+
+      // Add input listener for live calculations
+      priceInput.oninput = updateSingleListingCalculations;
+
+      // Show modal
+      document.getElementById('single-listing-modal').classList.add('open');
+    }
+
+    function closeSingleListingModal() {
+      document.getElementById('single-listing-modal').classList.remove('open');
+      currentListingCardId = null;
+    }
+
+    function updateSingleListingCalculations() {
+      const price = parseFloat(document.getElementById('single-listing-price').value) || 0;
+      const fees = price * 0.13;
+      const profit = price - fees;
+
+      document.getElementById('single-display-price').textContent = `$${price.toFixed(2)}`;
+      document.getElementById('single-display-fees').textContent = `-$${fees.toFixed(2)}`;
+      document.getElementById('single-display-profit').textContent = `$${profit.toFixed(2)}`;
+    }
+
+    async function submitSingleListing() {
+      if (!currentListingCardId || !ebayConnected) {
+        showToast('Please connect your eBay account first', 'error');
         return;
       }
 
+      const price = parseFloat(document.getElementById('single-listing-price').value);
+      const shippingMethod = document.getElementById('single-shipping-method').value;
+
+      if (isNaN(price) || price <= 0) {
+        showToast('Please enter a valid price', 'error');
+        return;
+      }
+
+      const btn = document.getElementById('single-list-btn');
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner"></span> Listing...';
+
       try {
-        const result = await api(`/ebay/list/${cardId}`, {
+        const result = await api(`/ebay/list/${currentListingCardId}`, {
           method: 'POST',
-          body: JSON.stringify({ price: priceNum })
+          body: JSON.stringify({ price, shippingMethod })
         });
 
         if (result?.success) {
           showToast(`Listed on eBay! ID: ${result.listingId}`, 'success');
+          closeSingleListingModal();
           window.open(result.listingUrl, '_blank');
           loadCards();
+          loadStatus();
         } else {
           showToast(result?.error || 'Failed to list', 'error');
         }
       } catch (e) {
         showToast('Failed to list: ' + e.message, 'error');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'List on eBay';
       }
     }
 
@@ -2457,7 +2611,21 @@
     let bulkListingCards = [];
     let selectedCardIds = new Set();
 
-    function showBulkListingModal() {
+    async function showBulkListingModal() {
+      // Check eBay connection first
+      try {
+        const status = await api('/ebay/status');
+        if (!status?.connected) {
+          showToast('Please connect your eBay account first (Settings > eBay)', 'error');
+          showSettingsModal('ebay');
+          return;
+        }
+      } catch (e) {
+        showToast('Please connect your eBay account first', 'error');
+        showSettingsModal('ebay');
+        return;
+      }
+
       // Get all priced cards that aren't listed
       const pricedCards = cards.filter(c => c.status === 'priced' && c.recommended_price);
       if (pricedCards.length === 0) {
@@ -2597,7 +2765,21 @@
     // ==========================================
     let lotCards = [];
 
-    function showLotListingModal() {
+    async function showLotListingModal() {
+      // Check eBay connection first
+      try {
+        const status = await api('/ebay/status');
+        if (!status?.connected) {
+          showToast('Please connect your eBay account first (Settings > eBay)', 'error');
+          showSettingsModal('ebay');
+          return;
+        }
+      } catch (e) {
+        showToast('Please connect your eBay account first', 'error');
+        showSettingsModal('ebay');
+        return;
+      }
+
       const pricedCards = cards.filter(c => c.status === 'priced' && c.recommended_price);
       if (pricedCards.length < 2) {
         showToast('Need at least 2 priced cards for a lot listing', 'error');
@@ -2719,7 +2901,21 @@
     // ==========================================
     let auctionCardId = null;
 
-    function showAuctionModal(cardId) {
+    async function showAuctionModal(cardId) {
+      // Check eBay connection first
+      try {
+        const status = await api('/ebay/status');
+        if (!status?.connected) {
+          showToast('Please connect your eBay account first (Settings > eBay)', 'error');
+          showSettingsModal('ebay');
+          return;
+        }
+      } catch (e) {
+        showToast('Please connect your eBay account first', 'error');
+        showSettingsModal('ebay');
+        return;
+      }
+
       const card = cards.find(c => c.id === cardId);
       if (!card) return;
 
