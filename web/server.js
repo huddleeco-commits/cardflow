@@ -2084,6 +2084,36 @@ function getGraderEbayId(graderName) {
   return graderMap[upper] || '2750123'; // Default to "Other"
 }
 
+// Map grade values to eBay condition descriptor IDs
+function getGradeEbayId(grade) {
+  const gradeMap = {
+    '10': '275020',
+    '9.5': '275021',
+    '9': '275022',
+    '8.5': '275023',
+    '8': '275024',
+    '7.5': '275025',
+    '7': '275026',
+    '6.5': '275027',
+    '6': '275028',
+    '5.5': '275029',
+    '5': '2750210',
+    '4.5': '2750211',
+    '4': '2750212',
+    '3.5': '2750213',
+    '3': '2750214',
+    '2.5': '2750215',
+    '2': '2750216',
+    '1.5': '2750217',
+    '1': '2750218',
+    'A': '2750219',      // Authentic
+    'AA': '2750220',     // Authentic Altered
+    'AT': '2750221',     // Authentic Trimmed
+    'AC': '2750222'      // Authentic Coloured
+  };
+  return gradeMap[String(grade)] || '275020'; // Default to 10
+}
+
 // Build conditionDescriptors for graded cards
 function buildConditionDescriptors(card) {
   if (!card.is_graded || !card.grading_company) {
@@ -2096,7 +2126,7 @@ function buildConditionDescriptors(card) {
     },
     {
       name: '27502', // Grade
-      values: [String(card.grade || '10')]
+      values: [getGradeEbayId(card.grade)]
     }
   ];
 }
@@ -3478,7 +3508,7 @@ const HOST = process.env.NODE_ENV === 'production' ? '0.0.0.0' : 'localhost';
 server.listen(PORT, HOST, () => {
   console.log(`
 ══════════════════════════════════════════════════
-  CARDFLOW v2.0 - Multi-User SaaS (Build 0201g)
+  CARDFLOW v2.0 - Multi-User SaaS (Build 0201h)
 ══════════════════════════════════════════════════
 
   Server:    http://${HOST}:${PORT}
