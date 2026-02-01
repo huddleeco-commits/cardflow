@@ -150,6 +150,10 @@ BEGIN
     ALTER TABLE users ADD COLUMN ebay_flat_rate_price DECIMAL(10,2) DEFAULT 4.99;
     ALTER TABLE users ADD COLUMN ebay_free_shipping_minimum DECIMAL(10,2) DEFAULT 50.00;
   END IF;
+  -- Merchant location key for eBay listings
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'users' AND column_name = 'ebay_merchant_location_key') THEN
+    ALTER TABLE users ADD COLUMN ebay_merchant_location_key VARCHAR(255);
+  END IF;
 END $$;
 
 -- Indexes for performance

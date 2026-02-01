@@ -1621,7 +1621,7 @@ app.get('/api/ebay/status', authenticateToken, async (req, res) => {
     );
 
     const userResult = await pool.query(
-      'SELECT ebay_payment_policy_id, ebay_return_policy_id, ebay_fulfillment_policy_id FROM users WHERE id = $1',
+      'SELECT ebay_payment_policy_id, ebay_return_policy_id, ebay_fulfillment_policy_id, ebay_merchant_location_key FROM users WHERE id = $1',
       [req.user.id]
     );
 
@@ -1973,16 +1973,61 @@ async function autoCreateEbayPolicies(userId, accessToken) {
       console.log('[eBay] Fulfillment policy created:', fulfillmentPolicyId);
     }
 
-    // Save policy IDs to database
+    // 4. Try to get or create inventory location
+    let merchantLocationKey = null;
+    try {
+      const locationRes = await axios.get(
+        'https://api.ebay.com/sell/inventory/v1/location?limit=1',
+        { headers }
+      );
+      if (locationRes.data.locations?.length > 0) {
+        merchantLocationKey = locationRes.data.locations[0].merchantLocationKey;
+        console.log('[eBay] Found existing location:', merchantLocationKey);
+      }
+    } catch (e) {
+      console.log('[eBay] No existing locations found, will create one');
+    }
+
+    if (!merchantLocationKey) {
+      try {
+        merchantLocationKey = `cardflow_${userId}_${Date.now()}`;
+        console.log('[eBay] Creating inventory location:', merchantLocationKey);
+        await axios.post(
+          `https://api.ebay.com/sell/inventory/v1/location/${merchantLocationKey}`,
+          {
+            location: {
+              address: {
+                city: 'New York',
+                stateOrProvince: 'NY',
+                postalCode: '10001',
+                country: 'US'
+              }
+            },
+            locationTypes: ['WAREHOUSE'],
+            name: 'CardFlow Shipping Location',
+            merchantLocationStatus: 'ENABLED'
+          },
+          { headers: { ...headers, 'Content-Language': 'en-US' } }
+        );
+        console.log('[eBay] Location created:', merchantLocationKey);
+      } catch (locErr) {
+        console.log('[eBay] Could not create location:', locErr.response?.data || locErr.message);
+        // Use a default placeholder - some accounts may not support location API
+        merchantLocationKey = 'default';
+      }
+    }
+
+    // Save policy IDs and location to database
     await pool.query(`
       UPDATE users SET
         ebay_payment_policy_id = $1,
         ebay_return_policy_id = $2,
-        ebay_fulfillment_policy_id = $3
-      WHERE id = $4
-    `, [paymentPolicyId, returnPolicyId, fulfillmentPolicyId, userId]);
+        ebay_fulfillment_policy_id = $3,
+        ebay_merchant_location_key = $4
+      WHERE id = $5
+    `, [paymentPolicyId, returnPolicyId, fulfillmentPolicyId, merchantLocationKey, userId]);
 
-    console.log('[eBay] All policies saved for user:', userId);
+    console.log('[eBay] All policies and location saved for user:', userId);
     return { success: true };
 
   } catch (error) {
@@ -2119,7 +2164,7 @@ app.post('/api/ebay/list/:cardId', authenticateToken, async (req, res) => {
 
     // Get user's policy IDs
     const userResult = await pool.query(
-      'SELECT ebay_payment_policy_id, ebay_return_policy_id, ebay_fulfillment_policy_id FROM users WHERE id = $1',
+      'SELECT ebay_payment_policy_id, ebay_return_policy_id, ebay_fulfillment_policy_id, ebay_merchant_location_key FROM users WHERE id = $1',
       [req.user.id]
     );
 
@@ -2186,6 +2231,7 @@ app.post('/api/ebay/list/:cardId', authenticateToken, async (req, res) => {
       availableQuantity: quantity,
       categoryId: '261328', // Sports Trading Cards
       listingDescription: description,
+      merchantLocationKey: policies.ebay_merchant_location_key || 'default',
       listingPolicies: {
         fulfillmentPolicyId: policies.ebay_fulfillment_policy_id,
         paymentPolicyId: policies.ebay_payment_policy_id,
@@ -2507,7 +2553,7 @@ app.post('/api/ebay/bulk-create', authenticateToken, async (req, res) => {
 
     // Get user's policy IDs
     const userResult = await pool.query(
-      'SELECT ebay_payment_policy_id, ebay_return_policy_id, ebay_fulfillment_policy_id FROM users WHERE id = $1',
+      'SELECT ebay_payment_policy_id, ebay_return_policy_id, ebay_fulfillment_policy_id, ebay_merchant_location_key FROM users WHERE id = $1',
       [req.user.id]
     );
 
@@ -2585,6 +2631,7 @@ app.post('/api/ebay/bulk-create', authenticateToken, async (req, res) => {
           availableQuantity: 1,
           categoryId: '261328',
           listingDescription: description,
+          merchantLocationKey: policies.ebay_merchant_location_key || 'default',
           listingPolicies: {
             fulfillmentPolicyId,
             paymentPolicyId: policies.ebay_payment_policy_id,
@@ -2866,7 +2913,7 @@ app.post('/api/ebay/create-lot', authenticateToken, async (req, res) => {
 
     // Get user's policies
     const userResult = await pool.query(
-      'SELECT ebay_payment_policy_id, ebay_return_policy_id, ebay_fulfillment_policy_id FROM users WHERE id = $1',
+      'SELECT ebay_payment_policy_id, ebay_return_policy_id, ebay_fulfillment_policy_id, ebay_merchant_location_key FROM users WHERE id = $1',
       [req.user.id]
     );
 
@@ -2946,6 +2993,7 @@ app.post('/api/ebay/create-lot', authenticateToken, async (req, res) => {
       availableQuantity: 1,
       categoryId: '261328',
       listingDescription: description,
+      merchantLocationKey: policies.ebay_merchant_location_key || 'default',
       listingPolicies: {
         fulfillmentPolicyId: policies.ebay_fulfillment_policy_id,
         paymentPolicyId: policies.ebay_payment_policy_id,
@@ -3090,7 +3138,7 @@ app.post('/api/ebay/create-auction', authenticateToken, async (req, res) => {
 
     // Get policies
     const userResult = await pool.query(
-      'SELECT ebay_payment_policy_id, ebay_return_policy_id, ebay_fulfillment_policy_id FROM users WHERE id = $1',
+      'SELECT ebay_payment_policy_id, ebay_return_policy_id, ebay_fulfillment_policy_id, ebay_merchant_location_key FROM users WHERE id = $1',
       [req.user.id]
     );
 
@@ -3133,6 +3181,7 @@ app.post('/api/ebay/create-auction', authenticateToken, async (req, res) => {
       availableQuantity: 1,
       categoryId: '261328',
       listingDescription: description,
+      merchantLocationKey: policies.ebay_merchant_location_key || 'default',
       listingPolicies: {
         fulfillmentPolicyId: policies.ebay_fulfillment_policy_id,
         paymentPolicyId: policies.ebay_payment_policy_id,
@@ -3380,7 +3429,7 @@ const HOST = process.env.NODE_ENV === 'production' ? '0.0.0.0' : 'localhost';
 server.listen(PORT, HOST, () => {
   console.log(`
 ══════════════════════════════════════════════════
-  CARDFLOW v2.0 - Multi-User SaaS (Build 0201d)
+  CARDFLOW v2.0 - Multi-User SaaS (Build 0201e)
 ══════════════════════════════════════════════════
 
   Server:    http://${HOST}:${PORT}
