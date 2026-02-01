@@ -1288,11 +1288,101 @@ app.post('/api/process/price', authenticateToken, async (req, res) => {
     const axios = require('axios');
     const cheerio = require('cheerio');
 
+    // SlabTrack browser headers - full set for legitimacy
     const BROWSER_HEADERS = {
-      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-      'Accept-Language': 'en-US,en;q=0.5'
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+      'Accept-Language': 'en-US,en;q=0.5',
+      'Accept-Encoding': 'gzip, deflate, br',
+      'DNT': '1',
+      'Connection': 'keep-alive',
+      'Upgrade-Insecure-Requests': '1'
     };
+
+    // Build cascading search queries (specific to broad)
+    function buildQueries(card) {
+      const queries = [];
+      const player = card.player || '';
+      const year = card.year || '';
+      const setName = card.set_name || '';
+      const cardNum = card.card_number || '';
+      const parallel = card.parallel && card.parallel !== 'Base' ? card.parallel : '';
+      const gradeStr = card.is_graded ? `${card.grading_company} ${card.grade}` : '';
+
+      // Query 1: Full with grade
+      if (gradeStr) {
+        queries.push([year, setName, player, cardNum, parallel, gradeStr].filter(Boolean).join(' '));
+      }
+      // Query 2: Full without grade
+      queries.push([year, setName, player, cardNum, parallel].filter(Boolean).join(' '));
+      // Query 3: Without card number
+      queries.push([year, setName, player, parallel].filter(Boolean).join(' '));
+      // Query 4: Without parallel
+      queries.push([year, setName, player].filter(Boolean).join(' '));
+      // Query 5: Just year + player
+      if (year && player) queries.push(`${year} ${player}`);
+
+      return [...new Set(queries)].filter(q => q.length > 0);
+    }
+
+    // Scrape eBay with cascading queries
+    async function scrapeEbay(queries) {
+      for (let i = 0; i < Math.min(queries.length, 4); i++) {
+        const query = queries[i];
+        const url = `https://www.ebay.com/sch/i.html?_nkw=${encodeURIComponent(query)}&LH_Complete=1&LH_Sold=1&_sop=13`;
+
+        console.log(`[Price] Query ${i + 1}/${queries.length}: "${query}"`);
+
+        try {
+          const response = await axios.get(url, {
+            headers: { ...BROWSER_HEADERS, 'Referer': 'https://www.ebay.com/' },
+            timeout: 15000
+          });
+
+          console.log(`[Price] Response: ${response.status}, ${response.data.length} bytes`);
+
+          const $ = cheerio.load(response.data);
+          const prices = [];
+
+          $('.s-item').each((idx, el) => {
+            if (idx === 0) return; // Skip header
+            const priceText = $(el).find('.s-item__price').text().trim();
+            if (priceText && !priceText.includes(' to ')) {
+              const price = parseFloat(priceText.replace(/[^0-9.]/g, ''));
+              if (price > 0.5 && price < 50000) {
+                prices.push(price);
+              }
+            }
+          });
+
+          console.log(`[Price] Found ${prices.length} prices`);
+
+          if (prices.length >= 3) {
+            prices.sort((a, b) => a - b);
+            return {
+              success: true,
+              prices,
+              avg: prices.reduce((a, b) => a + b, 0) / prices.length,
+              low: prices[0],
+              high: prices[prices.length - 1],
+              query,
+              url
+            };
+          }
+
+          // Wait before trying next query
+          await new Promise(r => setTimeout(r, 500));
+
+        } catch (e) {
+          console.error(`[Price] Error: ${e.message}`);
+          if (e.response?.status === 429 || e.response?.status === 503) {
+            console.log('[Price] Rate limited, stopping');
+            break;
+          }
+        }
+      }
+      return { success: false, prices: [], query: queries[0], url: `https://www.ebay.com/sch/i.html?_nkw=${encodeURIComponent(queries[0])}&LH_Complete=1&LH_Sold=1` };
+    }
 
     let processed = 0;
     let totalValue = 0;
@@ -1309,58 +1399,23 @@ app.post('/api/process/price', authenticateToken, async (req, res) => {
       });
 
       try {
-        // Build search query
-        const parts = [card.year, card.set_name, card.player, card.card_number].filter(Boolean);
-        const query = parts.join(' ');
-        const ebayUrl = `https://www.ebay.com/sch/i.html?_nkw=${encodeURIComponent(query)}&LH_Complete=1&LH_Sold=1&_sop=13`;
+        const queries = buildQueries(card);
+        console.log(`[Price] ${card.player}: ${queries.length} queries`);
 
-        console.log(`[Price] Searching: "${query}"`);
+        const result = await scrapeEbay(queries);
 
-        // Scrape eBay
-        let ebayPrices = [];
-        try {
-          const response = await axios.get(ebayUrl, {
-            headers: BROWSER_HEADERS,
-            timeout: 15000
-          });
-
-          console.log(`[Price] eBay response: ${response.status}, ${response.data.length} bytes`);
-
-          const $ = cheerio.load(response.data);
-          $('.s-item').each((idx, el) => {
-            if (idx === 0) return;
-            const priceText = $(el).find('.s-item__price').text().trim();
-            if (priceText && !priceText.includes(' to ')) {
-              const price = parseFloat(priceText.replace(/[^0-9.]/g, ''));
-              if (price > 0.5 && price < 50000) {
-                ebayPrices.push(price);
-              }
-            }
-          });
-
-          console.log(`[Price] Found ${ebayPrices.length} prices for "${card.player}"`);
-        } catch (e) {
-          console.error(`[Price] eBay scrape error for "${query}":`, e.message);
-        }
-
-        // Calculate price
         let recommendedPrice = null;
         let confidence = 'none';
         let pricingMethod = 'manual';
 
-        if (ebayPrices.length >= 3) {
-          ebayPrices.sort((a, b) => a - b);
-          recommendedPrice = ebayPrices.reduce((a, b) => a + b, 0) / ebayPrices.length;
-          recommendedPrice = Math.round(recommendedPrice * 100) / 100;
-          confidence = 'high';
+        if (result.success) {
+          recommendedPrice = Math.round(result.avg * 100) / 100;
+          confidence = result.prices.length >= 5 ? 'high' : 'medium';
           pricingMethod = 'scraped';
           totalValue += recommendedPrice;
-        } else if (ebayPrices.length > 0) {
-          recommendedPrice = ebayPrices.reduce((a, b) => a + b, 0) / ebayPrices.length;
-          recommendedPrice = Math.round(recommendedPrice * 100) / 100;
-          confidence = 'medium';
-          pricingMethod = 'scraped';
-          totalValue += recommendedPrice;
+          console.log(`[Price] ${card.player}: $${recommendedPrice} (${result.prices.length} sales)`);
+        } else {
+          console.log(`[Price] ${card.player}: No prices found`);
         }
 
         // Update card in database
@@ -1369,8 +1424,10 @@ app.post('/api/process/price', authenticateToken, async (req, res) => {
           recommended_price: recommendedPrice,
           confidence,
           pricing_method: pricingMethod,
-          ebay_url: ebayUrl,
-          sample_size: ebayPrices.length,
+          ebay_url: result.url,
+          ebay_low: result.low || null,
+          ebay_high: result.high || null,
+          sample_size: result.prices.length,
           priced_at: new Date().toISOString()
         };
 
