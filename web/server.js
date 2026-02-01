@@ -2254,6 +2254,11 @@ app.post('/api/ebay/list/:cardId', authenticateToken, async (req, res) => {
     // Step 1: Create inventory item
     // eBay trading cards: LIKE_NEW (2750) = Graded, USED_VERY_GOOD (4000) = Ungraded
     const conditionDescriptors = buildConditionDescriptors(card);
+
+    // Get image URLs (must be publicly accessible - Cloudinary URLs)
+    const imageUrls = [row.front_image_path, row.back_image_path]
+      .filter(url => url && url.startsWith('http'));
+
     const inventoryPayload = {
       availability: {
         shipToLocationAvailability: { quantity }
@@ -2276,7 +2281,8 @@ app.post('/api/ebay/list/:cardId', authenticateToken, async (req, res) => {
           ...(card.parallel && card.parallel !== 'Base' && {
             'Parallel/Variety': [card.parallel]
           })
-        }
+        },
+        imageUrls: imageUrls.length > 0 ? imageUrls : undefined
       }
     };
 
@@ -2668,6 +2674,8 @@ app.post('/api/ebay/bulk-create', authenticateToken, async (req, res) => {
         // Create inventory item
         // eBay trading cards: LIKE_NEW (2750) = Graded, USED_VERY_GOOD (4000) = Ungraded
         const conditionDescriptors = buildConditionDescriptors(card);
+        const imageUrls = [row.front_image_path, row.back_image_path]
+          .filter(url => url && url.startsWith('http'));
         const inventoryPayload = {
           availability: { shipToLocationAvailability: { quantity: 1 } },
           condition: card.is_graded ? 'LIKE_NEW' : 'USED_VERY_GOOD',
@@ -2681,7 +2689,8 @@ app.post('/api/ebay/bulk-create', authenticateToken, async (req, res) => {
               'Team': [card.team || 'N/A'],
               'Year': [String(card.year)],
               'Card Number': [card.card_number || 'N/A']
-            }
+            },
+            imageUrls: imageUrls.length > 0 ? imageUrls : undefined
           }
         };
 
@@ -3227,6 +3236,8 @@ app.post('/api/ebay/create-auction', authenticateToken, async (req, res) => {
     // Create inventory item
     // eBay trading cards: LIKE_NEW (2750) = Graded, USED_VERY_GOOD (4000) = Ungraded
     const conditionDescriptors = buildConditionDescriptors(card);
+    const imageUrls = [row.front_image_path, row.back_image_path]
+      .filter(url => url && url.startsWith('http'));
     await axios.put(
       `https://api.ebay.com/sell/inventory/v1/inventory_item/${sku}`,
       {
@@ -3240,7 +3251,8 @@ app.post('/api/ebay/create-auction', authenticateToken, async (req, res) => {
             'Sport': [card.sport || 'Baseball'],
             'Player': [card.player],
             'Year': [String(card.year)]
-          }
+          },
+          imageUrls: imageUrls.length > 0 ? imageUrls : undefined
         }
       },
       {
@@ -3508,7 +3520,7 @@ const HOST = process.env.NODE_ENV === 'production' ? '0.0.0.0' : 'localhost';
 server.listen(PORT, HOST, () => {
   console.log(`
 ══════════════════════════════════════════════════
-  CARDFLOW v2.0 - Multi-User SaaS (Build 0201h)
+  CARDFLOW v2.0 - Multi-User SaaS (Build 0201i)
 ══════════════════════════════════════════════════
 
   Server:    http://${HOST}:${PORT}
