@@ -2063,6 +2063,44 @@ app.post('/api/ebay/create-policies', authenticateToken, async (req, res) => {
 // EBAY LISTING ROUTES
 // ============================================
 
+// Map grading company names to eBay condition descriptor IDs
+function getGraderEbayId(graderName) {
+  const graderMap = {
+    'PSA': '275010',
+    'BCCG': '275011',
+    'BVG': '275012',
+    'BGS': '275013',
+    'CSG': '275014',
+    'SGC': '275016',
+    'KSA': '275017',
+    'GMA': '275018',
+    'HGA': '275019',
+    'ISA': '2750110',
+    'GSG': '2750112',
+    'CGC': '275014',  // Map CGC to CSG
+    'Other': '2750123'
+  };
+  const upper = (graderName || '').toUpperCase();
+  return graderMap[upper] || '2750123'; // Default to "Other"
+}
+
+// Build conditionDescriptors for graded cards
+function buildConditionDescriptors(card) {
+  if (!card.is_graded || !card.grading_company) {
+    return undefined; // Ungraded cards don't need descriptors
+  }
+  return [
+    {
+      name: '27501', // Professional Grader
+      values: [getGraderEbayId(card.grading_company)]
+    },
+    {
+      name: '27502', // Grade
+      values: [String(card.grade || '10')]
+    }
+  ];
+}
+
 // Generate listing title (max 80 chars)
 function generateListingTitle(card) {
   const parts = [];
@@ -2184,15 +2222,14 @@ app.post('/api/ebay/list/:cardId', authenticateToken, async (req, res) => {
     console.log('[eBay] SKU:', sku, 'Length:', sku.length);
 
     // Step 1: Create inventory item
-    // eBay trading cards: 2750 = Graded, 4000 = Ungraded
+    // eBay trading cards: LIKE_NEW (2750) = Graded, USED_VERY_GOOD (4000) = Ungraded
+    const conditionDescriptors = buildConditionDescriptors(card);
     const inventoryPayload = {
       availability: {
         shipToLocationAvailability: { quantity }
       },
       condition: card.is_graded ? 'LIKE_NEW' : 'USED_VERY_GOOD',
-      conditionDescription: card.is_graded
-        ? `${card.grading_company || 'PSA'} ${card.grade || '10'}`
-        : 'Ungraded card in excellent condition',
+      ...(conditionDescriptors && { conditionDescriptors }),
       product: {
         title,
         description,
@@ -2599,13 +2636,12 @@ app.post('/api/ebay/bulk-create', authenticateToken, async (req, res) => {
         let fulfillmentPolicyId = policies.ebay_fulfillment_policy_id;
 
         // Create inventory item
-        // eBay trading cards: LIKE_NEW = Graded, USED_VERY_GOOD = Ungraded
+        // eBay trading cards: LIKE_NEW (2750) = Graded, USED_VERY_GOOD (4000) = Ungraded
+        const conditionDescriptors = buildConditionDescriptors(card);
         const inventoryPayload = {
           availability: { shipToLocationAvailability: { quantity: 1 } },
           condition: card.is_graded ? 'LIKE_NEW' : 'USED_VERY_GOOD',
-          conditionDescription: card.is_graded
-            ? `${card.grading_company || 'PSA'} ${card.grade || '10'}`
-            : 'Ungraded card in excellent condition',
+          ...(conditionDescriptors && { conditionDescriptors }),
           product: {
             title,
             description,
@@ -3159,15 +3195,14 @@ app.post('/api/ebay/create-auction', authenticateToken, async (req, res) => {
     const sku = `CFAUC${cardId.replace(/-/g, '').substring(0, 16)}${Date.now().toString().slice(-8)}`;
 
     // Create inventory item
-    // eBay trading cards: LIKE_NEW = Graded, USED_VERY_GOOD = Ungraded
+    // eBay trading cards: LIKE_NEW (2750) = Graded, USED_VERY_GOOD (4000) = Ungraded
+    const conditionDescriptors = buildConditionDescriptors(card);
     await axios.put(
       `https://api.ebay.com/sell/inventory/v1/inventory_item/${sku}`,
       {
         availability: { shipToLocationAvailability: { quantity: 1 } },
         condition: card.is_graded ? 'LIKE_NEW' : 'USED_VERY_GOOD',
-        conditionDescription: card.is_graded
-          ? `${card.grading_company || 'PSA'} ${card.grade || '10'}`
-          : 'Ungraded card in excellent condition',
+        ...(conditionDescriptors && { conditionDescriptors }),
         product: {
           title,
           description,
@@ -3443,7 +3478,7 @@ const HOST = process.env.NODE_ENV === 'production' ? '0.0.0.0' : 'localhost';
 server.listen(PORT, HOST, () => {
   console.log(`
 ══════════════════════════════════════════════════
-  CARDFLOW v2.0 - Multi-User SaaS (Build 0201f)
+  CARDFLOW v2.0 - Multi-User SaaS (Build 0201g)
 ══════════════════════════════════════════════════
 
   Server:    http://${HOST}:${PORT}
