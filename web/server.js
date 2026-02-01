@@ -2170,7 +2170,8 @@ app.post('/api/ebay/list/:cardId', authenticateToken, async (req, res) => {
       {
         headers: {
           'Authorization': `Bearer ${accessToken}`,
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          'Accept-Language': 'en-US'
         }
       }
     );
@@ -2201,7 +2202,8 @@ app.post('/api/ebay/list/:cardId', authenticateToken, async (req, res) => {
       {
         headers: {
           'Authorization': `Bearer ${accessToken}`,
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          'Accept-Language': 'en-US'
         }
       }
     );
@@ -2216,7 +2218,8 @@ app.post('/api/ebay/list/:cardId', authenticateToken, async (req, res) => {
       {
         headers: {
           'Authorization': `Bearer ${accessToken}`,
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          'Accept-Language': 'en-US'
         }
       }
     );
@@ -2568,8 +2571,9 @@ app.post('/api/ebay/bulk-create', authenticateToken, async (req, res) => {
           {
             headers: {
               'Authorization': `Bearer ${accessToken}`,
-              'Content-Type': 'application/json'
-                }
+              'Content-Type': 'application/json',
+              'Accept-Language': 'en-US'
+            }
           }
         );
 
@@ -2597,7 +2601,8 @@ app.post('/api/ebay/bulk-create', authenticateToken, async (req, res) => {
           {
             headers: {
               'Authorization': `Bearer ${accessToken}`,
-              'Content-Type': 'application/json'
+              'Content-Type': 'application/json',
+              'Accept-Language': 'en-US'
             }
           }
         );
@@ -2611,7 +2616,8 @@ app.post('/api/ebay/bulk-create', authenticateToken, async (req, res) => {
           {
             headers: {
               'Authorization': `Bearer ${accessToken}`,
-              'Content-Type': 'application/json'
+              'Content-Type': 'application/json',
+              'Accept-Language': 'en-US'
             }
           }
         );
@@ -2926,7 +2932,8 @@ app.post('/api/ebay/create-lot', authenticateToken, async (req, res) => {
       {
         headers: {
           'Authorization': `Bearer ${accessToken}`,
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          'Accept-Language': 'en-US'
         }
       }
     );
@@ -2955,7 +2962,8 @@ app.post('/api/ebay/create-lot', authenticateToken, async (req, res) => {
       {
         headers: {
           'Authorization': `Bearer ${accessToken}`,
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          'Accept-Language': 'en-US'
         }
       }
     );
@@ -2969,7 +2977,8 @@ app.post('/api/ebay/create-lot', authenticateToken, async (req, res) => {
       {
         headers: {
           'Authorization': `Bearer ${accessToken}`,
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          'Accept-Language': 'en-US'
         }
       }
     );
@@ -3110,7 +3119,8 @@ app.post('/api/ebay/create-auction', authenticateToken, async (req, res) => {
       {
         headers: {
           'Authorization': `Bearer ${accessToken}`,
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          'Accept-Language': 'en-US'
         }
       }
     );
@@ -3141,7 +3151,8 @@ app.post('/api/ebay/create-auction', authenticateToken, async (req, res) => {
       {
         headers: {
           'Authorization': `Bearer ${accessToken}`,
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          'Accept-Language': 'en-US'
         }
       }
     );
@@ -3155,7 +3166,8 @@ app.post('/api/ebay/create-auction', authenticateToken, async (req, res) => {
       {
         headers: {
           'Authorization': `Bearer ${accessToken}`,
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          'Accept-Language': 'en-US'
         }
       }
     );
@@ -3221,7 +3233,8 @@ app.post('/api/ebay/end-listing/:listingId', authenticateToken, async (req, res)
       {
         headers: {
           'Authorization': `Bearer ${accessToken}`,
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          'Accept-Language': 'en-US'
         }
       }
     );
@@ -3367,7 +3380,7 @@ const HOST = process.env.NODE_ENV === 'production' ? '0.0.0.0' : 'localhost';
 server.listen(PORT, HOST, () => {
   console.log(`
 ══════════════════════════════════════════════════
-  CARDFLOW v2.0 - Multi-User SaaS (Build 0201a)
+  CARDFLOW v2.0 - Multi-User SaaS (Build 0201b)
 ══════════════════════════════════════════════════
 
   Server:    http://${HOST}:${PORT}
