@@ -2114,21 +2114,30 @@ function getGradeEbayId(grade) {
   return gradeMap[String(grade)] || '275020'; // Default to 10
 }
 
-// Build conditionDescriptors for graded cards
+// Build conditionDescriptors for trading cards (graded and ungraded)
 function buildConditionDescriptors(card) {
-  if (!card.is_graded || !card.grading_company) {
-    return undefined; // Ungraded cards don't need descriptors
+  if (card.is_graded && card.grading_company) {
+    // Graded cards: Professional Grader + Grade
+    return [
+      {
+        name: '27501', // Professional Grader
+        values: [getGraderEbayId(card.grading_company)]
+      },
+      {
+        name: '27502', // Grade
+        values: [getGradeEbayId(card.grade)]
+      }
+    ];
+  } else {
+    // Ungraded cards: Card Condition
+    // 400010 = Near mint or better, 400011 = Excellent, 400012 = Very good, 400013 = Poor
+    return [
+      {
+        name: '40001', // Card Condition
+        values: ['400010'] // Default to "Near mint or better"
+      }
+    ];
   }
-  return [
-    {
-      name: '27501', // Professional Grader
-      values: [getGraderEbayId(card.grading_company)]
-    },
-    {
-      name: '27502', // Grade
-      values: [getGradeEbayId(card.grade)]
-    }
-  ];
 }
 
 // Generate listing title (max 80 chars)
@@ -3520,7 +3529,7 @@ const HOST = process.env.NODE_ENV === 'production' ? '0.0.0.0' : 'localhost';
 server.listen(PORT, HOST, () => {
   console.log(`
 ══════════════════════════════════════════════════
-  CARDFLOW v2.0 - Multi-User SaaS (Build 0201i)
+  CARDFLOW v2.0 - Multi-User SaaS (Build 0201j)
 ══════════════════════════════════════════════════
 
   Server:    http://${HOST}:${PORT}
