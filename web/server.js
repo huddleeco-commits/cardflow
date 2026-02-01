@@ -2134,7 +2134,7 @@ app.post('/api/ebay/list/:cardId', authenticateToken, async (req, res) => {
 
     const title = generateListingTitle(card);
     const description = generateListingDescription(card);
-    const sku = `CF-${cardId}-${Date.now()}`;
+    const sku = `CF${cardId.replace(/-/g, '').substring(0, 20)}${Date.now().toString().slice(-8)}`;
 
     console.log('[eBay] Listing title:', title);
 
@@ -2541,7 +2541,7 @@ app.post('/api/ebay/bulk-create', authenticateToken, async (req, res) => {
         const card = row.card_data;
         const title = customTitle || generateListingTitle(card);
         const description = generateListingDescription(card);
-        const sku = `CF-${cardId}-${Date.now()}`;
+        const sku = `CF${cardId.replace(/-/g, '').substring(0, 20)}${Date.now().toString().slice(-8)}`;
 
         // Create fulfillment policy for this shipping method
         let fulfillmentPolicyId = policies.ebay_fulfillment_policy_id;
@@ -2871,9 +2871,9 @@ app.post('/api/ebay/create-lot', authenticateToken, async (req, res) => {
       return res.status(400).json({ success: false, error: 'eBay business policies not set up' });
     }
 
-    // Generate lot ID and SKU
-    const lotId = `LOT-${Date.now()}`;
-    const sku = `CF-${lotId}`;
+    // Generate lot ID and SKU (alphanumeric only, max 50 chars)
+    const lotId = `LOT${Date.now()}`;
+    const sku = `CF${lotId}`;
 
     // Generate collage if requested
     let collageUrl = null;
@@ -3092,7 +3092,7 @@ app.post('/api/ebay/create-auction', authenticateToken, async (req, res) => {
 
     const title = generateListingTitle(card);
     const description = generateListingDescription(card);
-    const sku = `CF-AUC-${cardId}-${Date.now()}`;
+    const sku = `CFAUC${cardId.replace(/-/g, '').substring(0, 16)}${Date.now().toString().slice(-8)}`;
 
     // Create inventory item
     await axios.put(
