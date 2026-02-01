@@ -950,6 +950,71 @@ app.post('/api/upload', authenticateToken, upload.single('image'), async (req, r
   }
 });
 
+// Upload front/back pair
+const pairUpload = multer({
+  storage: storage,
+  limits: { fileSize: 20 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    const allowed = ['.jpg', '.jpeg', '.png', '.webp'];
+    const ext = path.extname(file.originalname).toLowerCase();
+    if (allowed.includes(ext)) {
+      cb(null, true);
+    } else {
+      cb(new Error('Only image files allowed'));
+    }
+  }
+}).fields([
+  { name: 'front', maxCount: 1 },
+  { name: 'back', maxCount: 1 }
+]);
+
+app.post('/api/upload-pair', authenticateToken, (req, res) => {
+  pairUpload(req, res, async (err) => {
+    if (err) {
+      return res.status(400).json({ error: err.message });
+    }
+
+    try {
+      const frontFile = req.files['front'] ? req.files['front'][0] : null;
+      const backFile = req.files['back'] ? req.files['back'][0] : null;
+
+      if (!frontFile) {
+        return res.status(400).json({ error: 'Front image required' });
+      }
+
+      // Store pending pair in database (status: pending)
+      await pool.query(`
+        INSERT INTO cards (user_id, card_data, front_image_path, back_image_path, status)
+        VALUES ($1, $2, $3, $4, 'pending')
+      `, [
+        req.user.id,
+        JSON.stringify({ uploaded_at: new Date().toISOString() }),
+        frontFile.filename,
+        backFile ? backFile.filename : null
+      ]);
+
+      console.log(`[Upload] Pair: ${frontFile.filename}${backFile ? ' + ' + backFile.filename : ' (single)'}`);
+
+      broadcast({
+        type: 'pair_uploaded',
+        front: frontFile.filename,
+        back: backFile ? backFile.filename : null,
+        userId: req.user.id
+      });
+
+      res.json({
+        success: true,
+        front: frontFile.filename,
+        back: backFile ? backFile.filename : null
+      });
+
+    } catch (e) {
+      console.error('Pair upload error:', e);
+      res.status(500).json({ error: 'Upload failed' });
+    }
+  });
+});
+
 // ============================================
 // IMPORT ENDPOINTS
 // ============================================
@@ -1050,18 +1115,17 @@ app.post('/api/process/identify', authenticateToken, async (req, res) => {
       return res.status(400).json({ error: 'No API key configured. Add your Anthropic API key in Settings.' });
     }
 
-    // Find images in 1-new folder
-    const imageExts = ['.jpg', '.jpeg', '.png', '.webp'];
-    let images = [];
-    try {
-      images = fs.readdirSync(FOLDERS.new).filter(f =>
-        imageExts.includes(path.extname(f).toLowerCase())
-      );
-    } catch (e) {}
+    // Get pending cards from database
+    const pendingResult = await pool.query(`
+      SELECT * FROM cards WHERE user_id = $1 AND status = 'pending'
+      ORDER BY created_at
+    `, [userId]);
 
-    if (images.length === 0) {
-      return res.status(400).json({ error: 'No images found in 1-new folder' });
+    if (pendingResult.rows.length === 0) {
+      return res.status(400).json({ error: 'No pending cards to identify. Upload images first.' });
     }
+
+    const pendingCards = pendingResult.rows;
 
     // Initialize Anthropic
     const Anthropic = require('@anthropic-ai/sdk');
@@ -1070,30 +1134,47 @@ app.post('/api/process/identify', authenticateToken, async (req, res) => {
     // Send initial response
     res.json({
       success: true,
-      message: `Processing ${images.length} images...`,
-      count: images.length
+      message: `Processing ${pendingCards.length} cards...`,
+      count: pendingCards.length
     });
 
-    // Process each image
+    // Process each card
     let processed = 0;
     let totalCost = 0;
 
-    for (const filename of images) {
+    for (const card of pendingCards) {
       try {
-        const imagePath = path.join(FOLDERS.new, filename);
+        const frontPath = path.join(FOLDERS.new, card.front_image_path);
+        const backPath = card.back_image_path ? path.join(FOLDERS.new, card.back_image_path) : null;
 
         broadcast({
           type: 'identify_progress',
           current: processed + 1,
-          total: images.length,
-          filename,
+          total: pendingCards.length,
+          filename: card.front_image_path,
           userId
         });
 
-        // Build content with image
-        const content = [
-          { type: 'image', source: imageToBase64(imagePath) },
-          { type: 'text', text: `Analyze this sports card image and identify it.
+        // Build content with images
+        const content = [];
+
+        // Add front image
+        if (fs.existsSync(frontPath)) {
+          content.push({ type: 'image', source: imageToBase64(frontPath) });
+        }
+
+        // Add back image if exists
+        if (backPath && fs.existsSync(backPath)) {
+          content.push({ type: 'image', source: imageToBase64(backPath) });
+        }
+
+        // Add prompt
+        const hasBack = backPath && fs.existsSync(backPath);
+        content.push({
+          type: 'text',
+          text: `Analyze this sports card${hasBack ? ' (front and back images provided)' : ' image'} and identify it.
+
+${hasBack ? 'I have provided both the FRONT and BACK of the card. Use both images to accurately identify it.' : 'This appears to be a single image (likely a graded/slabbed card).'}
 
 Return ONLY a JSON object with these fields (no other text):
 {
@@ -1112,8 +1193,8 @@ Return ONLY a JSON object with these fields (no other text):
   "condition": "mint, near_mint, excellent, good, fair, poor",
   "confidence": "high, medium, or low",
   "notes": "Any special observations"
-}` }
-        ];
+}`
+        });
 
         const response = await anthropic.messages.create({
           model: 'claude-sonnet-4-20250514',
@@ -1126,6 +1207,7 @@ Return ONLY a JSON object with these fields (no other text):
 
         if (jsonMatch) {
           const cardData = JSON.parse(jsonMatch[0]);
+          cardData.identified_at = new Date().toISOString();
 
           // Calculate cost
           const inputTokens = response.usage?.input_tokens || 0;
@@ -1133,11 +1215,11 @@ Return ONLY a JSON object with these fields (no other text):
           const cost = (inputTokens / 1000000) * 3 + (outputTokens / 1000000) * 15;
           totalCost += cost;
 
-          // Save to database
+          // Update card in database
           await pool.query(`
-            INSERT INTO cards (user_id, card_data, front_image_path, status)
-            VALUES ($1, $2, $3, 'identified')
-          `, [userId, JSON.stringify(cardData), filename]);
+            UPDATE cards SET card_data = $1, status = 'identified'
+            WHERE id = $2
+          `, [JSON.stringify(cardData), card.id]);
 
           // Track API usage
           await pool.query(`
@@ -1145,24 +1227,27 @@ Return ONLY a JSON object with these fields (no other text):
             VALUES ($1, 'identify', 'sonnet4', $2, $3, $4)
           `, [userId, inputTokens, outputTokens, cost]);
 
-          // Move image to identified folder
-          const srcPath = path.join(FOLDERS.new, filename);
-          const dstPath = path.join(FOLDERS.identified, filename);
-          if (fs.existsSync(srcPath)) {
-            try { fs.renameSync(srcPath, dstPath); } catch (e) {}
+          // Move images to identified folder
+          if (fs.existsSync(frontPath)) {
+            const dstPath = path.join(FOLDERS.identified, card.front_image_path);
+            try { fs.renameSync(frontPath, dstPath); } catch (e) {}
+          }
+          if (backPath && fs.existsSync(backPath)) {
+            const dstPath = path.join(FOLDERS.identified, card.back_image_path);
+            try { fs.renameSync(backPath, dstPath); } catch (e) {}
           }
         }
 
         processed++;
       } catch (e) {
-        console.error(`Error identifying ${filename}:`, e.message);
+        console.error(`Error identifying card ${card.id}:`, e.message);
       }
     }
 
     broadcast({
       type: 'identify_complete',
       processed,
-      total: images.length,
+      total: pendingCards.length,
       cost: totalCost,
       userId
     });

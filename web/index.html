@@ -1037,6 +1037,127 @@
       to { transform: translateX(0); opacity: 1; }
     }
 
+    /* Pair Images Grid */
+    .pair-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 16px;
+      max-height: 60vh;
+      overflow-y: auto;
+      padding: 4px;
+    }
+
+    .pair-card {
+      background: var(--glass);
+      border: 2px solid var(--glass-border);
+      border-radius: 12px;
+      padding: 12px;
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .pair-card.complete {
+      border-color: var(--success);
+    }
+
+    .pair-slot {
+      flex: 1;
+      min-height: 100px;
+      background: rgba(0,0,0,0.2);
+      border: 2px dashed var(--glass-border);
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .pair-slot.has-image {
+      border-style: solid;
+      border-color: var(--cyan);
+    }
+
+    .pair-slot img {
+      max-width: 100%;
+      max-height: 100px;
+      object-fit: contain;
+    }
+
+    .pair-slot-label {
+      position: absolute;
+      bottom: 4px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 10px;
+      background: rgba(0,0,0,0.7);
+      padding: 2px 8px;
+      border-radius: 4px;
+      text-transform: uppercase;
+    }
+
+    .pair-slot .remove-btn {
+      position: absolute;
+      top: 4px;
+      right: 4px;
+      background: var(--error);
+      border: none;
+      border-radius: 50%;
+      width: 20px;
+      height: 20px;
+      cursor: pointer;
+      font-size: 12px;
+      display: none;
+    }
+
+    .pair-slot:hover .remove-btn {
+      display: block;
+    }
+
+    .unpaired-images {
+      margin-top: 20px;
+      padding: 16px;
+      background: rgba(0,0,0,0.2);
+      border-radius: 12px;
+    }
+
+    .unpaired-images h4 {
+      margin: 0 0 12px 0;
+      font-size: 14px;
+      color: var(--text-muted);
+    }
+
+    .unpaired-grid {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .unpaired-thumb {
+      width: 80px;
+      height: 80px;
+      border-radius: 8px;
+      overflow: hidden;
+      cursor: grab;
+      border: 2px solid var(--glass-border);
+      position: relative;
+    }
+
+    .unpaired-thumb:hover {
+      border-color: var(--cyan);
+    }
+
+    .unpaired-thumb img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    .unpaired-thumb.dragging {
+      opacity: 0.5;
+    }
+
     /* Lightbox */
     .lightbox {
       position: fixed;
@@ -1301,6 +1422,28 @@
     </div>
   </div>
 
+  <!-- Pair Images Modal -->
+  <div class="modal" id="pair-modal">
+    <div class="modal-content" style="max-width: 900px;">
+      <div class="modal-header">
+        <h2>Organize Card Images</h2>
+        <button class="modal-close" onclick="closePairModal()">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p style="margin-bottom: 16px; color: var(--text-muted);">
+          Drag images to pair front + back, or leave single for slabbed cards.
+        </p>
+        <div class="pair-grid" id="pair-grid">
+          <!-- Images will be added here -->
+        </div>
+        <div class="pair-actions" style="margin-top: 20px; display: flex; gap: 12px; justify-content: flex-end;">
+          <button class="btn btn-secondary" onclick="closePairModal()">Cancel</button>
+          <button class="btn btn-primary" onclick="confirmPairs()">Upload & Identify</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- Lightbox -->
   <div class="lightbox" id="lightbox" onclick="closeLightbox()">
     <img id="lightbox-img" src="">
@@ -1397,6 +1540,11 @@
           showToast('Price error: ' + data.error, 'error');
         }
 
+        // Pair uploaded
+        if (data.type === 'pair_uploaded') {
+          loadStatus();
+        }
+
         // Existing handlers
         if (data.type === 'card_updated' || data.type === 'cards_imported' || data.type === 'reset') {
           loadCards();
@@ -1423,8 +1571,8 @@
       document.getElementById('count-priced').textContent = status.cards.priced || 0;
       document.getElementById('count-exported').textContent = status.cards.exported || 0;
 
-      // Pending images (in 1-new folder)
-      const pendingCount = status.pipeline?.new || 0;
+      // Pending cards (uploaded but not identified)
+      const pendingCount = status.cards?.pending || 0;
       document.getElementById('count-pending').textContent = pendingCount;
       const pendingStep = document.getElementById('step-pending');
       if (pendingCount > 0) {
@@ -1737,6 +1885,9 @@
     }
 
     // File Upload Handling
+    let pendingFiles = [];
+    let cardPairs = []; // Array of { front: File|null, back: File|null }
+
     function handleDragOver(e) {
       e.preventDefault();
       e.stopPropagation();
@@ -1756,46 +1907,164 @@
 
       const files = Array.from(e.dataTransfer.files).filter(f => f.type.startsWith('image/'));
       if (files.length > 0) {
-        uploadFiles(files);
+        showPairModal(files);
       }
     }
 
     function handleFileSelect(e) {
       const files = Array.from(e.target.files);
       if (files.length > 0) {
-        uploadFiles(files);
+        showPairModal(files);
+      }
+      e.target.value = ''; // Reset for re-selection
+    }
+
+    function showPairModal(files) {
+      pendingFiles = files;
+      cardPairs = [];
+
+      // Auto-pair by filename patterns
+      const used = new Set();
+      const patterns = [
+        { front: /-front\./i, back: /-back\./i },
+        { front: /_front\./i, back: /_back\./i },
+        { front: /-1\./i, back: /-2\./i },
+        { front: /_1\./i, back: /_2\./i },
+        { front: /\(1\)\./i, back: /\(2\)\./i }
+      ];
+
+      // Try to auto-pair based on filenames
+      for (const file of files) {
+        if (used.has(file.name)) continue;
+
+        for (const pattern of patterns) {
+          if (pattern.front.test(file.name)) {
+            const baseName = file.name.replace(pattern.front, '.');
+            const backFile = files.find(f =>
+              !used.has(f.name) &&
+              f.name !== file.name &&
+              f.name.replace(pattern.back, '.').toLowerCase() === baseName.toLowerCase()
+            );
+            if (backFile) {
+              cardPairs.push({ front: file, back: backFile });
+              used.add(file.name);
+              used.add(backFile.name);
+              break;
+            }
+          }
+        }
+      }
+
+      // Add remaining files as single cards
+      for (const file of files) {
+        if (!used.has(file.name)) {
+          cardPairs.push({ front: file, back: null });
+          used.add(file.name);
+        }
+      }
+
+      renderPairModal();
+      document.getElementById('pair-modal').classList.add('open');
+    }
+
+    function renderPairModal() {
+      const grid = document.getElementById('pair-grid');
+      grid.innerHTML = cardPairs.map((pair, idx) => `
+        <div class="pair-card ${pair.front && pair.back ? 'complete' : ''}" data-idx="${idx}">
+          <div class="pair-slot has-image" ondrop="dropOnSlot(event, ${idx}, 'front')" ondragover="event.preventDefault()">
+            ${pair.front ? `<img src="${URL.createObjectURL(pair.front)}" alt="Front">` : ''}
+            <span class="pair-slot-label">Front</span>
+            ${pair.front ? `<button class="remove-btn" onclick="removeFromPair(${idx}, 'front')">×</button>` : ''}
+          </div>
+          <div class="pair-slot ${pair.back ? 'has-image' : ''}" ondrop="dropOnSlot(event, ${idx}, 'back')" ondragover="event.preventDefault()">
+            ${pair.back ? `<img src="${URL.createObjectURL(pair.back)}" alt="Back">` : '<span style="color: var(--text-muted); font-size: 12px;">+ Back<br>(optional)</span>'}
+            ${pair.back ? '<span class="pair-slot-label">Back</span>' : ''}
+            ${pair.back ? `<button class="remove-btn" onclick="removeFromPair(${idx}, 'back')">×</button>` : ''}
+          </div>
+        </div>
+      `).join('');
+
+      // Add "Add Card" button
+      grid.innerHTML += `
+        <div class="pair-card" style="border-style: dashed; cursor: pointer; justify-content: center;" onclick="addEmptyPair()">
+          <span style="color: var(--text-muted);">+ Add Another Card</span>
+        </div>
+      `;
+    }
+
+    function addEmptyPair() {
+      cardPairs.push({ front: null, back: null });
+      renderPairModal();
+    }
+
+    function removeFromPair(idx, slot) {
+      if (cardPairs[idx]) {
+        cardPairs[idx][slot] = null;
+        // Remove empty pairs
+        if (!cardPairs[idx].front && !cardPairs[idx].back) {
+          cardPairs.splice(idx, 1);
+        }
+        renderPairModal();
       }
     }
 
-    async function uploadFiles(files) {
+    function dropOnSlot(e, idx, slot) {
+      e.preventDefault();
+      const fileIdx = e.dataTransfer.getData('fileIdx');
+      if (fileIdx !== '') {
+        // Moving from another pair
+        const [srcIdx, srcSlot] = fileIdx.split('-');
+        const file = cardPairs[srcIdx][srcSlot];
+        cardPairs[srcIdx][srcSlot] = null;
+        cardPairs[idx][slot] = file;
+        renderPairModal();
+      }
+    }
+
+    function closePairModal() {
+      document.getElementById('pair-modal').classList.remove('open');
+      pendingFiles = [];
+      cardPairs = [];
+    }
+
+    async function confirmPairs() {
+      const validPairs = cardPairs.filter(p => p.front);
+      if (validPairs.length === 0) {
+        showToast('No cards to upload', 'error');
+        return;
+      }
+
+      closePairModal();
+
       const progressDiv = document.getElementById('upload-progress');
       const progressFill = document.getElementById('upload-fill');
       const statusText = document.getElementById('upload-status');
 
       progressDiv.style.display = 'block';
       progressFill.style.width = '0%';
-      statusText.textContent = `Uploading ${files.length} images...`;
+      statusText.textContent = `Uploading ${validPairs.length} cards...`;
 
       let uploaded = 0;
 
-      for (const file of files) {
+      for (const pair of validPairs) {
         try {
           const formData = new FormData();
-          formData.append('image', file);
+          formData.append('front', pair.front);
+          if (pair.back) {
+            formData.append('back', pair.back);
+          }
 
-          const response = await fetch(`${API_URL}/upload`, {
+          const response = await fetch(`${API_URL}/upload-pair`, {
             method: 'POST',
-            headers: {
-              'Authorization': `Bearer ${token}`
-            },
+            headers: { 'Authorization': `Bearer ${token}` },
             body: formData
           });
 
           if (response.ok) {
             uploaded++;
-            const percent = Math.round((uploaded / files.length) * 100);
+            const percent = Math.round((uploaded / validPairs.length) * 100);
             progressFill.style.width = percent + '%';
-            statusText.textContent = `Uploaded ${uploaded}/${files.length}`;
+            statusText.textContent = `Uploaded ${uploaded}/${validPairs.length}`;
           }
         } catch (e) {
           console.error('Upload error:', e);
@@ -1805,7 +2074,7 @@
       setTimeout(() => {
         progressDiv.style.display = 'none';
         if (uploaded > 0) {
-          showToast(`Uploaded ${uploaded} images. Click Identify to process.`, 'success');
+          showToast(`Uploaded ${uploaded} cards. Click Identify to process.`, 'success');
           loadStatus();
         }
       }, 1000);
