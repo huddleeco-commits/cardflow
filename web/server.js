@@ -35,6 +35,7 @@ const JWT_SECRET = process.env.JWT_SECRET || 'cardflow-dev-secret-change-in-prod
 const JWT_EXPIRY = '7d';
 const crypto = require('crypto');
 const axios = require('axios');
+const XLSX = require('xlsx');
 
 // eBay OAuth Config
 const EBAY_APP_ID = process.env.EBAY_APP_ID;
@@ -3411,6 +3412,595 @@ app.post('/api/ebay/end-listing/:listingId', authenticateToken, async (req, res)
 });
 
 // ============================================
+// BULK OPERATIONS API
+// ============================================
+
+// Bulk update cards (price, status)
+app.put('/api/cards/bulk-update', authenticateToken, async (req, res) => {
+  try {
+    const { cardIds, updates } = req.body;
+
+    if (!cardIds || !Array.isArray(cardIds) || cardIds.length === 0) {
+      return res.status(400).json({ error: 'No cards selected' });
+    }
+
+    let updated = 0;
+    for (const cardId of cardIds) {
+      const result = await pool.query(
+        'SELECT * FROM cards WHERE id = $1 AND user_id = $2',
+        [cardId, req.user.id]
+      );
+
+      if (result.rows.length > 0) {
+        const existingData = result.rows[0].card_data;
+        const newCardData = { ...existingData };
+
+        if (updates.recommended_price !== undefined) {
+          newCardData.recommended_price = updates.recommended_price;
+        }
+        if (updates.notes !== undefined) {
+          newCardData.notes = updates.notes;
+        }
+
+        const newStatus = updates.status || result.rows[0].status;
+
+        await pool.query(
+          'UPDATE cards SET card_data = $1, status = $2 WHERE id = $3',
+          [JSON.stringify(newCardData), newStatus, cardId]
+        );
+        updated++;
+      }
+    }
+
+    broadcast({ type: 'bulk_updated', count: updated, userId: req.user.id });
+    res.json({ success: true, updated });
+
+  } catch (e) {
+    console.error('Bulk update error:', e);
+    res.status(500).json({ error: 'Failed to update cards' });
+  }
+});
+
+// Bulk delete cards
+app.delete('/api/cards/bulk-delete', authenticateToken, async (req, res) => {
+  try {
+    const { cardIds } = req.body;
+
+    if (!cardIds || !Array.isArray(cardIds) || cardIds.length === 0) {
+      return res.status(400).json({ error: 'No cards selected' });
+    }
+
+    const result = await pool.query(
+      'DELETE FROM cards WHERE id = ANY($1) AND user_id = $2 RETURNING id',
+      [cardIds, req.user.id]
+    );
+
+    broadcast({ type: 'bulk_deleted', count: result.rowCount, userId: req.user.id });
+    res.json({ success: true, deleted: result.rowCount });
+
+  } catch (e) {
+    console.error('Bulk delete error:', e);
+    res.status(500).json({ error: 'Failed to delete cards' });
+  }
+});
+
+// ============================================
+// LISTING TEMPLATES API
+// ============================================
+
+// Get all templates for user
+app.get('/api/templates', authenticateToken, async (req, res) => {
+  try {
+    const result = await pool.query(
+      'SELECT * FROM listing_templates WHERE user_id = $1 ORDER BY is_default DESC, name ASC',
+      [req.user.id]
+    );
+    res.json({ templates: result.rows });
+  } catch (e) {
+    console.error('Get templates error:', e);
+    res.status(500).json({ error: 'Failed to load templates' });
+  }
+});
+
+// Create template
+app.post('/api/templates', authenticateToken, async (req, res) => {
+  try {
+    const { name, title_format, description_template, default_shipping, default_condition, default_quantity, is_default, settings } = req.body;
+
+    if (!name) {
+      return res.status(400).json({ error: 'Template name required' });
+    }
+
+    // If setting as default, unset other defaults first
+    if (is_default) {
+      await pool.query(
+        'UPDATE listing_templates SET is_default = false WHERE user_id = $1',
+        [req.user.id]
+      );
+    }
+
+    const result = await pool.query(`
+      INSERT INTO listing_templates (user_id, name, title_format, description_template, default_shipping, default_condition, default_quantity, is_default, settings)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+      RETURNING *
+    `, [req.user.id, name, title_format || '{year} {set_name} {player} #{card_number} {parallel} {grade}', description_template || '', default_shipping || 'standard_envelope', default_condition || 'USED_VERY_GOOD', default_quantity || 1, is_default || false, JSON.stringify(settings || {})]);
+
+    res.json({ success: true, template: result.rows[0] });
+
+  } catch (e) {
+    console.error('Create template error:', e);
+    res.status(500).json({ error: 'Failed to create template' });
+  }
+});
+
+// Update template
+app.put('/api/templates/:id', authenticateToken, async (req, res) => {
+  try {
+    const { name, title_format, description_template, default_shipping, default_condition, default_quantity, is_default, settings } = req.body;
+
+    // Verify ownership
+    const check = await pool.query(
+      'SELECT id FROM listing_templates WHERE id = $1 AND user_id = $2',
+      [req.params.id, req.user.id]
+    );
+    if (check.rows.length === 0) {
+      return res.status(404).json({ error: 'Template not found' });
+    }
+
+    // If setting as default, unset other defaults first
+    if (is_default) {
+      await pool.query(
+        'UPDATE listing_templates SET is_default = false WHERE user_id = $1',
+        [req.user.id]
+      );
+    }
+
+    await pool.query(`
+      UPDATE listing_templates SET
+        name = COALESCE($1, name),
+        title_format = COALESCE($2, title_format),
+        description_template = COALESCE($3, description_template),
+        default_shipping = COALESCE($4, default_shipping),
+        default_condition = COALESCE($5, default_condition),
+        default_quantity = COALESCE($6, default_quantity),
+        is_default = COALESCE($7, is_default),
+        settings = COALESCE($8, settings),
+        updated_at = NOW()
+      WHERE id = $9
+    `, [name, title_format, description_template, default_shipping, default_condition, default_quantity, is_default, settings ? JSON.stringify(settings) : null, req.params.id]);
+
+    res.json({ success: true });
+
+  } catch (e) {
+    console.error('Update template error:', e);
+    res.status(500).json({ error: 'Failed to update template' });
+  }
+});
+
+// Delete template
+app.delete('/api/templates/:id', authenticateToken, async (req, res) => {
+  try {
+    const result = await pool.query(
+      'DELETE FROM listing_templates WHERE id = $1 AND user_id = $2 RETURNING id',
+      [req.params.id, req.user.id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Template not found' });
+    }
+
+    res.json({ success: true });
+
+  } catch (e) {
+    console.error('Delete template error:', e);
+    res.status(500).json({ error: 'Failed to delete template' });
+  }
+});
+
+// ============================================
+// SALES TRACKING API
+// ============================================
+
+// Get all sales for user
+app.get('/api/sales', authenticateToken, async (req, res) => {
+  try {
+    const { startDate, endDate, platform } = req.query;
+    let query = 'SELECT * FROM sales WHERE user_id = $1';
+    const params = [req.user.id];
+    let paramIndex = 2;
+
+    if (startDate) {
+      query += ` AND sale_date >= $${paramIndex}`;
+      params.push(startDate);
+      paramIndex++;
+    }
+    if (endDate) {
+      query += ` AND sale_date <= $${paramIndex}`;
+      params.push(endDate);
+      paramIndex++;
+    }
+    if (platform) {
+      query += ` AND platform = $${paramIndex}`;
+      params.push(platform);
+    }
+
+    query += ' ORDER BY sale_date DESC';
+
+    const result = await pool.query(query, params);
+
+    // Calculate totals
+    const totals = result.rows.reduce((acc, sale) => ({
+      revenue: acc.revenue + parseFloat(sale.sale_price || 0),
+      shipping: acc.shipping + parseFloat(sale.shipping_cost || 0),
+      fees: acc.fees + parseFloat(sale.fees || 0),
+      profit: acc.profit + parseFloat(sale.profit || 0),
+      count: acc.count + 1
+    }), { revenue: 0, shipping: 0, fees: 0, profit: 0, count: 0 });
+
+    res.json({ sales: result.rows, totals });
+
+  } catch (e) {
+    console.error('Get sales error:', e);
+    res.status(500).json({ error: 'Failed to load sales' });
+  }
+});
+
+// Record a sale
+app.post('/api/sales', authenticateToken, async (req, res) => {
+  try {
+    const { card_id, sale_price, sale_date, platform, buyer_username, shipping_cost, fees, notes, ebay_listing_id } = req.body;
+
+    if (!sale_price) {
+      return res.status(400).json({ error: 'Sale price required' });
+    }
+
+    // Get card snapshot if card_id provided
+    let cardSnapshot = null;
+    if (card_id) {
+      const cardResult = await pool.query(
+        'SELECT * FROM cards WHERE id = $1 AND user_id = $2',
+        [card_id, req.user.id]
+      );
+      if (cardResult.rows.length > 0) {
+        const row = cardResult.rows[0];
+        cardSnapshot = {
+          ...row.card_data,
+          front_image: row.front_image_path,
+          back_image: row.back_image_path
+        };
+
+        // Update card status to sold
+        await pool.query(
+          "UPDATE cards SET status = 'sold', card_data = card_data || $1::jsonb WHERE id = $2",
+          [JSON.stringify({ sold_at: new Date().toISOString(), sold_price: sale_price }), card_id]
+        );
+      }
+    }
+
+    // Calculate profit
+    const saleAmount = parseFloat(sale_price) || 0;
+    const shippingAmount = parseFloat(shipping_cost) || 0;
+    const feeAmount = parseFloat(fees) || (saleAmount * 0.1325); // Default eBay fees ~13.25%
+    const profit = saleAmount - feeAmount;
+
+    const result = await pool.query(`
+      INSERT INTO sales (user_id, card_id, sale_price, sale_date, platform, buyer_username, shipping_cost, fees, profit, notes, ebay_listing_id, card_snapshot)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+      RETURNING *
+    `, [req.user.id, card_id, saleAmount, sale_date || new Date(), platform || 'ebay', buyer_username, shippingAmount, feeAmount, profit, notes, ebay_listing_id, cardSnapshot ? JSON.stringify(cardSnapshot) : null]);
+
+    broadcast({ type: 'sale_recorded', sale: result.rows[0], userId: req.user.id });
+    res.json({ success: true, sale: result.rows[0] });
+
+  } catch (e) {
+    console.error('Record sale error:', e);
+    res.status(500).json({ error: 'Failed to record sale' });
+  }
+});
+
+// Get sales dashboard/summary
+app.get('/api/sales/summary', authenticateToken, async (req, res) => {
+  try {
+    // Total all time
+    const totalResult = await pool.query(`
+      SELECT
+        COUNT(*) as total_sales,
+        COALESCE(SUM(sale_price), 0) as total_revenue,
+        COALESCE(SUM(profit), 0) as total_profit,
+        COALESCE(SUM(fees), 0) as total_fees
+      FROM sales WHERE user_id = $1
+    `, [req.user.id]);
+
+    // This month
+    const monthResult = await pool.query(`
+      SELECT
+        COUNT(*) as sales,
+        COALESCE(SUM(sale_price), 0) as revenue,
+        COALESCE(SUM(profit), 0) as profit
+      FROM sales
+      WHERE user_id = $1 AND sale_date >= date_trunc('month', CURRENT_DATE)
+    `, [req.user.id]);
+
+    // By platform
+    const platformResult = await pool.query(`
+      SELECT platform, COUNT(*) as count, COALESCE(SUM(sale_price), 0) as revenue
+      FROM sales WHERE user_id = $1
+      GROUP BY platform
+    `, [req.user.id]);
+
+    // Recent sales (last 30 days by day)
+    const dailyResult = await pool.query(`
+      SELECT DATE(sale_date) as date, COUNT(*) as count, COALESCE(SUM(sale_price), 0) as revenue
+      FROM sales
+      WHERE user_id = $1 AND sale_date >= CURRENT_DATE - INTERVAL '30 days'
+      GROUP BY DATE(sale_date)
+      ORDER BY date
+    `, [req.user.id]);
+
+    res.json({
+      allTime: totalResult.rows[0],
+      thisMonth: monthResult.rows[0],
+      byPlatform: platformResult.rows,
+      daily: dailyResult.rows
+    });
+
+  } catch (e) {
+    console.error('Sales summary error:', e);
+    res.status(500).json({ error: 'Failed to load sales summary' });
+  }
+});
+
+// ============================================
+// EXPORT API (CSV/Excel with images)
+// ============================================
+
+// Export cards to CSV
+app.get('/api/export/csv', authenticateToken, async (req, res) => {
+  try {
+    const { cardIds, status } = req.query;
+
+    let query = 'SELECT * FROM cards WHERE user_id = $1';
+    const params = [req.user.id];
+
+    if (cardIds) {
+      const ids = cardIds.split(',');
+      query += ' AND id = ANY($2)';
+      params.push(ids);
+    } else if (status) {
+      query += ' AND status = $2';
+      params.push(status);
+    }
+
+    query += ' ORDER BY created_at DESC';
+
+    const result = await pool.query(query, params);
+
+    // Build CSV
+    const headers = ['Player', 'Year', 'Set', 'Card #', 'Parallel', 'Grading Company', 'Grade', 'Condition', 'Recommended Price', 'eBay Low', 'eBay Avg', 'eBay High', 'Status', 'Front Image', 'Back Image', 'Notes'];
+
+    let csv = headers.join(',') + '\n';
+
+    for (const row of result.rows) {
+      const card = row.card_data;
+      const values = [
+        `"${(card.player || '').replace(/"/g, '""')}"`,
+        card.year || '',
+        `"${(card.set_name || '').replace(/"/g, '""')}"`,
+        card.card_number || '',
+        `"${(card.parallel || '').replace(/"/g, '""')}"`,
+        card.grading_company || '',
+        card.grade || '',
+        card.condition || '',
+        card.recommended_price || '',
+        card.ebay_low || '',
+        card.ebay_avg || '',
+        card.ebay_high || '',
+        row.status || '',
+        row.front_image_path || '',
+        row.back_image_path || '',
+        `"${(card.notes || '').replace(/"/g, '""')}"`
+      ];
+      csv += values.join(',') + '\n';
+    }
+
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', `attachment; filename="cardflow-export-${Date.now()}.csv"`);
+    res.send(csv);
+
+  } catch (e) {
+    console.error('CSV export error:', e);
+    res.status(500).json({ error: 'Failed to export CSV' });
+  }
+});
+
+// Export cards to Excel with images
+app.get('/api/export/excel', authenticateToken, async (req, res) => {
+  try {
+    const { cardIds, status, includeImages } = req.query;
+
+    let query = 'SELECT * FROM cards WHERE user_id = $1';
+    const params = [req.user.id];
+
+    if (cardIds) {
+      const ids = cardIds.split(',');
+      query += ' AND id = ANY($2)';
+      params.push(ids);
+    } else if (status) {
+      query += ' AND status = $2';
+      params.push(status);
+    }
+
+    query += ' ORDER BY created_at DESC';
+
+    const result = await pool.query(query, params);
+
+    // Build worksheet data
+    const wsData = [
+      ['Player', 'Year', 'Set', 'Card #', 'Parallel', 'Grading Company', 'Grade', 'Condition', 'Recommended Price', 'eBay Low', 'eBay Avg', 'eBay High', 'Status', 'Front Image URL', 'Back Image URL', 'Notes']
+    ];
+
+    for (const row of result.rows) {
+      const card = row.card_data;
+      wsData.push([
+        card.player || '',
+        card.year || '',
+        card.set_name || '',
+        card.card_number || '',
+        card.parallel || '',
+        card.grading_company || '',
+        card.grade || '',
+        card.condition || '',
+        card.recommended_price || '',
+        card.ebay_low || '',
+        card.ebay_avg || '',
+        card.ebay_high || '',
+        row.status || '',
+        row.front_image_path || '',
+        row.back_image_path || '',
+        card.notes || ''
+      ]);
+    }
+
+    // Create workbook
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.aoa_to_sheet(wsData);
+
+    // Set column widths
+    ws['!cols'] = [
+      { wch: 25 }, // Player
+      { wch: 8 },  // Year
+      { wch: 30 }, // Set
+      { wch: 8 },  // Card #
+      { wch: 20 }, // Parallel
+      { wch: 15 }, // Grading
+      { wch: 8 },  // Grade
+      { wch: 15 }, // Condition
+      { wch: 12 }, // Price
+      { wch: 10 }, // Low
+      { wch: 10 }, // Avg
+      { wch: 10 }, // High
+      { wch: 10 }, // Status
+      { wch: 50 }, // Front URL
+      { wch: 50 }, // Back URL
+      { wch: 30 }  // Notes
+    ];
+
+    XLSX.utils.book_append_sheet(wb, ws, 'Cards');
+
+    // Add summary sheet
+    const totalValue = result.rows.reduce((sum, row) => sum + (parseFloat(row.card_data.recommended_price) || 0), 0);
+    const summaryData = [
+      ['CardFlow Export Summary'],
+      [''],
+      ['Total Cards', result.rows.length],
+      ['Total Value', `$${totalValue.toFixed(2)}`],
+      ['Export Date', new Date().toLocaleString()],
+      [''],
+      ['Status Breakdown'],
+      ...Object.entries(result.rows.reduce((acc, row) => {
+        acc[row.status] = (acc[row.status] || 0) + 1;
+        return acc;
+      }, {})).map(([status, count]) => [status, count])
+    ];
+
+    const summaryWs = XLSX.utils.aoa_to_sheet(summaryData);
+    XLSX.utils.book_append_sheet(wb, summaryWs, 'Summary');
+
+    // Generate buffer
+    const buffer = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
+
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="cardflow-export-${Date.now()}.xlsx"`);
+    res.send(buffer);
+
+  } catch (e) {
+    console.error('Excel export error:', e);
+    res.status(500).json({ error: 'Failed to export Excel' });
+  }
+});
+
+// ============================================
+// DUPLICATE DETECTION API
+// ============================================
+
+// Check for duplicate cards
+app.post('/api/cards/check-duplicates', authenticateToken, async (req, res) => {
+  try {
+    const { player, year, set_name, card_number, grading_company, grade } = req.body;
+
+    let query = `
+      SELECT id, card_data, status, front_image_path
+      FROM cards
+      WHERE user_id = $1
+    `;
+    const params = [req.user.id];
+    let paramIndex = 2;
+
+    const conditions = [];
+
+    if (player) {
+      conditions.push(`card_data->>'player' ILIKE $${paramIndex}`);
+      params.push(`%${player}%`);
+      paramIndex++;
+    }
+    if (year) {
+      conditions.push(`card_data->>'year' = $${paramIndex}`);
+      params.push(String(year));
+      paramIndex++;
+    }
+    if (set_name) {
+      conditions.push(`card_data->>'set_name' ILIKE $${paramIndex}`);
+      params.push(`%${set_name}%`);
+      paramIndex++;
+    }
+    if (card_number) {
+      conditions.push(`card_data->>'card_number' = $${paramIndex}`);
+      params.push(String(card_number));
+      paramIndex++;
+    }
+
+    if (conditions.length > 0) {
+      query += ' AND (' + conditions.join(' AND ') + ')';
+    }
+
+    const result = await pool.query(query, params);
+
+    // Score matches
+    const matches = result.rows.map(row => {
+      const card = row.card_data;
+      let score = 0;
+
+      if (player && card.player && card.player.toLowerCase().includes(player.toLowerCase())) score += 30;
+      if (year && card.year === String(year)) score += 20;
+      if (set_name && card.set_name && card.set_name.toLowerCase().includes(set_name.toLowerCase())) score += 25;
+      if (card_number && card.card_number === String(card_number)) score += 25;
+
+      // Exact match bonus
+      if (grading_company && card.grading_company === grading_company) score += 10;
+      if (grade && card.grade === String(grade)) score += 10;
+
+      return {
+        id: row.id,
+        card: { ...card, front: row.front_image_path },
+        status: row.status,
+        matchScore: score
+      };
+    }).filter(m => m.matchScore >= 50) // Only return likely matches
+      .sort((a, b) => b.matchScore - a.matchScore)
+      .slice(0, 5); // Top 5 matches
+
+    res.json({
+      hasDuplicates: matches.length > 0,
+      matches
+    });
+
+  } catch (e) {
+    console.error('Duplicate check error:', e);
+    res.status(500).json({ error: 'Failed to check duplicates' });
+  }
+});
+
+// ============================================
 // WEBSOCKET
 // ============================================
 
@@ -3529,7 +4119,7 @@ const HOST = process.env.NODE_ENV === 'production' ? '0.0.0.0' : 'localhost';
 server.listen(PORT, HOST, () => {
   console.log(`
 ══════════════════════════════════════════════════
-  CARDFLOW v2.0 - Multi-User SaaS (Build 0201j)
+  CARDFLOW v2.0 - Multi-User SaaS (Build 0201k)
 ══════════════════════════════════════════════════
 
   Server:    http://${HOST}:${PORT}

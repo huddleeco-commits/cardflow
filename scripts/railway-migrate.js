@@ -156,6 +156,40 @@ BEGIN
   END IF;
 END $$;
 
+-- Listing templates table
+CREATE TABLE IF NOT EXISTS listing_templates (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+  name VARCHAR(255) NOT NULL,
+  title_format TEXT,
+  description_template TEXT,
+  default_shipping VARCHAR(50) DEFAULT 'standard_envelope',
+  default_condition VARCHAR(50) DEFAULT 'USED_VERY_GOOD',
+  default_quantity INTEGER DEFAULT 1,
+  is_default BOOLEAN DEFAULT false,
+  settings JSONB DEFAULT '{}',
+  created_at TIMESTAMP DEFAULT NOW(),
+  updated_at TIMESTAMP DEFAULT NOW()
+);
+
+-- Sales tracking table
+CREATE TABLE IF NOT EXISTS sales (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+  card_id UUID REFERENCES cards(id) ON DELETE SET NULL,
+  sale_price DECIMAL(10,2) NOT NULL,
+  sale_date TIMESTAMP DEFAULT NOW(),
+  platform VARCHAR(50) DEFAULT 'ebay',
+  buyer_username VARCHAR(255),
+  shipping_cost DECIMAL(10,2) DEFAULT 0,
+  fees DECIMAL(10,2) DEFAULT 0,
+  profit DECIMAL(10,2),
+  ebay_listing_id VARCHAR(255),
+  notes TEXT,
+  card_snapshot JSONB,
+  created_at TIMESTAMP DEFAULT NOW()
+);
+
 -- Indexes for performance
 CREATE INDEX IF NOT EXISTS idx_cards_user_id ON cards(user_id);
 CREATE INDEX IF NOT EXISTS idx_cards_status ON cards(status);
@@ -169,6 +203,10 @@ CREATE INDEX IF NOT EXISTS idx_ebay_tokens_expiry ON ebay_user_tokens(token_expi
 CREATE INDEX IF NOT EXISTS idx_ebay_listings_card ON ebay_listings(card_id);
 CREATE INDEX IF NOT EXISTS idx_ebay_listings_user ON ebay_listings(user_id);
 CREATE INDEX IF NOT EXISTS idx_ebay_listings_status ON ebay_listings(status);
+CREATE INDEX IF NOT EXISTS idx_templates_user ON listing_templates(user_id);
+CREATE INDEX IF NOT EXISTS idx_sales_user ON sales(user_id);
+CREATE INDEX IF NOT EXISTS idx_sales_date ON sales(sale_date);
+CREATE INDEX IF NOT EXISTS idx_sales_card ON sales(card_id);
 
 -- Function to update updated_at timestamp
 CREATE OR REPLACE FUNCTION update_updated_at_column()

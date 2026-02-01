@@ -673,6 +673,12 @@
       color: var(--text-muted);
     }
 
+    .status-sold {
+      background: linear-gradient(135deg, rgba(0, 255, 136, 0.3), rgba(0, 200, 100, 0.2));
+      color: var(--success);
+      border: 1px solid rgba(0, 255, 136, 0.4);
+    }
+
     .card-set {
       font-size: 14px;
       color: var(--text-muted);
@@ -1524,16 +1530,39 @@
         <option value="">All Cards</option>
         <option value="pending">Uploaded</option>
         <option value="identified">Identified</option>
+        <option value="priced">Priced</option>
         <option value="listed">Listed</option>
+        <option value="sold">Sold</option>
       </select>
+      <button class="btn btn-secondary" onclick="toggleSelectMode()" id="select-mode-btn" style="margin-left: 12px;">☐ Select</button>
     </div>
     <div class="action-buttons">
       <button class="btn btn-accent" id="identify-btn" onclick="runIdentify()">🔍 Identify</button>
       <button class="btn btn-success" onclick="showBulkListingModal()">📦 Bulk List</button>
       <button class="btn btn-success" onclick="showLotListingModal()">🎴 Create Lot</button>
-      <button class="btn btn-primary" onclick="window.location.href='/collection'">📋 Collection</button>
+      <button class="btn btn-primary" onclick="showExportModal()">📤 Export</button>
+      <button class="btn btn-primary" onclick="showSalesModal()">💰 Sales</button>
       <button class="btn btn-secondary" onclick="showSettingsModal()">⚙️ Settings</button>
       <button class="btn btn-danger" onclick="confirmClearAll()">🗑️ Clear</button>
+    </div>
+  </section>
+
+  <!-- Bulk Action Bar (hidden by default) -->
+  <section class="bulk-action-bar" id="bulk-action-bar" style="display: none; padding: 12px 24px; background: linear-gradient(135deg, rgba(0, 246, 255, 0.1), rgba(123, 47, 247, 0.1)); border-bottom: 1px solid var(--glass-border);">
+    <div style="display: flex; align-items: center; justify-content: space-between;">
+      <div style="display: flex; align-items: center; gap: 16px;">
+        <input type="checkbox" id="select-all-checkbox" onchange="toggleSelectAll()" style="width: 20px; height: 20px;">
+        <span id="selected-count" style="color: var(--cyan); font-weight: 600;">0 selected</span>
+      </div>
+      <div style="display: flex; gap: 8px;">
+        <button class="btn btn-secondary" onclick="bulkSetPrice()">💲 Set Price</button>
+        <button class="btn btn-secondary" onclick="bulkSetStatus()">📋 Set Status</button>
+        <button class="btn btn-accent" onclick="bulkListSelected()">📦 List Selected</button>
+        <button class="btn btn-success" onclick="bulkMarkSold()">💰 Mark Sold</button>
+        <button class="btn btn-primary" onclick="exportSelected('csv')">📄 Export CSV</button>
+        <button class="btn btn-primary" onclick="exportSelected('excel')">📊 Export Excel</button>
+        <button class="btn btn-danger" onclick="bulkDeleteSelected()">🗑️ Delete</button>
+      </div>
     </div>
   </section>
 
@@ -1797,11 +1826,6 @@
     </div>
   </div>
 
-  <!-- Lightbox -->
-  <div class="lightbox" id="lightbox" onclick="closeLightbox()">
-    <img id="lightbox-img" src="">
-  </div>
-
   <!-- Single Card Listing Modal -->
   <div class="modal" id="single-listing-modal">
     <div class="modal-content" style="max-width: 500px;">
@@ -2054,6 +2078,117 @@
     </div>
   </div>
 
+  <!-- Export Modal -->
+  <div class="modal" id="export-modal">
+    <div class="modal-content" style="max-width: 500px;">
+      <div class="modal-header">
+        <h2>Export Cards</h2>
+        <button class="modal-close" onclick="closeExportModal()">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p style="color: var(--text-muted); margin-bottom: 20px;">Export your card inventory to CSV or Excel format.</p>
+
+        <div style="display: grid; gap: 12px;">
+          <button class="btn btn-primary" onclick="exportAll('csv')" style="width: 100%; padding: 16px; font-size: 15px;">
+            📄 Export All to CSV
+          </button>
+          <button class="btn btn-accent" onclick="exportAll('excel')" style="width: 100%; padding: 16px; font-size: 15px;">
+            📊 Export All to Excel
+          </button>
+        </div>
+
+        <div style="margin-top: 20px; padding: 16px; background: var(--glass); border-radius: 8px;">
+          <h4 style="margin-bottom: 12px; color: var(--cyan);">What's Included</h4>
+          <ul style="color: var(--text-muted); font-size: 13px; padding-left: 20px;">
+            <li>Player name, year, set, card number</li>
+            <li>Parallel/variant information</li>
+            <li>Grading company and grade</li>
+            <li>Pricing data (recommended, eBay low/avg/high)</li>
+            <li>Image URLs (Cloudinary links)</li>
+            <li>Card status and notes</li>
+          </ul>
+        </div>
+
+        <div style="margin-top: 16px; padding: 12px; background: rgba(255,170,0,0.1); border: 1px solid rgba(255,170,0,0.2); border-radius: 8px; font-size: 12px; color: var(--warning);">
+          <strong>Tip:</strong> Use Select Mode to export only specific cards.
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeExportModal()">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Sales Modal -->
+  <div class="modal" id="sales-modal">
+    <div class="modal-content" style="max-width: 700px;">
+      <div class="modal-header">
+        <h2>💰 Sales Dashboard</h2>
+        <button class="modal-close" onclick="closeSalesModal()">&times;</button>
+      </div>
+      <div class="modal-body">
+        <!-- Sales Summary -->
+        <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 24px;">
+          <div style="background: var(--glass); padding: 16px; border-radius: 12px; text-align: center;">
+            <div id="sales-total-revenue" style="font-size: 24px; font-weight: 700; color: var(--success);">$0.00</div>
+            <div style="font-size: 11px; color: var(--text-muted); text-transform: uppercase;">Total Revenue</div>
+          </div>
+          <div style="background: var(--glass); padding: 16px; border-radius: 12px; text-align: center;">
+            <div id="sales-total-profit" style="font-size: 24px; font-weight: 700; color: var(--cyan);">$0.00</div>
+            <div style="font-size: 11px; color: var(--text-muted); text-transform: uppercase;">Net Profit</div>
+          </div>
+          <div style="background: var(--glass); padding: 16px; border-radius: 12px; text-align: center;">
+            <div id="sales-total-count" style="font-size: 24px; font-weight: 700; color: var(--purple);">0</div>
+            <div style="font-size: 11px; color: var(--text-muted); text-transform: uppercase;">Cards Sold</div>
+          </div>
+          <div style="background: var(--glass); padding: 16px; border-radius: 12px; text-align: center;">
+            <div id="sales-month-revenue" style="font-size: 24px; font-weight: 700; color: var(--warning);">$0.00</div>
+            <div style="font-size: 11px; color: var(--text-muted); text-transform: uppercase;">This Month</div>
+          </div>
+        </div>
+
+        <!-- Record Manual Sale -->
+        <div style="background: var(--glass); padding: 16px; border-radius: 12px; margin-bottom: 24px;">
+          <h4 style="margin-bottom: 12px; color: var(--cyan);">Record Manual Sale</h4>
+          <div style="display: grid; grid-template-columns: 1fr 1fr 2fr auto; gap: 12px; align-items: end;">
+            <div>
+              <label style="display: block; margin-bottom: 4px; font-size: 11px; color: var(--text-muted);">Price ($)</label>
+              <input type="number" id="manual-sale-price" step="0.01" min="0" placeholder="0.00" style="width: 100%; padding: 10px; background: var(--bg-deep); border: 1px solid var(--glass-border); border-radius: 6px; color: var(--text);">
+            </div>
+            <div>
+              <label style="display: block; margin-bottom: 4px; font-size: 11px; color: var(--text-muted);">Platform</label>
+              <select id="manual-sale-platform" style="width: 100%; padding: 10px; background: var(--bg-deep); border: 1px solid var(--glass-border); border-radius: 6px; color: var(--text);">
+                <option value="ebay">eBay</option>
+                <option value="local">Local/In-Person</option>
+                <option value="show">Card Show</option>
+                <option value="other">Other</option>
+              </select>
+            </div>
+            <div>
+              <label style="display: block; margin-bottom: 4px; font-size: 11px; color: var(--text-muted);">Notes (optional)</label>
+              <input type="text" id="manual-sale-notes" placeholder="Buyer name, etc." style="width: 100%; padding: 10px; background: var(--bg-deep); border: 1px solid var(--glass-border); border-radius: 6px; color: var(--text);">
+            </div>
+            <button class="btn btn-success" onclick="recordManualSale()">Add</button>
+          </div>
+        </div>
+
+        <!-- Recent Sales -->
+        <h4 style="margin-bottom: 12px; color: var(--text-muted);">Recent Sales</h4>
+        <div id="sales-list" style="max-height: 300px; overflow-y: auto;">
+          <div style="text-align: center; padding: 40px; color: var(--text-muted);">Loading sales...</div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeSalesModal()">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Lightbox -->
+  <div class="lightbox" id="lightbox" onclick="closeLightbox()">
+    <img id="lightbox-img" src="" alt="Full size">
+  </div>
+
   <script>
     const API_URL = '/api';
     let cards = [];
@@ -2121,6 +2256,10 @@
           showToast(`Identified ${data.processed} cards ($${data.cost?.toFixed(4) || '0'})`, 'success');
           loadCards();
           loadStatus();
+          // Check for duplicates after identification
+          if (data.processed > 0) {
+            checkForDuplicates();
+          }
         }
         if (data.type === 'identify_error') {
           document.getElementById('identify-btn').disabled = false;
@@ -2247,6 +2386,7 @@
         const backSrc = card.back ? getImageUrl(card.back, card) : '';
         const gradeInfo = card.is_graded ? `${card.grading_company} ${card.grade}` : '';
         const parallelInfo = card.parallel && card.parallel !== 'Base' ? card.parallel : '';
+        const isSelected = selectedCards.has(card.id);
 
         let pricingHtml = '';
         if (card.recommended_price) {
@@ -2262,21 +2402,29 @@
           `;
         }
 
+        const checkboxHtml = selectMode ? `
+          <div style="position: absolute; top: 12px; left: 12px; z-index: 10;">
+            <input type="checkbox" ${isSelected ? 'checked' : ''} onchange="toggleCardSelection('${card.id}')"
+                   style="width: 22px; height: 22px; cursor: pointer; accent-color: var(--cyan);">
+          </div>
+        ` : '';
+
         return `
-          <div class="card-item" data-id="${card.id}">
-            <div class="card-images">
-              <div class="card-img-wrapper" onclick="openLightbox('${frontSrc}')">
+          <div class="card-item ${isSelected ? 'selected' : ''}" data-id="${card.id}" style="position: relative; ${isSelected ? 'border-color: var(--cyan); box-shadow: 0 0 20px var(--cyan-glow);' : ''}">
+            ${checkboxHtml}
+            <div class="card-images" ${selectMode ? `onclick="toggleCardSelection('${card.id}')" style="cursor: pointer;"` : ''}>
+              <div class="card-img-wrapper" ${!selectMode ? `onclick="openLightbox('${frontSrc}')"` : ''}>
                 ${frontSrc ? `<img src="${frontSrc}" alt="Front" loading="lazy">` : '<div class="no-image">No Image</div>'}
                 <div class="img-label">Front</div>
               </div>
               ${backSrc ? `
-              <div class="card-img-wrapper" onclick="openLightbox('${backSrc}')">
+              <div class="card-img-wrapper" ${!selectMode ? `onclick="openLightbox('${backSrc}')"` : ''}>
                 <img src="${backSrc}" alt="Back" loading="lazy">
                 <div class="img-label">Back</div>
               </div>
               ` : ''}
             </div>
-            <div class="card-info">
+            <div class="card-info" ${selectMode ? `onclick="toggleCardSelection('${card.id}')" style="cursor: pointer;"` : ''}>
               <div class="card-header">
                 <div class="card-player">${card.player || 'Unknown'}</div>
                 <span class="status-badge status-${card.status}">${card.status}</span>
@@ -2294,6 +2442,8 @@
               <button class="btn btn-secondary" onclick="editCard('${card.id}')">Edit</button>
               ${card.status === 'listed' ? `
                 <button class="btn btn-accent" onclick="window.open(cards.find(c=>c.id==='${card.id}')?.ebay_listing_url || 'https://ebay.com', '_blank')">View on eBay</button>
+              ` : card.status === 'sold' ? `
+                <span style="color: var(--success); font-weight: 600;">SOLD ${card.sold_price ? '$' + card.sold_price.toFixed(2) : ''}</span>
               ` : card.status === 'identified' || card.status === 'priced' || card.status === 'approved' ? `
                 <button class="btn btn-accent" onclick="listOnEbay('${card.id}')">List</button>
                 <button class="btn btn-success" onclick="showAuctionModal('${card.id}')" title="Auction">🔨</button>
@@ -3541,6 +3691,452 @@
           loadCards();
         }
       });
+    }
+
+    function editCard(cardId) {
+      const card = cards.find(c => c.id === cardId);
+      if (!card) return;
+
+      // For now, open a simple prompt-based editor
+      const fields = [
+        { key: 'player', label: 'Player Name', value: card.player || '' },
+        { key: 'year', label: 'Year', value: card.year || '' },
+        { key: 'set_name', label: 'Set Name', value: card.set_name || '' },
+        { key: 'card_number', label: 'Card Number', value: card.card_number || '' },
+        { key: 'parallel', label: 'Parallel', value: card.parallel || '' },
+        { key: 'recommended_price', label: 'Price ($)', value: card.recommended_price || '' },
+        { key: 'notes', label: 'Notes', value: card.notes || '' }
+      ];
+
+      let msg = 'Edit Card (format: field=value, one per line):\n\n';
+      fields.forEach(f => {
+        msg += `${f.key}=${f.value}\n`;
+      });
+
+      const input = prompt(msg);
+      if (!input) return;
+
+      // Parse input
+      const updates = {};
+      input.split('\n').forEach(line => {
+        const [key, ...valueParts] = line.split('=');
+        const value = valueParts.join('=').trim();
+        if (key && value) {
+          const cleanKey = key.trim();
+          if (cleanKey === 'recommended_price') {
+            updates[cleanKey] = parseFloat(value) || 0;
+          } else {
+            updates[cleanKey] = value;
+          }
+        }
+      });
+
+      if (Object.keys(updates).length > 0) {
+        api(`/cards/${cardId}`, {
+          method: 'PUT',
+          body: JSON.stringify(updates)
+        }).then(result => {
+          if (result) {
+            showToast('Card updated', 'success');
+            loadCards();
+          }
+        });
+      }
+    }
+
+    // ==========================================
+    // DUPLICATE DETECTION FUNCTIONS
+    // ==========================================
+
+    async function checkForDuplicates() {
+      // Check newly identified cards for duplicates
+      const newlyIdentified = cards.filter(c => c.status === 'identified');
+      let duplicatesFound = [];
+
+      for (const card of newlyIdentified.slice(0, 5)) { // Check first 5 to avoid too many API calls
+        try {
+          const result = await api('/cards/check-duplicates', {
+            method: 'POST',
+            body: JSON.stringify({
+              player: card.player,
+              year: card.year,
+              set_name: card.set_name,
+              card_number: card.card_number
+            })
+          });
+
+          if (result?.hasDuplicates) {
+            const existing = result.matches.find(m => m.id !== card.id);
+            if (existing) {
+              duplicatesFound.push({
+                newCard: card,
+                existingCard: existing.card
+              });
+            }
+          }
+        } catch (e) {
+          console.error('Duplicate check error:', e);
+        }
+      }
+
+      if (duplicatesFound.length > 0) {
+        showDuplicateWarning(duplicatesFound);
+      }
+    }
+
+    function showDuplicateWarning(duplicates) {
+      const count = duplicates.length;
+      const firstDupe = duplicates[0];
+
+      if (confirm(`⚠️ Possible duplicate detected!\n\n"${firstDupe.newCard.player}" may already exist in your collection.\n\nTotal potential duplicates: ${count}\n\nClick OK to review, or Cancel to ignore.`)) {
+        // Show details
+        let msg = 'Potential Duplicates Found:\n\n';
+        duplicates.forEach((d, i) => {
+          msg += `${i + 1}. ${d.newCard.player} (${d.newCard.year} ${d.newCard.set_name})\n`;
+          msg += `   Existing: ${d.existingCard.player} (${d.existingCard.year} ${d.existingCard.set_name})\n\n`;
+        });
+        alert(msg);
+      }
+    }
+
+    // ==========================================
+    // BULK SELECTION FUNCTIONS
+    // ==========================================
+    let selectMode = false;
+    let selectedCards = new Set();
+
+    function toggleSelectMode() {
+      selectMode = !selectMode;
+      const btn = document.getElementById('select-mode-btn');
+      const bar = document.getElementById('bulk-action-bar');
+
+      if (selectMode) {
+        btn.innerHTML = '✓ Select Mode';
+        btn.style.background = 'var(--cyan)';
+        btn.style.color = '#000';
+        bar.style.display = 'block';
+      } else {
+        btn.innerHTML = '☐ Select';
+        btn.style.background = '';
+        btn.style.color = '';
+        bar.style.display = 'none';
+        selectedCards.clear();
+      }
+      renderCards();
+    }
+
+    function toggleCardSelection(cardId) {
+      if (selectedCards.has(cardId)) {
+        selectedCards.delete(cardId);
+      } else {
+        selectedCards.add(cardId);
+      }
+      updateSelectedCount();
+      renderCards();
+    }
+
+    function toggleSelectAll() {
+      const checkbox = document.getElementById('select-all-checkbox');
+      if (checkbox.checked) {
+        cards.forEach(c => selectedCards.add(c.id));
+      } else {
+        selectedCards.clear();
+      }
+      updateSelectedCount();
+      renderCards();
+    }
+
+    function updateSelectedCount() {
+      document.getElementById('selected-count').textContent = `${selectedCards.size} selected`;
+      document.getElementById('select-all-checkbox').checked = selectedCards.size === cards.length && cards.length > 0;
+    }
+
+    async function bulkSetPrice() {
+      if (selectedCards.size === 0) {
+        showToast('No cards selected', 'error');
+        return;
+      }
+
+      const input = prompt('Enter new price for all selected cards ($):');
+      if (input === null) return;
+
+      const price = parseFloat(input);
+      if (isNaN(price) || price < 0) {
+        showToast('Invalid price', 'error');
+        return;
+      }
+
+      try {
+        const result = await api('/cards/bulk-update', {
+          method: 'PUT',
+          body: JSON.stringify({
+            cardIds: Array.from(selectedCards),
+            updates: { recommended_price: price }
+          })
+        });
+
+        if (result?.success) {
+          showToast(`Updated ${result.updated} cards to $${price.toFixed(2)}`, 'success');
+          loadCards();
+        }
+      } catch (e) {
+        showToast('Failed to update prices: ' + e.message, 'error');
+      }
+    }
+
+    async function bulkSetStatus() {
+      if (selectedCards.size === 0) {
+        showToast('No cards selected', 'error');
+        return;
+      }
+
+      const status = prompt('Enter new status (pending, identified, priced, listed, sold):');
+      if (!status) return;
+
+      const validStatuses = ['pending', 'identified', 'priced', 'approved', 'listed', 'sold'];
+      if (!validStatuses.includes(status.toLowerCase())) {
+        showToast('Invalid status', 'error');
+        return;
+      }
+
+      try {
+        const result = await api('/cards/bulk-update', {
+          method: 'PUT',
+          body: JSON.stringify({
+            cardIds: Array.from(selectedCards),
+            updates: { status: status.toLowerCase() }
+          })
+        });
+
+        if (result?.success) {
+          showToast(`Updated ${result.updated} cards to ${status}`, 'success');
+          loadCards();
+          loadStatus();
+        }
+      } catch (e) {
+        showToast('Failed to update status: ' + e.message, 'error');
+      }
+    }
+
+    async function bulkDeleteSelected() {
+      if (selectedCards.size === 0) {
+        showToast('No cards selected', 'error');
+        return;
+      }
+
+      if (!confirm(`Delete ${selectedCards.size} selected cards? This cannot be undone.`)) return;
+
+      try {
+        const result = await api('/cards/bulk-delete', {
+          method: 'DELETE',
+          body: JSON.stringify({ cardIds: Array.from(selectedCards) })
+        });
+
+        if (result?.success) {
+          showToast(`Deleted ${result.deleted} cards`, 'success');
+          selectedCards.clear();
+          updateSelectedCount();
+          loadCards();
+          loadStatus();
+        }
+      } catch (e) {
+        showToast('Failed to delete cards: ' + e.message, 'error');
+      }
+    }
+
+    async function bulkListSelected() {
+      if (selectedCards.size === 0) {
+        showToast('No cards selected', 'error');
+        return;
+      }
+
+      // Filter to only priced cards
+      const pricedIds = cards.filter(c => selectedCards.has(c.id) && c.recommended_price).map(c => c.id);
+      if (pricedIds.length === 0) {
+        showToast('Selected cards need prices first', 'error');
+        return;
+      }
+
+      // Open bulk listing modal with selected cards
+      bulkListingCards = cards.filter(c => pricedIds.includes(c.id)).map(c => ({
+        id: c.id,
+        player: c.player,
+        year: c.year,
+        set_name: c.set_name,
+        price: c.recommended_price,
+        customPrice: c.recommended_price,
+        front: c.front,
+        frontUrl: getImageUrl(c.front, c),
+        selected: true,
+        shippingMethod: 'calculated'
+      }));
+
+      selectedCardIds = new Set(pricedIds);
+      renderBulkCardsList();
+      updateBulkSummary();
+      document.getElementById('bulk-listing-modal').classList.add('open');
+    }
+
+    // ==========================================
+    // EXPORT FUNCTIONS
+    // ==========================================
+
+    function showExportModal() {
+      document.getElementById('export-modal').classList.add('open');
+    }
+
+    function closeExportModal() {
+      document.getElementById('export-modal').classList.remove('open');
+    }
+
+    async function exportSelected(format) {
+      const ids = selectedCards.size > 0 ? Array.from(selectedCards).join(',') : '';
+      const status = document.getElementById('status-filter').value;
+
+      let url = `/api/export/${format}?`;
+      if (ids) url += `cardIds=${ids}`;
+      else if (status) url += `status=${status}`;
+
+      // Download file
+      window.location.href = url;
+      showToast(`Exporting to ${format.toUpperCase()}...`, 'success');
+    }
+
+    async function exportAll(format) {
+      window.location.href = `/api/export/${format}`;
+      showToast(`Exporting all cards to ${format.toUpperCase()}...`, 'success');
+      closeExportModal();
+    }
+
+    // ==========================================
+    // SALES TRACKING FUNCTIONS
+    // ==========================================
+
+    let salesData = [];
+
+    function showSalesModal() {
+      document.getElementById('sales-modal').classList.add('open');
+      loadSalesData();
+    }
+
+    function closeSalesModal() {
+      document.getElementById('sales-modal').classList.remove('open');
+    }
+
+    async function loadSalesData() {
+      try {
+        const [salesResult, summaryResult] = await Promise.all([
+          api('/sales'),
+          api('/sales/summary')
+        ]);
+
+        if (salesResult?.sales) {
+          salesData = salesResult.sales;
+          renderSalesList();
+        }
+
+        if (summaryResult) {
+          document.getElementById('sales-total-revenue').textContent = '$' + (parseFloat(summaryResult.allTime?.total_revenue) || 0).toFixed(2);
+          document.getElementById('sales-total-profit').textContent = '$' + (parseFloat(summaryResult.allTime?.total_profit) || 0).toFixed(2);
+          document.getElementById('sales-total-count').textContent = summaryResult.allTime?.total_sales || 0;
+          document.getElementById('sales-month-revenue').textContent = '$' + (parseFloat(summaryResult.thisMonth?.revenue) || 0).toFixed(2);
+        }
+      } catch (e) {
+        console.error('Failed to load sales:', e);
+      }
+    }
+
+    function renderSalesList() {
+      const container = document.getElementById('sales-list');
+      if (salesData.length === 0) {
+        container.innerHTML = '<div style="text-align: center; padding: 40px; color: var(--text-muted);">No sales recorded yet</div>';
+        return;
+      }
+
+      container.innerHTML = salesData.slice(0, 20).map(sale => {
+        const card = sale.card_snapshot || {};
+        return `
+          <div style="display: flex; align-items: center; gap: 12px; padding: 12px; background: var(--glass); border-radius: 8px; margin-bottom: 8px;">
+            <div style="flex: 1;">
+              <div style="font-weight: 600;">${card.player || 'Unknown Card'}</div>
+              <div style="font-size: 12px; color: var(--text-muted);">${card.year || ''} ${card.set_name || ''}</div>
+              <div style="font-size: 11px; color: var(--text-muted);">${new Date(sale.sale_date).toLocaleDateString()} via ${sale.platform}</div>
+            </div>
+            <div style="text-align: right;">
+              <div style="font-size: 18px; font-weight: 700; color: var(--success);">$${parseFloat(sale.sale_price).toFixed(2)}</div>
+              <div style="font-size: 11px; color: var(--text-muted);">Profit: $${parseFloat(sale.profit || 0).toFixed(2)}</div>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    async function bulkMarkSold() {
+      if (selectedCards.size === 0) {
+        showToast('No cards selected', 'error');
+        return;
+      }
+
+      const priceInput = prompt(`Enter sale price for ${selectedCards.size} card(s) ($):`);
+      if (priceInput === null) return;
+
+      const price = parseFloat(priceInput);
+      if (isNaN(price) || price <= 0) {
+        showToast('Invalid price', 'error');
+        return;
+      }
+
+      let recorded = 0;
+      for (const cardId of selectedCards) {
+        try {
+          await api('/sales', {
+            method: 'POST',
+            body: JSON.stringify({
+              card_id: cardId,
+              sale_price: price,
+              platform: 'ebay'
+            })
+          });
+          recorded++;
+        } catch (e) {
+          console.error('Failed to record sale:', e);
+        }
+      }
+
+      showToast(`Recorded ${recorded} sales at $${price.toFixed(2)} each`, 'success');
+      selectedCards.clear();
+      updateSelectedCount();
+      loadCards();
+      loadStatus();
+    }
+
+    async function recordManualSale() {
+      const price = parseFloat(document.getElementById('manual-sale-price').value);
+      const platform = document.getElementById('manual-sale-platform').value;
+      const notes = document.getElementById('manual-sale-notes').value;
+
+      if (isNaN(price) || price <= 0) {
+        showToast('Enter a valid price', 'error');
+        return;
+      }
+
+      try {
+        await api('/sales', {
+          method: 'POST',
+          body: JSON.stringify({
+            sale_price: price,
+            platform,
+            notes
+          })
+        });
+
+        showToast('Sale recorded!', 'success');
+        document.getElementById('manual-sale-price').value = '';
+        document.getElementById('manual-sale-notes').value = '';
+        loadSalesData();
+      } catch (e) {
+        showToast('Failed to record sale: ' + e.message, 'error');
+      }
     }
 
     // Initialize
