@@ -1849,91 +1849,132 @@ async function getUserEbayToken(userId) {
   return tokenData.access_token;
 }
 
-// Helper: Auto-create eBay business policies
+// Helper: Fetch or create eBay business policies
 async function autoCreateEbayPolicies(userId, accessToken) {
   try {
-    console.log('[eBay] Auto-creating business policies for user:', userId);
+    console.log('[eBay] Fetching existing policies for user:', userId);
 
-    // 1. Payment Policy
-    const paymentResponse = await axios.post(
-      'https://api.ebay.com/sell/account/v1/payment_policy',
-      {
-        name: `CardFlow Payment - User ${userId}`,
-        description: 'Immediate payment required',
-        marketplaceId: 'EBAY_US',
-        categoryTypes: [{ name: 'ALL_EXCLUDING_MOTORS_VEHICLES' }],
-        immediatePay: true
-      },
-      {
-        headers: {
-          'Authorization': `Bearer ${accessToken}`,
-          'Content-Type': 'application/json',
-          'Content-Language': 'en-US'
-        }
+    const headers = {
+      'Authorization': `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+      'Content-Language': 'en-US'
+    };
+
+    let paymentPolicyId = null;
+    let returnPolicyId = null;
+    let fulfillmentPolicyId = null;
+
+    // 1. Try to get existing Payment Policy
+    try {
+      const paymentRes = await axios.get(
+        'https://api.ebay.com/sell/account/v1/payment_policy?marketplace_id=EBAY_US',
+        { headers }
+      );
+      if (paymentRes.data.paymentPolicies?.length > 0) {
+        paymentPolicyId = paymentRes.data.paymentPolicies[0].paymentPolicyId;
+        console.log('[eBay] Found existing payment policy:', paymentPolicyId);
       }
-    );
-    const paymentPolicyId = paymentResponse.data.paymentPolicyId;
-    console.log('[eBay] Payment policy created:', paymentPolicyId);
+    } catch (e) {
+      console.log('[eBay] No existing payment policies found');
+    }
 
-    // 2. Return Policy
-    const returnResponse = await axios.post(
-      'https://api.ebay.com/sell/account/v1/return_policy',
-      {
-        name: `CardFlow Returns - User ${userId}`,
-        description: 'No returns accepted',
-        marketplaceId: 'EBAY_US',
-        categoryTypes: [{ name: 'ALL_EXCLUDING_MOTORS_VEHICLES' }],
-        returnsAccepted: false
-      },
-      {
-        headers: {
-          'Authorization': `Bearer ${accessToken}`,
-          'Content-Type': 'application/json',
-          'Content-Language': 'en-US'
-        }
+    // 2. Try to get existing Return Policy
+    try {
+      const returnRes = await axios.get(
+        'https://api.ebay.com/sell/account/v1/return_policy?marketplace_id=EBAY_US',
+        { headers }
+      );
+      if (returnRes.data.returnPolicies?.length > 0) {
+        returnPolicyId = returnRes.data.returnPolicies[0].returnPolicyId;
+        console.log('[eBay] Found existing return policy:', returnPolicyId);
       }
-    );
-    const returnPolicyId = returnResponse.data.returnPolicyId;
-    console.log('[eBay] Return policy created:', returnPolicyId);
+    } catch (e) {
+      console.log('[eBay] No existing return policies found');
+    }
 
-    // 3. Fulfillment Policy
-    const fulfillmentResponse = await axios.post(
-      'https://api.ebay.com/sell/account/v1/fulfillment_policy',
-      {
-        name: `CardFlow Shipping - User ${userId}`,
-        description: 'USPS First Class shipping',
-        marketplaceId: 'EBAY_US',
-        categoryTypes: [{ name: 'ALL_EXCLUDING_MOTORS_VEHICLES' }],
-        handlingTime: { value: 1, unit: 'DAY' },
-        shipToLocations: {
-          regionIncluded: [{ regionName: 'US', regionType: 'COUNTRY' }]
+    // 3. Try to get existing Fulfillment Policy
+    try {
+      const fulfillmentRes = await axios.get(
+        'https://api.ebay.com/sell/account/v1/fulfillment_policy?marketplace_id=EBAY_US',
+        { headers }
+      );
+      if (fulfillmentRes.data.fulfillmentPolicies?.length > 0) {
+        fulfillmentPolicyId = fulfillmentRes.data.fulfillmentPolicies[0].fulfillmentPolicyId;
+        console.log('[eBay] Found existing fulfillment policy:', fulfillmentPolicyId);
+      }
+    } catch (e) {
+      console.log('[eBay] No existing fulfillment policies found');
+    }
+
+    // Create any missing policies
+    if (!paymentPolicyId) {
+      console.log('[eBay] Creating payment policy...');
+      const paymentResponse = await axios.post(
+        'https://api.ebay.com/sell/account/v1/payment_policy',
+        {
+          name: `CardFlow Payment`,
+          description: 'Immediate payment required',
+          marketplaceId: 'EBAY_US',
+          categoryTypes: [{ name: 'ALL_EXCLUDING_MOTORS_VEHICLES' }],
+          immediatePay: true
         },
-        shippingOptions: [{
-          optionType: 'DOMESTIC',
-          costType: 'FLAT_RATE',
-          shippingServices: [{
-            shippingCarrierCode: 'USPS',
-            shippingServiceCode: 'USPSFirstClass',
-            shippingCost: { value: '4.99', currency: 'USD' },
-            freeShipping: false,
-            sortOrder: 1
-          }]
-        }],
-        globalShipping: false,
-        pickupDropOff: false
-      },
-      {
-        headers: {
-          'Authorization': `Bearer ${accessToken}`,
-          'Content-Type': 'application/json',
-          'Content-Language': 'en-US'
-        }
-      }
-    );
-    const fulfillmentPolicyId = fulfillmentResponse.data.fulfillmentPolicyId;
-    console.log('[eBay] Fulfillment policy created:', fulfillmentPolicyId);
+        { headers }
+      );
+      paymentPolicyId = paymentResponse.data.paymentPolicyId;
+      console.log('[eBay] Payment policy created:', paymentPolicyId);
+    }
 
-    // Save policy IDs
+    if (!returnPolicyId) {
+      console.log('[eBay] Creating return policy...');
+      const returnResponse = await axios.post(
+        'https://api.ebay.com/sell/account/v1/return_policy',
+        {
+          name: `CardFlow Returns`,
+          description: 'No returns accepted',
+          marketplaceId: 'EBAY_US',
+          categoryTypes: [{ name: 'ALL_EXCLUDING_MOTORS_VEHICLES' }],
+          returnsAccepted: false
+        },
+        { headers }
+      );
+      returnPolicyId = returnResponse.data.returnPolicyId;
+      console.log('[eBay] Return policy created:', returnPolicyId);
+    }
+
+    if (!fulfillmentPolicyId) {
+      console.log('[eBay] Creating fulfillment policy...');
+      const fulfillmentResponse = await axios.post(
+        'https://api.ebay.com/sell/account/v1/fulfillment_policy',
+        {
+          name: `CardFlow Shipping`,
+          description: 'USPS First Class shipping',
+          marketplaceId: 'EBAY_US',
+          categoryTypes: [{ name: 'ALL_EXCLUDING_MOTORS_VEHICLES' }],
+          handlingTime: { value: 1, unit: 'DAY' },
+          shipToLocations: {
+            regionIncluded: [{ regionName: 'US', regionType: 'COUNTRY' }]
+          },
+          shippingOptions: [{
+            optionType: 'DOMESTIC',
+            costType: 'FLAT_RATE',
+            shippingServices: [{
+              shippingCarrierCode: 'USPS',
+              shippingServiceCode: 'USPSFirstClass',
+              shippingCost: { value: '4.99', currency: 'USD' },
+              freeShipping: false,
+              sortOrder: 1
+            }]
+          }],
+          globalShipping: false,
+          pickupDropOff: false
+        },
+        { headers }
+      );
+      fulfillmentPolicyId = fulfillmentResponse.data.fulfillmentPolicyId;
+      console.log('[eBay] Fulfillment policy created:', fulfillmentPolicyId);
+    }
+
+    // Save policy IDs to database
     await pool.query(`
       UPDATE users SET
         ebay_payment_policy_id = $1,
@@ -1946,8 +1987,8 @@ async function autoCreateEbayPolicies(userId, accessToken) {
     return { success: true };
 
   } catch (error) {
-    console.error('[eBay] Failed to create policies:', error.response?.data || error.message);
-    return { success: false, error: error.message };
+    console.error('[eBay] Failed to setup policies:', error.response?.data || error.message);
+    return { success: false, error: error.response?.data?.errors?.[0]?.longMessage || error.message };
   }
 }
 
