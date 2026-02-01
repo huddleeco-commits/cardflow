@@ -3182,6 +3182,11 @@ app.get('/admin', (req, res) => {
   res.sendFile(path.join(__dirname, 'admin.html'));
 });
 
+// Serve collection page
+app.get('/collection', (req, res) => {
+  res.sendFile(path.join(__dirname, 'collection.html'));
+});
+
 // Default route - serve main dashboard
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'index.html'));
