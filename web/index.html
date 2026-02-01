@@ -1670,6 +1670,18 @@
                 </div>
               </div>
 
+              <!-- Fix Policies Button - shows when policies not configured -->
+              <div id="ebay-policies-warning" style="display: none; background: rgba(255,170,0,0.1); border: 1px solid rgba(255,170,0,0.3); border-radius: 8px; padding: 12px; margin-bottom: 16px;">
+                <div style="display: flex; align-items: center; gap: 12px;">
+                  <span style="font-size: 24px;">⚠️</span>
+                  <div style="flex: 1;">
+                    <div style="font-weight: 600; color: #ffaa00;">Business Policies Required</div>
+                    <div style="font-size: 12px; color: var(--text-muted);">eBay requires payment, return, and shipping policies to list items.</div>
+                  </div>
+                  <button class="btn btn-accent" onclick="fixEbayPolicies()" id="fix-policies-btn">Fix Policies</button>
+                </div>
+              </div>
+
               <h5 style="margin: 20px 0 12px 0; color: var(--text-muted); font-size: 12px; text-transform: uppercase;">Default Shipping Settings</h5>
               <div style="background: var(--glass); padding: 16px; border-radius: 8px; margin-bottom: 16px;">
                 <div style="margin-bottom: 12px;">
@@ -2478,9 +2490,24 @@
           connected.style.display = 'block';
 
           // Show policy status
-          document.getElementById('ebay-payment-policy').textContent = data.policies.paymentPolicyId ? 'Configured' : 'Not Set';
-          document.getElementById('ebay-return-policy').textContent = data.policies.returnPolicyId ? 'Configured' : 'Not Set';
-          document.getElementById('ebay-shipping-policy').textContent = data.policies.fulfillmentPolicyId ? 'Configured' : 'Not Set';
+          const hasPayment = data.policies.paymentPolicyId;
+          const hasReturn = data.policies.returnPolicyId;
+          const hasShipping = data.policies.fulfillmentPolicyId;
+
+          document.getElementById('ebay-payment-policy').textContent = hasPayment ? 'Configured' : 'Not Set';
+          document.getElementById('ebay-payment-policy').style.color = hasPayment ? 'var(--success)' : 'var(--error)';
+          document.getElementById('ebay-return-policy').textContent = hasReturn ? 'Configured' : 'Not Set';
+          document.getElementById('ebay-return-policy').style.color = hasReturn ? 'var(--success)' : 'var(--error)';
+          document.getElementById('ebay-shipping-policy').textContent = hasShipping ? 'Configured' : 'Not Set';
+          document.getElementById('ebay-shipping-policy').style.color = hasShipping ? 'var(--success)' : 'var(--error)';
+
+          // Show warning if policies missing
+          const policiesWarning = document.getElementById('ebay-policies-warning');
+          if (!hasPayment || !hasReturn || !hasShipping) {
+            policiesWarning.style.display = 'block';
+          } else {
+            policiesWarning.style.display = 'none';
+          }
 
           // Load shipping settings
           loadShippingSettings();
@@ -2519,6 +2546,27 @@
         loadEbayStatus();
       } catch (e) {
         showToast('Failed to disconnect: ' + e.message, 'error');
+      }
+    }
+
+    async function fixEbayPolicies() {
+      const btn = document.getElementById('fix-policies-btn');
+      btn.disabled = true;
+      btn.textContent = 'Creating...';
+
+      try {
+        const result = await api('/ebay/create-policies', { method: 'POST' });
+        if (result?.success) {
+          showToast('eBay policies created successfully!', 'success');
+          loadEbayStatus(); // Refresh to show updated status
+        } else {
+          showToast(result?.error || 'Failed to create policies', 'error');
+        }
+      } catch (e) {
+        showToast('Failed to create policies: ' + e.message, 'error');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Fix Policies';
       }
     }
 

@@ -1951,6 +1951,29 @@ async function autoCreateEbayPolicies(userId, accessToken) {
   }
 }
 
+// Fix/Create eBay Business Policies
+app.post('/api/ebay/create-policies', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    console.log('[eBay] Manual policy creation for user:', userId);
+
+    // Get user's eBay token
+    const accessToken = await getUserEbayToken(userId);
+
+    // Create policies
+    const result = await autoCreateEbayPolicies(userId, accessToken);
+
+    if (result.success) {
+      res.json({ success: true, message: 'eBay policies created successfully' });
+    } else {
+      res.status(500).json({ success: false, error: result.error || 'Failed to create policies' });
+    }
+  } catch (error) {
+    console.error('[eBay] Create policies error:', error.message);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 // ============================================
 // EBAY LISTING ROUTES
 // ============================================
