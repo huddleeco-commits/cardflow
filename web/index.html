@@ -1284,11 +1284,11 @@
     </div>
   </header>
 
-  <!-- Pipeline -->
+  <!-- Pipeline: Upload → Identify → List -->
   <section class="pipeline">
     <div class="pipeline-step" id="step-pending">
       <div class="step-count" id="count-pending">0</div>
-      <div class="step-name">Pending</div>
+      <div class="step-name">Uploaded</div>
     </div>
     <div class="pipeline-arrow">→</div>
     <div class="pipeline-step active" data-filter="" onclick="setFilter('')">
@@ -1301,14 +1301,9 @@
       <div class="step-name">Identified</div>
     </div>
     <div class="pipeline-arrow">→</div>
-    <div class="pipeline-step" data-filter="priced" onclick="setFilter('priced')">
-      <div class="step-count" id="count-priced">0</div>
-      <div class="step-name">Priced</div>
-    </div>
-    <div class="pipeline-arrow">→</div>
-    <div class="pipeline-step" data-filter="exported" onclick="setFilter('exported')">
-      <div class="step-count" id="count-exported">0</div>
-      <div class="step-name">Exported</div>
+    <div class="pipeline-step" data-filter="listed" onclick="setFilter('listed')">
+      <div class="step-count" id="count-listed">0</div>
+      <div class="step-name">Listed</div>
     </div>
   </section>
 
@@ -1318,19 +1313,17 @@
       <label>Filter:</label>
       <select id="status-filter" onchange="loadCards()">
         <option value="">All Cards</option>
+        <option value="pending">Uploaded</option>
         <option value="identified">Identified</option>
-        <option value="approved">Approved</option>
-        <option value="priced">Priced</option>
-        <option value="exported">Exported</option>
+        <option value="listed">Listed</option>
       </select>
     </div>
     <div class="action-buttons">
       <button class="btn btn-accent" id="identify-btn" onclick="runIdentify()">🔍 Identify</button>
-      <button class="btn btn-accent" id="price-btn" onclick="runPrice()">💰 Price</button>
       <button class="btn btn-success" onclick="showBulkListingModal()">📦 Bulk List</button>
       <button class="btn btn-success" onclick="showLotListingModal()">🎴 Create Lot</button>
+      <button class="btn btn-primary" onclick="window.location.href='/collection'">📋 Collection</button>
       <button class="btn btn-secondary" onclick="showSettingsModal()">⚙️ Settings</button>
-      <button class="btn btn-secondary" onclick="approveAll()">✓ Approve All</button>
       <button class="btn btn-danger" onclick="confirmClearAll()">🗑️ Clear</button>
     </div>
   </section>
@@ -1857,9 +1850,8 @@
       document.getElementById('total-cards').textContent = status.cards.total;
       document.getElementById('total-value').textContent = '$' + (status.totalValue || 0).toFixed(2);
       document.getElementById('count-all').textContent = status.cards.total;
-      document.getElementById('count-identified').textContent = (status.cards.identified || 0) + (status.cards.approved || 0);
-      document.getElementById('count-priced').textContent = status.cards.priced || 0;
-      document.getElementById('count-exported').textContent = status.cards.exported || 0;
+      document.getElementById('count-identified').textContent = (status.cards.identified || 0) + (status.cards.approved || 0) + (status.cards.priced || 0);
+      document.getElementById('count-listed').textContent = (status.cards.listed || 0) + (status.cards.exported || 0);
 
       // Pending cards (uploaded but not identified)
       const pendingCount = status.cards?.pending || 0;
@@ -1948,10 +1940,14 @@
             </div>
             <div class="card-actions">
               <button class="btn btn-secondary" onclick="editCard('${card.id}')">Edit</button>
-              ${card.status === 'priced' && card.recommended_price ? `
+              ${card.status === 'listed' ? `
+                <button class="btn btn-accent" onclick="window.open(cards.find(c=>c.id==='${card.id}')?.ebay_listing_url || 'https://ebay.com', '_blank')">View on eBay</button>
+              ` : card.status === 'identified' || card.status === 'priced' || card.status === 'approved' ? `
                 <button class="btn btn-accent" onclick="listOnEbay('${card.id}')">List</button>
-                <button class="btn btn-success" onclick="showAuctionModal('${card.id}')" title="Create Auction">Auction</button>
-              ` : `<button class="btn btn-success" onclick="approveCard('${card.id}')">Approve</button>`}
+                <button class="btn btn-success" onclick="showAuctionModal('${card.id}')" title="Auction">Auction</button>
+              ` : `
+                <button class="btn btn-success" onclick="approveCard('${card.id}')">Ready</button>
+              `}
               <button class="btn btn-secondary" onclick="deleteCard('${card.id}')">Delete</button>
             </div>
           </div>
@@ -1964,8 +1960,9 @@
         case 'new':
         case 'pending': return '1-new';
         case 'identified':
-        case 'approved': return '2-identified';
-        case 'priced': return '3-priced';
+        case 'approved':
+        case 'priced': return '2-identified';
+        case 'listed':
         case 'exported': return '4-exported';
         default: return '2-identified';
       }

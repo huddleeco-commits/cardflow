@@ -652,8 +652,8 @@
       switch (status) {
         case 'pending': return '1-new';
         case 'identified':
-        case 'approved': return '2-identified';
-        case 'priced': return '3-priced';
+        case 'approved':
+        case 'priced': return '2-identified';
         case 'listed':
         case 'exported': return '4-exported';
         default: return '2-identified';
