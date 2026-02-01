@@ -2184,11 +2184,15 @@ app.post('/api/ebay/list/:cardId', authenticateToken, async (req, res) => {
     console.log('[eBay] SKU:', sku, 'Length:', sku.length);
 
     // Step 1: Create inventory item
+    // eBay trading cards: 2750 = Graded, 4000 = Ungraded
     const inventoryPayload = {
       availability: {
         shipToLocationAvailability: { quantity }
       },
-      condition: card.is_graded ? 'NEW' : 'USED_EXCELLENT',
+      condition: card.is_graded ? 'LIKE_NEW' : 'USED_VERY_GOOD',
+      conditionDescription: card.is_graded
+        ? `${card.grading_company || 'PSA'} ${card.grade || '10'}`
+        : 'Ungraded card in excellent condition',
       product: {
         title,
         description,
@@ -2595,9 +2599,13 @@ app.post('/api/ebay/bulk-create', authenticateToken, async (req, res) => {
         let fulfillmentPolicyId = policies.ebay_fulfillment_policy_id;
 
         // Create inventory item
+        // eBay trading cards: LIKE_NEW = Graded, USED_VERY_GOOD = Ungraded
         const inventoryPayload = {
           availability: { shipToLocationAvailability: { quantity: 1 } },
-          condition: card.is_graded ? 'NEW' : 'USED_EXCELLENT',
+          condition: card.is_graded ? 'LIKE_NEW' : 'USED_VERY_GOOD',
+          conditionDescription: card.is_graded
+            ? `${card.grading_company || 'PSA'} ${card.grade || '10'}`
+            : 'Ungraded card in excellent condition',
           product: {
             title,
             description,
@@ -2958,9 +2966,11 @@ app.post('/api/ebay/create-lot', authenticateToken, async (req, res) => {
     const description = generateLotDescription(cards, collageUrl);
 
     // Create inventory item
+    // eBay trading cards: USED_VERY_GOOD = Ungraded/Lot
     const inventoryPayload = {
       availability: { shipToLocationAvailability: { quantity: 1 } },
-      condition: 'USED_EXCELLENT',
+      condition: 'USED_VERY_GOOD',
+      conditionDescription: 'Lot of trading cards in excellent condition',
       product: {
         title: title.substring(0, 80),
         description,
@@ -3149,11 +3159,15 @@ app.post('/api/ebay/create-auction', authenticateToken, async (req, res) => {
     const sku = `CFAUC${cardId.replace(/-/g, '').substring(0, 16)}${Date.now().toString().slice(-8)}`;
 
     // Create inventory item
+    // eBay trading cards: LIKE_NEW = Graded, USED_VERY_GOOD = Ungraded
     await axios.put(
       `https://api.ebay.com/sell/inventory/v1/inventory_item/${sku}`,
       {
         availability: { shipToLocationAvailability: { quantity: 1 } },
-        condition: card.is_graded ? 'NEW' : 'USED_EXCELLENT',
+        condition: card.is_graded ? 'LIKE_NEW' : 'USED_VERY_GOOD',
+        conditionDescription: card.is_graded
+          ? `${card.grading_company || 'PSA'} ${card.grade || '10'}`
+          : 'Ungraded card in excellent condition',
         product: {
           title,
           description,
@@ -3429,7 +3443,7 @@ const HOST = process.env.NODE_ENV === 'production' ? '0.0.0.0' : 'localhost';
 server.listen(PORT, HOST, () => {
   console.log(`
 ══════════════════════════════════════════════════
-  CARDFLOW v2.0 - Multi-User SaaS (Build 0201e)
+  CARDFLOW v2.0 - Multi-User SaaS (Build 0201f)
 ══════════════════════════════════════════════════
 
   Server:    http://${HOST}:${PORT}
