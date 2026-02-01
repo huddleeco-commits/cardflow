@@ -1342,6 +1342,17 @@ app.post('/api/process/price', authenticateToken, async (req, res) => {
           console.log(`[Price] Response: ${response.status}, ${response.data.length} bytes`);
 
           const $ = cheerio.load(response.data);
+
+          // Debug: Check what we're getting
+          const itemCount = $('.s-item').length;
+          const title = $('title').text();
+          console.log(`[Price] Page title: "${title.substring(0, 50)}...", Items found: ${itemCount}`);
+
+          // Check if we got a captcha or error page
+          if (response.data.includes('captcha') || response.data.includes('robot')) {
+            console.log('[Price] WARNING: Possible captcha/bot detection');
+          }
+
           const prices = [];
 
           $('.s-item').each((idx, el) => {
