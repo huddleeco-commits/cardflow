@@ -1159,7 +1159,7 @@ async function getUserApiKey(userId) {
   return process.env.ANTHROPIC_API_KEY || null;
 }
 
-// Convert image to base64
+// Convert image to base64 (local file)
 function imageToBase64(imagePath) {
   const buffer = fs.readFileSync(imagePath);
   const ext = path.extname(imagePath).toLowerCase();
@@ -1174,6 +1174,32 @@ function imageToBase64(imagePath) {
     media_type: mediaTypes[ext] || 'image/jpeg',
     data: buffer.toString('base64')
   };
+}
+
+// Convert image to base64 - handles both URLs (Cloudinary) and local files
+async function getImageBase64(imagePathOrUrl, folder = null) {
+  // Check if it's a URL (Cloudinary)
+  if (imagePathOrUrl.startsWith('http://') || imagePathOrUrl.startsWith('https://')) {
+    console.log('[Identify] Fetching image from URL:', imagePathOrUrl.substring(0, 60) + '...');
+    const response = await axios.get(imagePathOrUrl, { responseType: 'arraybuffer', timeout: 30000 });
+    const buffer = Buffer.from(response.data);
+    const contentType = response.headers['content-type'] || 'image/jpeg';
+    return {
+      type: 'base64',
+      media_type: contentType,
+      data: buffer.toString('base64')
+    };
+  }
+
+  // Local file path
+  const localPath = folder ? path.join(folder, imagePathOrUrl) : imagePathOrUrl;
+  if (!fs.existsSync(localPath)) {
+    console.error('[Identify] Local file not found:', localPath);
+    return null;
+  }
+
+  console.log('[Identify] Reading local file:', localPath);
+  return imageToBase64(localPath);
 }
 
 // Identify cards endpoint
@@ -1216,9 +1242,6 @@ app.post('/api/process/identify', authenticateToken, async (req, res) => {
 
     for (const card of pendingCards) {
       try {
-        const frontPath = path.join(FOLDERS.new, card.front_image_path);
-        const backPath = card.back_image_path ? path.join(FOLDERS.new, card.back_image_path) : null;
-
         broadcast({
           type: 'identify_progress',
           current: processed + 1,
@@ -1227,44 +1250,68 @@ app.post('/api/process/identify', authenticateToken, async (req, res) => {
           userId
         });
 
-        // Build content with images
+        // Build content with images - handles both Cloudinary URLs and local files
         const content = [];
+        let hasBack = false;
 
         // Add front image
-        if (fs.existsSync(frontPath)) {
-          content.push({ type: 'image', source: imageToBase64(frontPath) });
+        const frontImageData = await getImageBase64(card.front_image_path, FOLDERS.new);
+        if (frontImageData) {
+          content.push({ type: 'image', source: frontImageData });
+          console.log('[Identify] Front image added to request');
+        } else {
+          console.error('[Identify] FAILED to load front image:', card.front_image_path);
         }
 
         // Add back image if exists
-        if (backPath && fs.existsSync(backPath)) {
-          content.push({ type: 'image', source: imageToBase64(backPath) });
+        if (card.back_image_path) {
+          const backImageData = await getImageBase64(card.back_image_path, FOLDERS.new);
+          if (backImageData) {
+            content.push({ type: 'image', source: backImageData });
+            hasBack = true;
+            console.log('[Identify] Back image added to request');
+          }
         }
 
-        // Add prompt
-        const hasBack = backPath && fs.existsSync(backPath);
+        // Check if we have at least the front image
+        if (content.length === 0) {
+          console.error('[Identify] NO IMAGES LOADED for card:', card.id);
+          processed++;
+          continue;
+        }
         content.push({
           type: 'text',
-          text: `Analyze this sports card${hasBack ? ' (front and back images provided)' : ' image'} and identify it.
+          text: `CAREFULLY analyze this sports card image and identify it accurately.
 
-${hasBack ? 'I have provided both the FRONT and BACK of the card. Use both images to accurately identify it.' : 'This appears to be a single image (likely a graded/slabbed card).'}
+IMPORTANT INSTRUCTIONS:
+1. LOOK AT THE ACTUAL CARD IMAGE - identify the player shown on the card
+2. READ THE PLAYER NAME printed on the card itself
+3. If this is a GRADED/SLABBED card, READ THE GRADING LABEL carefully:
+   - The PSA/BGS/SGC label contains the player name, year, set, and card number
+   - Read the certification number from the label
+   - Read the grade from the label
+4. Do NOT guess or assume - only report what you can actually see in the image
+5. If you cannot clearly identify something, set confidence to "low"
+
+${hasBack ? 'I have provided both the FRONT and BACK of the card. Use both images.' : 'This is a single image (likely a graded/slabbed card). Read the label text carefully.'}
 
 Return ONLY a JSON object with these fields (no other text):
 {
-  "player": "Full player name",
+  "player": "Full player name AS SHOWN ON CARD/LABEL",
   "year": 2024,
   "set_name": "Full set name (e.g., Topps Chrome, Panini Prizm)",
-  "card_number": "Card number",
+  "card_number": "Card number from label or card",
   "parallel": "Parallel type if any (Base, Refractor, Silver, Gold, etc.)",
   "numbered": "Serial numbering if any (/99, /25, etc.) or null",
-  "team": "Team name",
+  "team": "Team name visible on card",
   "sport": "Sport (Baseball, Basketball, Football, Hockey, Soccer, Pokemon)",
   "is_graded": true,
-  "grading_company": "PSA, BGS, SGC, CGC, or null if raw",
-  "grade": "Grade number (10, 9.5, 9, etc.) or null",
-  "cert_number": "Certification number or null",
+  "grading_company": "PSA, BGS, SGC, CGC - READ FROM LABEL",
+  "grade": "Grade number from label (10, 9.5, 9, etc.)",
+  "cert_number": "Certification number from label",
   "condition": "mint, near_mint, excellent, good, fair, poor",
-  "confidence": "high, medium, or low",
-  "notes": "Any special observations"
+  "confidence": "high, medium, or low - be honest if unclear",
+  "notes": "What text did you read from the grading label?"
 }`
         });
 
@@ -1299,15 +1346,24 @@ Return ONLY a JSON object with these fields (no other text):
             VALUES ($1, 'identify', 'sonnet4', $2, $3, $4)
           `, [userId, inputTokens, outputTokens, cost]);
 
-          // Move images to identified folder
-          if (fs.existsSync(frontPath)) {
-            const dstPath = path.join(FOLDERS.identified, card.front_image_path);
-            try { fs.renameSync(frontPath, dstPath); } catch (e) {}
+          // Move local images to identified folder (skip for Cloudinary URLs)
+          const isCloudinaryFront = card.front_image_path.startsWith('http');
+          if (!isCloudinaryFront) {
+            const frontPath = path.join(FOLDERS.new, card.front_image_path);
+            if (fs.existsSync(frontPath)) {
+              const dstPath = path.join(FOLDERS.identified, card.front_image_path);
+              try { fs.renameSync(frontPath, dstPath); } catch (e) {}
+            }
           }
-          if (backPath && fs.existsSync(backPath)) {
-            const dstPath = path.join(FOLDERS.identified, card.back_image_path);
-            try { fs.renameSync(backPath, dstPath); } catch (e) {}
+          if (card.back_image_path && !card.back_image_path.startsWith('http')) {
+            const backPath = path.join(FOLDERS.new, card.back_image_path);
+            if (fs.existsSync(backPath)) {
+              const dstPath = path.join(FOLDERS.identified, card.back_image_path);
+              try { fs.renameSync(backPath, dstPath); } catch (e) {}
+            }
           }
+
+          console.log(`[Identify] Card ${card.id} identified as: ${cardData.player} - ${cardData.year} ${cardData.set_name}`);
         }
 
         processed++;
