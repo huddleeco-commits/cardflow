@@ -296,6 +296,16 @@
       opacity: 1;
     }
 
+    .pipeline-step.has-items {
+      border-color: var(--purple);
+      animation: pulse-glow 2s ease-in-out infinite;
+    }
+
+    @keyframes pulse-glow {
+      0%, 100% { box-shadow: 0 0 10px var(--purple-glow); }
+      50% { box-shadow: 0 0 25px var(--purple-glow); }
+    }
+
     .step-count {
       font-weight: 700;
       font-size: 20px;
@@ -440,6 +450,68 @@
     .btn-secondary:hover {
       border-color: var(--cyan);
       background: var(--glass-hover);
+    }
+
+    /* Upload Zone */
+    .upload-zone {
+      margin: 20px 24px;
+      padding: 40px;
+      border: 2px dashed var(--glass-border);
+      border-radius: 16px;
+      background: var(--glass);
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.3s ease;
+    }
+
+    .upload-zone:hover, .upload-zone.dragover {
+      border-color: var(--cyan);
+      background: rgba(0, 212, 255, 0.1);
+    }
+
+    .upload-zone.dragover {
+      transform: scale(1.01);
+      box-shadow: 0 0 30px var(--cyan-glow);
+    }
+
+    .upload-icon {
+      font-size: 48px;
+      margin-bottom: 12px;
+    }
+
+    .upload-zone h3 {
+      margin: 0 0 8px 0;
+      color: var(--text);
+    }
+
+    .upload-zone p {
+      margin: 0;
+      color: var(--text-muted);
+    }
+
+    .upload-label {
+      color: var(--cyan);
+      cursor: pointer;
+      text-decoration: underline;
+    }
+
+    .upload-progress {
+      margin-top: 20px;
+    }
+
+    .progress-bar {
+      height: 8px;
+      background: rgba(255,255,255,0.1);
+      border-radius: 4px;
+      overflow: hidden;
+      margin-bottom: 8px;
+    }
+
+    .progress-fill {
+      height: 100%;
+      background: linear-gradient(90deg, var(--cyan), var(--purple));
+      width: 0%;
+      transition: width 0.3s ease;
     }
 
     /* Cards Grid */
@@ -1059,6 +1131,11 @@
 
   <!-- Pipeline -->
   <section class="pipeline">
+    <div class="pipeline-step" id="step-pending">
+      <div class="step-count" id="count-pending">0</div>
+      <div class="step-name">Pending</div>
+    </div>
+    <div class="pipeline-arrow">→</div>
     <div class="pipeline-step active" data-filter="" onclick="setFilter('')">
       <div class="step-count" id="count-all">0</div>
       <div class="step-name">All</div>
@@ -1099,6 +1176,19 @@
       <button class="btn btn-success" onclick="approveAll()">✓ Approve All</button>
       <button class="btn btn-primary" onclick="showExportModal()">📤 Export</button>
       <button class="btn btn-danger" onclick="confirmClearAll()">🗑️ Clear</button>
+    </div>
+  </section>
+
+  <!-- Upload Zone -->
+  <section class="upload-zone" id="upload-zone" ondrop="handleDrop(event)" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)">
+    <div class="upload-content">
+      <div class="upload-icon">📷</div>
+      <h3>Drop card images here</h3>
+      <p>or <label class="upload-label"><input type="file" id="file-input" multiple accept="image/*" onchange="handleFileSelect(event)" hidden>click to browse</label></p>
+      <div class="upload-progress" id="upload-progress" style="display:none;">
+        <div class="progress-bar"><div class="progress-fill" id="upload-fill"></div></div>
+        <span id="upload-status">Uploading...</span>
+      </div>
     </div>
   </section>
 
@@ -1332,6 +1422,16 @@
       document.getElementById('count-identified').textContent = (status.cards.identified || 0) + (status.cards.approved || 0);
       document.getElementById('count-priced').textContent = status.cards.priced || 0;
       document.getElementById('count-exported').textContent = status.cards.exported || 0;
+
+      // Pending images (in 1-new folder)
+      const pendingCount = status.pipeline?.new || 0;
+      document.getElementById('count-pending').textContent = pendingCount;
+      const pendingStep = document.getElementById('step-pending');
+      if (pendingCount > 0) {
+        pendingStep.classList.add('has-items');
+      } else {
+        pendingStep.classList.remove('has-items');
+      }
 
       // Load costs
       const costs = await api('/costs');
@@ -1634,6 +1734,81 @@
         btn.disabled = false;
         btn.innerHTML = originalText;
       }, 3000);
+    }
+
+    // File Upload Handling
+    function handleDragOver(e) {
+      e.preventDefault();
+      e.stopPropagation();
+      document.getElementById('upload-zone').classList.add('dragover');
+    }
+
+    function handleDragLeave(e) {
+      e.preventDefault();
+      e.stopPropagation();
+      document.getElementById('upload-zone').classList.remove('dragover');
+    }
+
+    function handleDrop(e) {
+      e.preventDefault();
+      e.stopPropagation();
+      document.getElementById('upload-zone').classList.remove('dragover');
+
+      const files = Array.from(e.dataTransfer.files).filter(f => f.type.startsWith('image/'));
+      if (files.length > 0) {
+        uploadFiles(files);
+      }
+    }
+
+    function handleFileSelect(e) {
+      const files = Array.from(e.target.files);
+      if (files.length > 0) {
+        uploadFiles(files);
+      }
+    }
+
+    async function uploadFiles(files) {
+      const progressDiv = document.getElementById('upload-progress');
+      const progressFill = document.getElementById('upload-fill');
+      const statusText = document.getElementById('upload-status');
+
+      progressDiv.style.display = 'block';
+      progressFill.style.width = '0%';
+      statusText.textContent = `Uploading ${files.length} images...`;
+
+      let uploaded = 0;
+
+      for (const file of files) {
+        try {
+          const formData = new FormData();
+          formData.append('image', file);
+
+          const response = await fetch(`${API_URL}/upload`, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${token}`
+            },
+            body: formData
+          });
+
+          if (response.ok) {
+            uploaded++;
+            const percent = Math.round((uploaded / files.length) * 100);
+            progressFill.style.width = percent + '%';
+            statusText.textContent = `Uploaded ${uploaded}/${files.length}`;
+          }
+        } catch (e) {
+          console.error('Upload error:', e);
+        }
+      }
+
+      setTimeout(() => {
+        progressDiv.style.display = 'none';
+        if (uploaded > 0) {
+          showToast(`Uploaded ${uploaded} images. Click Identify to process.`, 'success');
+          loadStatus();
+        }
+      }, 1000);
     }
 
     // Lightbox

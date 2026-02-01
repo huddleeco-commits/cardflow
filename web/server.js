@@ -24,6 +24,7 @@ const cors = require('cors');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const { Pool } = require('pg');
+const multer = require('multer');
 
 const app = express();
 const server = http.createServer(app);
@@ -73,6 +74,32 @@ const COSTS_PATH = path.join(BASE_DIR, 'costs.json');
 Object.values(FOLDERS).forEach(folder => {
   if (!fs.existsSync(folder)) {
     fs.mkdirSync(folder, { recursive: true });
+  }
+});
+
+// Configure multer for file uploads
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, FOLDERS.new);
+  },
+  filename: (req, file, cb) => {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    const ext = path.extname(file.originalname);
+    cb(null, file.fieldname + '-' + uniqueSuffix + ext);
+  }
+});
+
+const upload = multer({
+  storage: storage,
+  limits: { fileSize: 20 * 1024 * 1024 }, // 20MB limit
+  fileFilter: (req, file, cb) => {
+    const allowed = ['.jpg', '.jpeg', '.png', '.webp'];
+    const ext = path.extname(file.originalname).toLowerCase();
+    if (allowed.includes(ext)) {
+      cb(null, true);
+    } else {
+      cb(new Error('Only image files allowed'));
+    }
   }
 });
 
@@ -890,6 +917,36 @@ app.get('/api/admin/analytics', authenticateToken, requireAdmin, async (req, res
   } catch (e) {
     console.error('Analytics error:', e);
     res.status(500).json({ error: 'Failed to get analytics' });
+  }
+});
+
+// ============================================
+// FILE UPLOAD ENDPOINT
+// ============================================
+
+app.post('/api/upload', authenticateToken, upload.single('image'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'No file uploaded' });
+    }
+
+    console.log(`[Upload] ${req.file.filename} by user ${req.user.id}`);
+
+    // Notify via WebSocket
+    broadcast({
+      type: 'file_uploaded',
+      filename: req.file.filename,
+      userId: req.user.id
+    });
+
+    res.json({
+      success: true,
+      filename: req.file.filename,
+      size: req.file.size
+    });
+  } catch (e) {
+    console.error('Upload error:', e);
+    res.status(500).json({ error: 'Upload failed' });
   }
 });
 
