@@ -93,6 +93,56 @@ CREATE TABLE IF NOT EXISTS sessions (
   updated_at TIMESTAMP DEFAULT NOW()
 );
 
+-- eBay OAuth tokens table
+CREATE TABLE IF NOT EXISTS ebay_user_tokens (
+  id SERIAL PRIMARY KEY,
+  user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+  access_token TEXT NOT NULL,
+  refresh_token TEXT NOT NULL,
+  token_expires_at TIMESTAMP NOT NULL,
+  ebay_user_id VARCHAR(255),
+  scope TEXT,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE(user_id)
+);
+
+-- eBay OAuth states (CSRF protection)
+CREATE TABLE IF NOT EXISTS ebay_oauth_states (
+  user_id UUID PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  state VARCHAR(255) NOT NULL,
+  expires_at TIMESTAMP NOT NULL
+);
+
+-- eBay listings tracking
+CREATE TABLE IF NOT EXISTS ebay_listings (
+  id SERIAL PRIMARY KEY,
+  card_id UUID REFERENCES cards(id) ON DELETE CASCADE,
+  user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+  ebay_listing_id VARCHAR(255) NOT NULL,
+  ebay_url TEXT,
+  sku VARCHAR(255),
+  offer_id VARCHAR(255),
+  status VARCHAR(50) DEFAULT 'active',
+  price DECIMAL(10,2),
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  ended_at TIMESTAMP,
+  UNIQUE(card_id)
+);
+
+-- Add eBay policy columns to users (if not exist)
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'users' AND column_name = 'ebay_payment_policy_id') THEN
+    ALTER TABLE users ADD COLUMN ebay_payment_policy_id VARCHAR(255);
+    ALTER TABLE users ADD COLUMN ebay_return_policy_id VARCHAR(255);
+    ALTER TABLE users ADD COLUMN ebay_fulfillment_policy_id VARCHAR(255);
+    ALTER TABLE users ADD COLUMN ebay_marketplace_id VARCHAR(50) DEFAULT 'EBAY_US';
+    ALTER TABLE users ADD COLUMN ebay_currency VARCHAR(10) DEFAULT 'USD';
+    ALTER TABLE users ADD COLUMN ebay_country_code VARCHAR(10) DEFAULT 'US';
+  END IF;
+END $$;
+
 -- Indexes for performance
 CREATE INDEX IF NOT EXISTS idx_cards_user_id ON cards(user_id);
 CREATE INDEX IF NOT EXISTS idx_cards_status ON cards(status);
@@ -101,6 +151,11 @@ CREATE INDEX IF NOT EXISTS idx_api_usage_user_id ON api_usage(user_id);
 CREATE INDEX IF NOT EXISTS idx_api_usage_timestamp ON api_usage(timestamp);
 CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id);
 CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
+CREATE INDEX IF NOT EXISTS idx_ebay_tokens_user ON ebay_user_tokens(user_id);
+CREATE INDEX IF NOT EXISTS idx_ebay_tokens_expiry ON ebay_user_tokens(token_expires_at);
+CREATE INDEX IF NOT EXISTS idx_ebay_listings_card ON ebay_listings(card_id);
+CREATE INDEX IF NOT EXISTS idx_ebay_listings_user ON ebay_listings(user_id);
+CREATE INDEX IF NOT EXISTS idx_ebay_listings_status ON ebay_listings(status);
 
 -- Function to update updated_at timestamp
 CREATE OR REPLACE FUNCTION update_updated_at_column()

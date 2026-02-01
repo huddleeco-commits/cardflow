@@ -33,6 +33,21 @@ const wss = new WebSocket.Server({ server });
 const PORT = process.env.PORT || 3005;
 const JWT_SECRET = process.env.JWT_SECRET || 'cardflow-dev-secret-change-in-production';
 const JWT_EXPIRY = '7d';
+const crypto = require('crypto');
+const axios = require('axios');
+
+// eBay OAuth Config
+const EBAY_APP_ID = process.env.EBAY_APP_ID;
+const EBAY_CERT_ID = process.env.EBAY_CERT_ID;
+const EBAY_DEV_ID = process.env.EBAY_DEV_ID;
+const EBAY_REDIRECT_URI = process.env.EBAY_REDIRECT_URI ||
+  (process.env.NODE_ENV === 'production'
+    ? 'https://cardflow.be1st.io/api/ebay/callback'
+    : 'http://localhost:3005/api/ebay/callback');
+const FRONTEND_URL = process.env.FRONTEND_URL ||
+  (process.env.NODE_ENV === 'production'
+    ? 'https://cardflow.be1st.io'
+    : 'http://localhost:3005');
 
 // Database connection
 // Railway internal connections don't use SSL
@@ -1477,6 +1492,646 @@ app.post('/api/process/price', authenticateToken, async (req, res) => {
   } catch (e) {
     console.error('Price error:', e);
     broadcast({ type: 'price_error', error: e.message, userId });
+  }
+});
+
+// ============================================
+// EBAY OAUTH ROUTES
+// ============================================
+
+// eBay OAuth Status
+app.get('/api/ebay/status', authenticateToken, async (req, res) => {
+  try {
+    const tokenResult = await pool.query(
+      'SELECT created_at, ebay_user_id FROM ebay_user_tokens WHERE user_id = $1',
+      [req.user.id]
+    );
+
+    const userResult = await pool.query(
+      'SELECT ebay_payment_policy_id, ebay_return_policy_id, ebay_fulfillment_policy_id FROM users WHERE id = $1',
+      [req.user.id]
+    );
+
+    const policies = userResult.rows[0] || {};
+
+    res.json({
+      success: true,
+      connected: tokenResult.rows.length > 0,
+      connectedAt: tokenResult.rows[0]?.created_at || null,
+      ebayUserId: tokenResult.rows[0]?.ebay_user_id || null,
+      policies: {
+        paymentPolicyId: policies.ebay_payment_policy_id || null,
+        returnPolicyId: policies.ebay_return_policy_id || null,
+        fulfillmentPolicyId: policies.ebay_fulfillment_policy_id || null
+      }
+    });
+  } catch (error) {
+    console.error('eBay status error:', error.message);
+    res.status(500).json({ success: false, error: 'Failed to check eBay status' });
+  }
+});
+
+// eBay OAuth Connect - Initiate OAuth flow
+app.get('/api/ebay/connect', authenticateToken, async (req, res) => {
+  try {
+    if (!EBAY_APP_ID || !EBAY_CERT_ID) {
+      return res.status(500).json({
+        success: false,
+        error: 'eBay integration not configured. Add EBAY_APP_ID and EBAY_CERT_ID to environment.'
+      });
+    }
+
+    // Generate cryptographically secure state token
+    const state = crypto.randomBytes(32).toString('hex');
+
+    // Store state with user ID (with expiry)
+    await pool.query(`
+      INSERT INTO ebay_oauth_states (user_id, state, expires_at)
+      VALUES ($1, $2, NOW() + INTERVAL '10 minutes')
+      ON CONFLICT (user_id)
+      DO UPDATE SET state = EXCLUDED.state, expires_at = EXCLUDED.expires_at
+    `, [req.user.id, state]);
+
+    console.log('[eBay] OAuth initiated for user:', req.user.id);
+
+    // Build OAuth URL
+    const scopes = [
+      'https://api.ebay.com/oauth/api_scope/sell.inventory',
+      'https://api.ebay.com/oauth/api_scope/sell.inventory.readonly',
+      'https://api.ebay.com/oauth/api_scope/sell.fulfillment',
+      'https://api.ebay.com/oauth/api_scope/sell.fulfillment.readonly',
+      'https://api.ebay.com/oauth/api_scope/sell.account',
+      'https://api.ebay.com/oauth/api_scope/sell.account.readonly'
+    ].join(' ');
+
+    const authUrl = `https://auth.ebay.com/oauth2/authorize?` +
+      `client_id=${encodeURIComponent(EBAY_APP_ID)}&` +
+      `response_type=code&` +
+      `redirect_uri=${encodeURIComponent(EBAY_REDIRECT_URI)}&` +
+      `scope=${encodeURIComponent(scopes)}&` +
+      `state=${state}`;
+
+    res.json({ success: true, authUrl });
+
+  } catch (error) {
+    console.error('eBay connect error:', error.message);
+    res.status(500).json({ success: false, error: 'Failed to initiate eBay connection' });
+  }
+});
+
+// eBay OAuth Callback
+app.get('/api/ebay/callback', async (req, res) => {
+  try {
+    const { code, state, error: oauthError } = req.query;
+
+    if (oauthError) {
+      console.error('eBay OAuth error:', oauthError);
+      return res.redirect(`${FRONTEND_URL}?ebay_error=oauth_denied`);
+    }
+
+    if (!code || !state) {
+      return res.redirect(`${FRONTEND_URL}?ebay_error=missing_params`);
+    }
+
+    // Verify state and get user ID
+    const stateResult = await pool.query(
+      `SELECT user_id FROM ebay_oauth_states WHERE state = $1 AND expires_at > NOW()`,
+      [state]
+    );
+
+    if (stateResult.rows.length === 0) {
+      return res.redirect(`${FRONTEND_URL}?ebay_error=expired_state`);
+    }
+
+    const userId = stateResult.rows[0].user_id;
+    console.log('[eBay] Valid OAuth state for user:', userId);
+
+    // Exchange code for tokens
+    const auth = Buffer.from(`${EBAY_APP_ID}:${EBAY_CERT_ID}`).toString('base64');
+
+    const tokenResponse = await axios.post(
+      'https://api.ebay.com/identity/v1/oauth2/token',
+      `grant_type=authorization_code&code=${encodeURIComponent(code)}&redirect_uri=${encodeURIComponent(EBAY_REDIRECT_URI)}`,
+      {
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'Authorization': `Basic ${auth}`
+        },
+        timeout: 10000
+      }
+    );
+
+    const { access_token, refresh_token, expires_in } = tokenResponse.data;
+
+    if (!access_token || !refresh_token) {
+      return res.redirect(`${FRONTEND_URL}?ebay_error=invalid_response`);
+    }
+
+    const expiresAt = new Date(Date.now() + (expires_in * 1000));
+
+    // Store tokens
+    await pool.query(`
+      INSERT INTO ebay_user_tokens (user_id, access_token, refresh_token, token_expires_at, updated_at)
+      VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP)
+      ON CONFLICT (user_id)
+      DO UPDATE SET
+        access_token = EXCLUDED.access_token,
+        refresh_token = EXCLUDED.refresh_token,
+        token_expires_at = EXCLUDED.token_expires_at,
+        updated_at = CURRENT_TIMESTAMP
+    `, [userId, access_token, refresh_token, expiresAt]);
+
+    // Clean up used state
+    await pool.query('DELETE FROM ebay_oauth_states WHERE user_id = $1', [userId]);
+
+    console.log('[eBay] OAuth successful for user:', userId);
+
+    // Auto-create business policies
+    await autoCreateEbayPolicies(userId, access_token);
+
+    res.redirect(`${FRONTEND_URL}?ebay_success=true`);
+
+  } catch (error) {
+    console.error('eBay callback error:', error.message);
+    res.redirect(`${FRONTEND_URL}?ebay_error=connection_failed`);
+  }
+});
+
+// eBay Disconnect
+app.post('/api/ebay/disconnect', authenticateToken, async (req, res) => {
+  try {
+    const result = await pool.query(
+      'DELETE FROM ebay_user_tokens WHERE user_id = $1 RETURNING id',
+      [req.user.id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'No eBay connection found' });
+    }
+
+    // Clear policy IDs
+    await pool.query(`
+      UPDATE users SET
+        ebay_payment_policy_id = NULL,
+        ebay_return_policy_id = NULL,
+        ebay_fulfillment_policy_id = NULL
+      WHERE id = $1
+    `, [req.user.id]);
+
+    console.log('[eBay] Disconnected for user:', req.user.id);
+    res.json({ success: true });
+
+  } catch (error) {
+    console.error('eBay disconnect error:', error.message);
+    res.status(500).json({ success: false, error: 'Failed to disconnect eBay' });
+  }
+});
+
+// Helper: Get valid user eBay token (with auto-refresh)
+async function getUserEbayToken(userId) {
+  const result = await pool.query(
+    'SELECT * FROM ebay_user_tokens WHERE user_id = $1',
+    [userId]
+  );
+
+  if (result.rows.length === 0) {
+    throw new Error('eBay account not connected');
+  }
+
+  const tokenData = result.rows[0];
+
+  // Check if token needs refresh (5 minute buffer)
+  const needsRefresh = new Date(tokenData.token_expires_at) < new Date(Date.now() + 5 * 60 * 1000);
+
+  if (needsRefresh) {
+    console.log('[eBay] Refreshing token for user:', userId);
+
+    const auth = Buffer.from(`${EBAY_APP_ID}:${EBAY_CERT_ID}`).toString('base64');
+
+    const refreshResponse = await axios.post(
+      'https://api.ebay.com/identity/v1/oauth2/token',
+      `grant_type=refresh_token&refresh_token=${encodeURIComponent(tokenData.refresh_token)}`,
+      {
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'Authorization': `Basic ${auth}`
+        },
+        timeout: 10000
+      }
+    );
+
+    const { access_token, expires_in } = refreshResponse.data;
+    const expiresAt = new Date(Date.now() + (expires_in * 1000));
+
+    await pool.query(`
+      UPDATE ebay_user_tokens
+      SET access_token = $1, token_expires_at = $2, updated_at = CURRENT_TIMESTAMP
+      WHERE user_id = $3
+    `, [access_token, expiresAt, userId]);
+
+    console.log('[eBay] Token refreshed for user:', userId);
+    return access_token;
+  }
+
+  return tokenData.access_token;
+}
+
+// Helper: Auto-create eBay business policies
+async function autoCreateEbayPolicies(userId, accessToken) {
+  try {
+    console.log('[eBay] Auto-creating business policies for user:', userId);
+
+    // 1. Payment Policy
+    const paymentResponse = await axios.post(
+      'https://api.ebay.com/sell/account/v1/payment_policy',
+      {
+        name: `CardFlow Payment - User ${userId}`,
+        description: 'Immediate payment required',
+        marketplaceId: 'EBAY_US',
+        categoryTypes: [{ name: 'ALL_EXCLUDING_MOTORS_VEHICLES' }],
+        immediatePay: true
+      },
+      {
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+          'Content-Language': 'en-US'
+        }
+      }
+    );
+    const paymentPolicyId = paymentResponse.data.paymentPolicyId;
+    console.log('[eBay] Payment policy created:', paymentPolicyId);
+
+    // 2. Return Policy
+    const returnResponse = await axios.post(
+      'https://api.ebay.com/sell/account/v1/return_policy',
+      {
+        name: `CardFlow Returns - User ${userId}`,
+        description: 'No returns accepted',
+        marketplaceId: 'EBAY_US',
+        categoryTypes: [{ name: 'ALL_EXCLUDING_MOTORS_VEHICLES' }],
+        returnsAccepted: false
+      },
+      {
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+          'Content-Language': 'en-US'
+        }
+      }
+    );
+    const returnPolicyId = returnResponse.data.returnPolicyId;
+    console.log('[eBay] Return policy created:', returnPolicyId);
+
+    // 3. Fulfillment Policy
+    const fulfillmentResponse = await axios.post(
+      'https://api.ebay.com/sell/account/v1/fulfillment_policy',
+      {
+        name: `CardFlow Shipping - User ${userId}`,
+        description: 'USPS First Class shipping',
+        marketplaceId: 'EBAY_US',
+        categoryTypes: [{ name: 'ALL_EXCLUDING_MOTORS_VEHICLES' }],
+        handlingTime: { value: 1, unit: 'DAY' },
+        shipToLocations: {
+          regionIncluded: [{ regionName: 'US', regionType: 'COUNTRY' }]
+        },
+        shippingOptions: [{
+          optionType: 'DOMESTIC',
+          costType: 'FLAT_RATE',
+          shippingServices: [{
+            shippingCarrierCode: 'USPS',
+            shippingServiceCode: 'USPSFirstClass',
+            shippingCost: { value: '4.99', currency: 'USD' },
+            freeShipping: false,
+            sortOrder: 1
+          }]
+        }],
+        globalShipping: false,
+        pickupDropOff: false
+      },
+      {
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+          'Content-Language': 'en-US'
+        }
+      }
+    );
+    const fulfillmentPolicyId = fulfillmentResponse.data.fulfillmentPolicyId;
+    console.log('[eBay] Fulfillment policy created:', fulfillmentPolicyId);
+
+    // Save policy IDs
+    await pool.query(`
+      UPDATE users SET
+        ebay_payment_policy_id = $1,
+        ebay_return_policy_id = $2,
+        ebay_fulfillment_policy_id = $3
+      WHERE id = $4
+    `, [paymentPolicyId, returnPolicyId, fulfillmentPolicyId, userId]);
+
+    console.log('[eBay] All policies saved for user:', userId);
+    return { success: true };
+
+  } catch (error) {
+    console.error('[eBay] Failed to create policies:', error.response?.data || error.message);
+    return { success: false, error: error.message };
+  }
+}
+
+// ============================================
+// EBAY LISTING ROUTES
+// ============================================
+
+// Generate listing title (max 80 chars)
+function generateListingTitle(card) {
+  const parts = [];
+  if (card.year) parts.push(card.year);
+  if (card.set_name) parts.push(card.set_name.replace(/^\d{4}\s+/, ''));
+  if (card.player) parts.push(card.player);
+  if (card.card_number) parts.push(`#${card.card_number}`);
+  if (card.grading_company && card.grade) {
+    parts.push(`${card.grading_company} ${card.grade}`);
+  }
+  if (card.parallel && card.parallel !== 'Base') {
+    parts.push(card.parallel);
+  }
+
+  let title = parts.join(' ');
+  if (title.length > 80) {
+    title = title.substring(0, 77) + '...';
+  }
+  return title;
+}
+
+// Generate listing description (HTML)
+function generateListingDescription(card) {
+  return `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+      <h2 style="color: #0654ba; text-align: center;">${card.year} ${card.set_name} - ${card.player}</h2>
+      <div style="background: #f7f7f7; padding: 20px; border-radius: 8px; margin: 20px 0;">
+        <h3 style="margin-top: 0; color: #333;">Card Details</h3>
+        <table style="width: 100%; border-collapse: collapse;">
+          <tr><td style="padding: 8px; border-bottom: 1px solid #ddd;"><strong>Player:</strong></td><td style="padding: 8px; border-bottom: 1px solid #ddd;">${card.player}</td></tr>
+          <tr><td style="padding: 8px; border-bottom: 1px solid #ddd;"><strong>Year:</strong></td><td style="padding: 8px; border-bottom: 1px solid #ddd;">${card.year}</td></tr>
+          <tr><td style="padding: 8px; border-bottom: 1px solid #ddd;"><strong>Set:</strong></td><td style="padding: 8px; border-bottom: 1px solid #ddd;">${card.set_name}</td></tr>
+          <tr><td style="padding: 8px; border-bottom: 1px solid #ddd;"><strong>Card Number:</strong></td><td style="padding: 8px; border-bottom: 1px solid #ddd;">#${card.card_number || 'N/A'}</td></tr>
+          <tr><td style="padding: 8px; border-bottom: 1px solid #ddd;"><strong>Team:</strong></td><td style="padding: 8px; border-bottom: 1px solid #ddd;">${card.team || 'N/A'}</td></tr>
+          ${card.grading_company ? `
+          <tr><td style="padding: 8px; border-bottom: 1px solid #ddd;"><strong>Grading:</strong></td><td style="padding: 8px; border-bottom: 1px solid #ddd;">${card.grading_company} ${card.grade}</td></tr>
+          ` : ''}
+          ${card.parallel && card.parallel !== 'Base' ? `
+          <tr><td style="padding: 8px; border-bottom: 1px solid #ddd;"><strong>Parallel:</strong></td><td style="padding: 8px; border-bottom: 1px solid #ddd;">${card.parallel}</td></tr>
+          ` : ''}
+        </table>
+      </div>
+      <div style="background: #e8f4f8; padding: 20px; border-radius: 8px; margin: 20px 0;">
+        <h3 style="margin-top: 0; color: #333;">Shipping & Returns</h3>
+        <ul style="list-style: none; padding: 0;">
+          <li style="margin: 8px 0;">Ships within 1 business day</li>
+          <li style="margin: 8px 0;">Securely packed in sleeve & toploader</li>
+          <li style="margin: 8px 0;">USPS First Class with tracking</li>
+        </ul>
+      </div>
+      <p style="text-align: center; color: #666; font-size: 12px; margin-top: 30px;">
+        Listed via <strong>CardFlow</strong>
+      </p>
+    </div>
+  `.trim();
+}
+
+// List card on eBay
+app.post('/api/ebay/list/:cardId', authenticateToken, async (req, res) => {
+  try {
+    const { cardId } = req.params;
+    const { price, quantity = 1 } = req.body;
+
+    if (!price || price <= 0) {
+      return res.status(400).json({ success: false, error: 'Price is required' });
+    }
+
+    console.log(`[eBay] Creating listing for card ${cardId}...`);
+
+    // Get card from database
+    const cardResult = await pool.query(
+      'SELECT * FROM cards WHERE id = $1 AND user_id = $2',
+      [cardId, req.user.id]
+    );
+
+    if (cardResult.rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'Card not found' });
+    }
+
+    const row = cardResult.rows[0];
+    const card = row.card_data;
+
+    // Check if already listed
+    const existingListing = await pool.query(
+      'SELECT * FROM ebay_listings WHERE card_id = $1 AND status = $2',
+      [cardId, 'active']
+    );
+
+    if (existingListing.rows.length > 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'Card is already listed on eBay',
+        listingId: existingListing.rows[0].ebay_listing_id
+      });
+    }
+
+    // Get user's eBay token
+    const accessToken = await getUserEbayToken(req.user.id);
+
+    // Get user's policy IDs
+    const userResult = await pool.query(
+      'SELECT ebay_payment_policy_id, ebay_return_policy_id, ebay_fulfillment_policy_id FROM users WHERE id = $1',
+      [req.user.id]
+    );
+
+    const policies = userResult.rows[0];
+    if (!policies.ebay_payment_policy_id) {
+      return res.status(400).json({
+        success: false,
+        error: 'eBay business policies not set up. Try disconnecting and reconnecting eBay.'
+      });
+    }
+
+    const title = generateListingTitle(card);
+    const description = generateListingDescription(card);
+    const sku = `CF-${cardId}-${Date.now()}`;
+
+    console.log('[eBay] Listing title:', title);
+
+    // Step 1: Create inventory item
+    const inventoryPayload = {
+      availability: {
+        shipToLocationAvailability: { quantity }
+      },
+      condition: card.is_graded ? 'NEW' : 'USED_EXCELLENT',
+      product: {
+        title,
+        description,
+        aspects: {
+          'Sport': [card.sport || 'Baseball'],
+          'Player': [card.player],
+          'Team': [card.team || 'N/A'],
+          'Year': [String(card.year)],
+          'Card Number': [card.card_number || 'N/A'],
+          ...(card.grading_company && {
+            'Professional Grader': [card.grading_company],
+            'Grade': [String(card.grade)]
+          }),
+          ...(card.parallel && card.parallel !== 'Base' && {
+            'Parallel/Variety': [card.parallel]
+          })
+        }
+      }
+    };
+
+    await axios.put(
+      `https://api.ebay.com/sell/inventory/v1/inventory_item/${sku}`,
+      inventoryPayload,
+      {
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+          'Content-Language': 'en-US'
+        }
+      }
+    );
+
+    console.log('[eBay] Inventory item created');
+
+    // Step 2: Create offer
+    const offerPayload = {
+      sku,
+      marketplaceId: 'EBAY_US',
+      format: 'FIXED_PRICE',
+      availableQuantity: quantity,
+      categoryId: '261328', // Sports Trading Cards
+      listingDescription: description,
+      listingPolicies: {
+        fulfillmentPolicyId: policies.ebay_fulfillment_policy_id,
+        paymentPolicyId: policies.ebay_payment_policy_id,
+        returnPolicyId: policies.ebay_return_policy_id
+      },
+      pricingSummary: {
+        price: { value: String(price), currency: 'USD' }
+      }
+    };
+
+    const offerResponse = await axios.post(
+      'https://api.ebay.com/sell/inventory/v1/offer',
+      offerPayload,
+      {
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json'
+        }
+      }
+    );
+
+    const offerId = offerResponse.data.offerId;
+    console.log('[eBay] Offer created:', offerId);
+
+    // Step 3: Publish listing
+    const publishResponse = await axios.post(
+      `https://api.ebay.com/sell/inventory/v1/offer/${offerId}/publish`,
+      {},
+      {
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json'
+        }
+      }
+    );
+
+    const listingId = publishResponse.data.listingId;
+    console.log('[eBay] Listing published:', listingId);
+
+    // Save listing to database
+    await pool.query(`
+      INSERT INTO ebay_listings (card_id, user_id, ebay_listing_id, ebay_url, sku, offer_id, price, status)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, 'active')
+    `, [
+      cardId,
+      req.user.id,
+      listingId,
+      `https://www.ebay.com/itm/${listingId}`,
+      sku,
+      offerId,
+      price
+    ]);
+
+    // Update card status
+    await pool.query(`
+      UPDATE cards SET status = 'listed', card_data = card_data || $1::jsonb
+      WHERE id = $2
+    `, [JSON.stringify({ ebay_listing_id: listingId, ebay_price: price, listed_at: new Date().toISOString() }), cardId]);
+
+    broadcast({ type: 'card_listed', cardId, listingId, userId: req.user.id });
+
+    res.json({
+      success: true,
+      listingId,
+      listingUrl: `https://www.ebay.com/itm/${listingId}`,
+      message: 'Card listed on eBay successfully!'
+    });
+
+  } catch (error) {
+    console.error('[eBay] Listing error:', error.response?.data || error.message);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to create eBay listing',
+      details: error.response?.data?.errors?.[0]?.message || error.message
+    });
+  }
+});
+
+// Get user's eBay listings
+app.get('/api/ebay/listings', authenticateToken, async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT el.*, c.card_data, c.front_image_path
+      FROM ebay_listings el
+      JOIN cards c ON c.id = el.card_id
+      WHERE el.user_id = $1
+      ORDER BY el.created_at DESC
+    `, [req.user.id]);
+
+    res.json({ success: true, listings: result.rows });
+
+  } catch (error) {
+    console.error('Get listings error:', error.message);
+    res.status(500).json({ success: false, error: 'Failed to get listings' });
+  }
+});
+
+// Listing preview
+app.get('/api/ebay/preview/:cardId', authenticateToken, async (req, res) => {
+  try {
+    const cardResult = await pool.query(
+      'SELECT * FROM cards WHERE id = $1 AND user_id = $2',
+      [req.params.cardId, req.user.id]
+    );
+
+    if (cardResult.rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'Card not found' });
+    }
+
+    const card = cardResult.rows[0].card_data;
+
+    res.json({
+      success: true,
+      preview: {
+        title: generateListingTitle(card),
+        description: generateListingDescription(card),
+        suggestedPrice: card.recommended_price || 9.99,
+        condition: card.is_graded ? 'New (Graded)' : 'Used - Excellent'
+      }
+    });
+
+  } catch (error) {
+    res.status(500).json({ success: false, error: 'Failed to generate preview' });
   }
 });
 

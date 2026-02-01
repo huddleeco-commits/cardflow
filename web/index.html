@@ -1331,6 +1331,7 @@
       <div class="modal-body">
         <div class="settings-tabs">
           <button class="settings-tab active" data-tab="api" onclick="switchSettingsTab('api')">API Key</button>
+          <button class="settings-tab" data-tab="ebay" onclick="switchSettingsTab('ebay')">eBay</button>
           <button class="settings-tab" data-tab="models" onclick="switchSettingsTab('models')">Models</button>
           <button class="settings-tab" data-tab="costs" onclick="switchSettingsTab('costs')">Costs</button>
           <button class="settings-tab" data-tab="account" onclick="switchSettingsTab('account')">Account</button>
@@ -1356,6 +1357,40 @@
             <div id="api-key-result" style="margin-top: 8px; font-size: 13px;"></div>
           </div>
           <p style="font-size: 12px; color: var(--text-muted);">Get your API key at <a href="https://console.anthropic.com" target="_blank" style="color: var(--cyan);">console.anthropic.com</a></p>
+        </div>
+
+        <div class="settings-panel" id="panel-ebay">
+          <h4 style="margin-bottom: 16px;">eBay Connection</h4>
+          <div id="ebay-status" style="background: var(--glass); border-radius: 12px; padding: 20px; margin-bottom: 16px;">
+            <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 16px;">
+              <div id="ebay-indicator" style="width: 16px; height: 16px; border-radius: 50%; background: var(--error);"></div>
+              <div>
+                <div id="ebay-status-text" style="font-weight: 600; font-size: 16px;">Not Connected</div>
+                <div id="ebay-user" style="font-size: 12px; color: var(--text-muted);"></div>
+              </div>
+            </div>
+            <div id="ebay-not-connected">
+              <p style="margin-bottom: 16px; color: var(--text-muted);">Connect your eBay account to list cards directly.</p>
+              <button class="btn btn-primary" onclick="connectEbay()">Connect eBay Account</button>
+            </div>
+            <div id="ebay-connected" style="display: none;">
+              <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 16px;">
+                <div style="text-align: center;">
+                  <div style="font-size: 11px; color: var(--text-muted); text-transform: uppercase;">Payment</div>
+                  <div id="ebay-payment-policy" style="color: var(--success); font-size: 13px;">-</div>
+                </div>
+                <div style="text-align: center;">
+                  <div style="font-size: 11px; color: var(--text-muted); text-transform: uppercase;">Return</div>
+                  <div id="ebay-return-policy" style="color: var(--success); font-size: 13px;">-</div>
+                </div>
+                <div style="text-align: center;">
+                  <div style="font-size: 11px; color: var(--text-muted); text-transform: uppercase;">Shipping</div>
+                  <div id="ebay-shipping-policy" style="color: var(--success); font-size: 13px;">-</div>
+                </div>
+              </div>
+              <button class="btn btn-danger" onclick="disconnectEbay()">Disconnect eBay</button>
+            </div>
+          </div>
         </div>
 
         <div class="settings-panel" id="panel-models">
@@ -1658,7 +1693,7 @@
             </div>
             <div class="card-actions">
               <button class="btn btn-secondary" onclick="editCard('${card.id}')">Edit</button>
-              <button class="btn btn-success" onclick="approveCard('${card.id}')">Approve</button>
+              ${card.status === 'priced' && card.recommended_price ? `<button class="btn btn-accent" onclick="listOnEbay('${card.id}')">List to eBay</button>` : `<button class="btn btn-success" onclick="approveCard('${card.id}')">Approve</button>`}
               <button class="btn btn-secondary" onclick="deleteCard('${card.id}')">Delete</button>
             </div>
           </div>
@@ -1725,6 +1760,9 @@
       document.getElementById('settings-modal').classList.add('open');
       switchSettingsTab(tab);
       loadUserInfo();
+      if (tab === 'ebay') {
+        loadEbayStatus();
+      }
     }
 
     function closeSettingsModal() {
@@ -1736,6 +1774,9 @@
       document.querySelectorAll('.settings-panel').forEach(p => p.classList.remove('active'));
       document.querySelector(`.settings-tab[data-tab="${tab}"]`).classList.add('active');
       document.getElementById(`panel-${tab}`).classList.add('active');
+      if (tab === 'ebay') {
+        loadEbayStatus();
+      }
     }
 
     async function loadUserInfo() {
@@ -1807,6 +1848,115 @@
     async function saveSettings() {
       closeSettingsModal();
       showToast('Settings saved', 'success');
+    }
+
+    // eBay Functions
+    async function loadEbayStatus() {
+      try {
+        const data = await api('/ebay/status');
+        if (!data) return;
+
+        const indicator = document.getElementById('ebay-indicator');
+        const statusText = document.getElementById('ebay-status-text');
+        const userText = document.getElementById('ebay-user');
+        const notConnected = document.getElementById('ebay-not-connected');
+        const connected = document.getElementById('ebay-connected');
+
+        if (data.connected) {
+          indicator.style.background = 'var(--success)';
+          indicator.style.boxShadow = '0 0 10px var(--success-glow)';
+          statusText.textContent = 'Connected to eBay';
+          userText.textContent = data.ebayUserId ? `User: ${data.ebayUserId}` : 'Connected ' + (data.connectedAt ? new Date(data.connectedAt).toLocaleDateString() : '');
+          notConnected.style.display = 'none';
+          connected.style.display = 'block';
+
+          // Show policy status
+          document.getElementById('ebay-payment-policy').textContent = data.policies.paymentPolicyId ? 'Configured' : 'Not Set';
+          document.getElementById('ebay-return-policy').textContent = data.policies.returnPolicyId ? 'Configured' : 'Not Set';
+          document.getElementById('ebay-shipping-policy').textContent = data.policies.fulfillmentPolicyId ? 'Configured' : 'Not Set';
+        } else {
+          indicator.style.background = 'var(--error)';
+          indicator.style.boxShadow = 'none';
+          statusText.textContent = 'Not Connected';
+          userText.textContent = '';
+          notConnected.style.display = 'block';
+          connected.style.display = 'none';
+        }
+      } catch (e) {
+        console.error('Failed to load eBay status:', e);
+      }
+    }
+
+    async function connectEbay() {
+      try {
+        const data = await api('/ebay/connect');
+        if (data?.authUrl) {
+          window.location.href = data.authUrl;
+        } else if (data?.error) {
+          showToast(data.error, 'error');
+        }
+      } catch (e) {
+        showToast('Failed to connect eBay: ' + e.message, 'error');
+      }
+    }
+
+    async function disconnectEbay() {
+      if (!confirm('Disconnect your eBay account? You will need to reconnect to list cards.')) return;
+
+      try {
+        await api('/ebay/disconnect', { method: 'POST' });
+        showToast('eBay disconnected', 'success');
+        loadEbayStatus();
+      } catch (e) {
+        showToast('Failed to disconnect: ' + e.message, 'error');
+      }
+    }
+
+    async function listOnEbay(cardId) {
+      const card = cards.find(c => c.id === cardId);
+      if (!card) return;
+
+      const price = prompt('Enter listing price (USD):', card.recommended_price?.toFixed(2) || '9.99');
+      if (!price) return;
+
+      const priceNum = parseFloat(price);
+      if (isNaN(priceNum) || priceNum <= 0) {
+        showToast('Invalid price', 'error');
+        return;
+      }
+
+      try {
+        const result = await api(`/ebay/list/${cardId}`, {
+          method: 'POST',
+          body: JSON.stringify({ price: priceNum })
+        });
+
+        if (result?.success) {
+          showToast(`Listed on eBay! ID: ${result.listingId}`, 'success');
+          window.open(result.listingUrl, '_blank');
+          loadCards();
+        } else {
+          showToast(result?.error || 'Failed to list', 'error');
+        }
+      } catch (e) {
+        showToast('Failed to list: ' + e.message, 'error');
+      }
+    }
+
+    // Check for eBay OAuth callback
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('ebay_success')) {
+      showToast('eBay connected successfully!', 'success');
+      history.replaceState({}, '', '/');
+    } else if (urlParams.get('ebay_error')) {
+      const errorMap = {
+        oauth_denied: 'eBay authorization denied',
+        missing_params: 'Invalid OAuth response',
+        expired_state: 'Session expired, please try again',
+        connection_failed: 'Connection failed, please try again'
+      };
+      showToast(errorMap[urlParams.get('ebay_error')] || 'eBay connection error', 'error');
+      history.replaceState({}, '', '/');
     }
 
     function logout() {
