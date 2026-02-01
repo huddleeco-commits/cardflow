@@ -1185,6 +1185,40 @@
       box-shadow: 0 0 100px var(--cyan-glow);
     }
 
+    /* Bulk Listing Styles */
+    .bulk-card-row:hover {
+      background: var(--glass-hover) !important;
+    }
+
+    .bulk-card-row input[type="number"] {
+      font-size: 14px;
+      font-weight: 600;
+    }
+
+    .bulk-card-row input[type="number"]:focus {
+      border-color: var(--cyan);
+      outline: none;
+    }
+
+    /* Card action button improvements */
+    .card-actions {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+
+    .card-actions .btn {
+      flex: 1;
+      min-width: auto;
+      padding: 8px 12px;
+      font-size: 11px;
+    }
+
+    .card-actions .btn-small {
+      flex: 0 0 auto;
+      padding: 8px;
+    }
+
     /* Responsive */
     @media (max-width: 768px) {
       .cards-grid {
@@ -1293,9 +1327,10 @@
     <div class="action-buttons">
       <button class="btn btn-accent" id="identify-btn" onclick="runIdentify()">🔍 Identify</button>
       <button class="btn btn-accent" id="price-btn" onclick="runPrice()">💰 Price</button>
+      <button class="btn btn-success" onclick="showBulkListingModal()">📦 Bulk List</button>
+      <button class="btn btn-success" onclick="showLotListingModal()">🎴 Create Lot</button>
       <button class="btn btn-secondary" onclick="showSettingsModal()">⚙️ Settings</button>
-      <button class="btn btn-success" onclick="approveAll()">✓ Approve All</button>
-      <button class="btn btn-primary" onclick="showExportModal()">📤 Export</button>
+      <button class="btn btn-secondary" onclick="approveAll()">✓ Approve All</button>
       <button class="btn btn-danger" onclick="confirmClearAll()">🗑️ Clear</button>
     </div>
   </section>
@@ -1388,6 +1423,31 @@
                   <div id="ebay-shipping-policy" style="color: var(--success); font-size: 13px;">-</div>
                 </div>
               </div>
+
+              <h5 style="margin: 20px 0 12px 0; color: var(--text-muted); font-size: 12px; text-transform: uppercase;">Default Shipping Settings</h5>
+              <div style="background: var(--glass); padding: 16px; border-radius: 8px; margin-bottom: 16px;">
+                <div style="margin-bottom: 12px;">
+                  <label style="display: block; margin-bottom: 6px; font-size: 12px; color: var(--text-muted);">Default Shipping Method</label>
+                  <select id="ebay-default-shipping" style="width: 100%; padding: 10px; background: var(--bg-deep); border: 1px solid var(--glass-border); border-radius: 6px; color: var(--text);">
+                    <option value="standard_envelope">Standard Envelope ($1.32)</option>
+                    <option value="calculated">Calculated (USPS)</option>
+                    <option value="flat_rate">Flat Rate</option>
+                    <option value="free">Free Shipping</option>
+                  </select>
+                </div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                  <div>
+                    <label style="display: block; margin-bottom: 6px; font-size: 12px; color: var(--text-muted);">Flat Rate Price ($)</label>
+                    <input type="number" id="ebay-flat-rate" value="4.99" step="0.01" min="0" style="width: 100%; padding: 10px; background: var(--bg-deep); border: 1px solid var(--glass-border); border-radius: 6px; color: var(--text);">
+                  </div>
+                  <div>
+                    <label style="display: block; margin-bottom: 6px; font-size: 12px; color: var(--text-muted);">Free Shipping Min ($)</label>
+                    <input type="number" id="ebay-free-min" value="50" step="1" min="0" style="width: 100%; padding: 10px; background: var(--bg-deep); border: 1px solid var(--glass-border); border-radius: 6px; color: var(--text);">
+                  </div>
+                </div>
+                <button class="btn btn-primary" style="margin-top: 12px;" onclick="saveShippingSettings()">Save Shipping Settings</button>
+              </div>
+
               <button class="btn btn-danger" onclick="disconnectEbay()">Disconnect eBay</button>
             </div>
           </div>
@@ -1484,6 +1544,179 @@
     <img id="lightbox-img" src="">
   </div>
 
+  <!-- Bulk Listing Modal -->
+  <div class="modal" id="bulk-listing-modal">
+    <div class="modal-content" style="max-width: 1000px; max-height: 90vh; display: flex; flex-direction: column;">
+      <div class="modal-header">
+        <h2>Bulk List to eBay</h2>
+        <button class="modal-close" onclick="closeBulkListingModal()">&times;</button>
+      </div>
+      <div class="modal-body" style="overflow-y: auto; flex: 1;">
+        <div style="display: flex; gap: 16px; margin-bottom: 16px;">
+          <div style="flex: 1; background: var(--glass); padding: 16px; border-radius: 12px;">
+            <div style="font-size: 28px; font-weight: 700; color: var(--cyan);" id="bulk-card-count">0</div>
+            <div style="font-size: 11px; color: var(--text-muted); text-transform: uppercase;">Cards Selected</div>
+          </div>
+          <div style="flex: 1; background: var(--glass); padding: 16px; border-radius: 12px;">
+            <div style="font-size: 28px; font-weight: 700; color: var(--success);" id="bulk-total-value">$0.00</div>
+            <div style="font-size: 11px; color: var(--text-muted); text-transform: uppercase;">Total Value</div>
+          </div>
+          <div style="flex: 1; background: var(--glass); padding: 16px; border-radius: 12px;">
+            <div style="font-size: 28px; font-weight: 700; color: var(--purple);" id="bulk-total-fees">$0.00</div>
+            <div style="font-size: 11px; color: var(--text-muted); text-transform: uppercase;">Est. eBay Fees</div>
+          </div>
+          <div style="flex: 1; background: var(--glass); padding: 16px; border-radius: 12px;">
+            <div style="font-size: 28px; font-weight: 700; color: var(--success);" id="bulk-net-profit">$0.00</div>
+            <div style="font-size: 11px; color: var(--text-muted); text-transform: uppercase;">Net Profit</div>
+          </div>
+        </div>
+
+        <div style="margin-bottom: 16px;">
+          <label style="display: block; margin-bottom: 8px; font-size: 12px; color: var(--text-muted); text-transform: uppercase;">Default Shipping Method</label>
+          <select id="bulk-shipping-method" style="width: 100%; padding: 12px; background: var(--bg-deep); border: 1px solid var(--glass-border); border-radius: 8px; color: var(--text);" onchange="updateBulkShipping()">
+            <option value="standard_envelope">Standard Envelope - $1.32 (best for single cards under $20)</option>
+            <option value="calculated" selected>Calculated - USPS calculates based on buyer location</option>
+            <option value="flat_rate">Flat Rate - $4.99</option>
+            <option value="free">Free Shipping (built into price)</option>
+          </select>
+          <div id="bulk-shipping-note" style="margin-top: 8px; padding: 8px 12px; background: rgba(0,246,255,0.1); border-radius: 6px; font-size: 12px; color: var(--cyan);"></div>
+        </div>
+
+        <div id="bulk-cards-list" style="max-height: 400px; overflow-y: auto;">
+          <!-- Cards will be rendered here -->
+        </div>
+      </div>
+      <div class="modal-footer" style="border-top: 1px solid var(--glass-border); padding: 16px;">
+        <button class="btn btn-secondary" onclick="closeBulkListingModal()">Cancel</button>
+        <button class="btn btn-success" id="bulk-list-btn" onclick="submitBulkListing()">List All on eBay</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Lot Listing Modal -->
+  <div class="modal" id="lot-listing-modal">
+    <div class="modal-content" style="max-width: 900px; max-height: 90vh; display: flex; flex-direction: column;">
+      <div class="modal-header">
+        <h2>Create Lot Listing</h2>
+        <button class="modal-close" onclick="closeLotListingModal()">&times;</button>
+      </div>
+      <div class="modal-body" style="overflow-y: auto; flex: 1;">
+        <div style="display: flex; gap: 16px; margin-bottom: 16px;">
+          <div style="flex: 1; background: var(--glass); padding: 16px; border-radius: 12px;">
+            <div style="font-size: 28px; font-weight: 700; color: var(--cyan);" id="lot-card-count">0</div>
+            <div style="font-size: 11px; color: var(--text-muted); text-transform: uppercase;">Cards in Lot</div>
+          </div>
+          <div style="flex: 1; background: var(--glass); padding: 16px; border-radius: 12px;">
+            <div style="font-size: 28px; font-weight: 700; color: var(--text-muted);" id="lot-individual-value">$0.00</div>
+            <div style="font-size: 11px; color: var(--text-muted); text-transform: uppercase;">Individual Total</div>
+          </div>
+          <div style="flex: 1; background: var(--glass); padding: 16px; border-radius: 12px;">
+            <div style="font-size: 28px; font-weight: 700; color: var(--success);" id="lot-suggested-price">$0.00</div>
+            <div style="font-size: 11px; color: var(--text-muted); text-transform: uppercase;">Suggested Lot Price</div>
+          </div>
+        </div>
+
+        <div class="form-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px;">
+          <div class="form-group">
+            <label style="display: block; margin-bottom: 8px; font-size: 12px; color: var(--text-muted); text-transform: uppercase;">Lot Title</label>
+            <input type="text" id="lot-title" placeholder="LOT of X Cards..." style="width: 100%; padding: 12px; background: var(--bg-deep); border: 1px solid var(--glass-border); border-radius: 8px; color: var(--text);">
+          </div>
+          <div class="form-group">
+            <label style="display: block; margin-bottom: 8px; font-size: 12px; color: var(--text-muted); text-transform: uppercase;">Lot Price ($)</label>
+            <input type="number" id="lot-price" step="0.01" min="0.99" placeholder="0.00" style="width: 100%; padding: 12px; background: var(--bg-deep); border: 1px solid var(--glass-border); border-radius: 8px; color: var(--text);">
+          </div>
+        </div>
+
+        <div class="form-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px;">
+          <div class="form-group">
+            <label style="display: block; margin-bottom: 8px; font-size: 12px; color: var(--text-muted); text-transform: uppercase;">Collage Grid Size</label>
+            <select id="lot-grid-size" style="width: 100%; padding: 12px; background: var(--bg-deep); border: 1px solid var(--glass-border); border-radius: 8px; color: var(--text);">
+              <option value="large">Large (4x5 = 20 cards/page)</option>
+              <option value="medium" selected>Medium (5x6 = 30 cards/page)</option>
+              <option value="small">Small (6x7 = 42 cards/page)</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label style="display: block; margin-bottom: 8px; font-size: 12px; color: var(--text-muted); text-transform: uppercase;">Shipping Method</label>
+            <select id="lot-shipping-method" style="width: 100%; padding: 12px; background: var(--bg-deep); border: 1px solid var(--glass-border); border-radius: 8px; color: var(--text);">
+              <option value="calculated" selected>Calculated (Recommended for lots)</option>
+              <option value="flat_rate">Flat Rate - $4.99</option>
+              <option value="free">Free Shipping</option>
+            </select>
+          </div>
+        </div>
+
+        <div id="lot-shipping-info" style="margin-bottom: 16px; padding: 12px 16px; background: rgba(123, 47, 247, 0.1); border-radius: 8px; font-size: 13px;">
+          <div style="display: flex; gap: 24px;">
+            <span><strong>Toploaders needed:</strong> <span id="lot-toploaders">0</span></span>
+            <span><strong>Packaging:</strong> <span id="lot-packaging">-</span></span>
+          </div>
+        </div>
+
+        <div style="margin-bottom: 12px;">
+          <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+            <input type="checkbox" id="lot-generate-collage" checked style="width: 18px; height: 18px;">
+            <span style="font-size: 13px;">Generate collage image for listing</span>
+          </label>
+        </div>
+
+        <div id="lot-cards-list" style="max-height: 300px; overflow-y: auto;">
+          <!-- Cards will be rendered here -->
+        </div>
+      </div>
+      <div class="modal-footer" style="border-top: 1px solid var(--glass-border); padding: 16px;">
+        <button class="btn btn-secondary" onclick="closeLotListingModal()">Cancel</button>
+        <button class="btn btn-accent" id="lot-list-btn" onclick="submitLotListing()">Create Lot Listing</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Auction Modal -->
+  <div class="modal" id="auction-modal">
+    <div class="modal-content" style="max-width: 500px;">
+      <div class="modal-header">
+        <h2>Create Auction</h2>
+        <button class="modal-close" onclick="closeAuctionModal()">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div style="background: var(--glass); padding: 16px; border-radius: 12px; margin-bottom: 16px; display: flex; gap: 16px; align-items: center;">
+          <div id="auction-card-image" style="width: 80px; height: 112px; background: var(--bg-deep); border-radius: 8px; overflow: hidden;">
+            <img id="auction-card-img" style="width: 100%; height: 100%; object-fit: cover;">
+          </div>
+          <div>
+            <div id="auction-card-player" style="font-weight: 600; font-size: 16px;"></div>
+            <div id="auction-card-set" style="color: var(--text-muted); font-size: 13px;"></div>
+            <div id="auction-card-price" style="color: var(--success); font-size: 14px; margin-top: 4px;"></div>
+          </div>
+        </div>
+
+        <div class="form-group" style="margin-bottom: 16px;">
+          <label style="display: block; margin-bottom: 8px; font-size: 12px; color: var(--text-muted); text-transform: uppercase;">Starting Price ($)</label>
+          <input type="number" id="auction-start-price" step="0.01" min="0.99" placeholder="0.99" style="width: 100%; padding: 12px; background: var(--bg-deep); border: 1px solid var(--glass-border); border-radius: 8px; color: var(--text);">
+        </div>
+
+        <div class="form-group" style="margin-bottom: 16px;">
+          <label style="display: block; margin-bottom: 8px; font-size: 12px; color: var(--text-muted); text-transform: uppercase;">Buy It Now Price (optional)</label>
+          <input type="number" id="auction-bin-price" step="0.01" min="0.99" placeholder="Leave blank for no BIN" style="width: 100%; padding: 12px; background: var(--bg-deep); border: 1px solid var(--glass-border); border-radius: 8px; color: var(--text);">
+        </div>
+
+        <div class="form-group" style="margin-bottom: 16px;">
+          <label style="display: block; margin-bottom: 8px; font-size: 12px; color: var(--text-muted); text-transform: uppercase;">Duration</label>
+          <select id="auction-duration" style="width: 100%; padding: 12px; background: var(--bg-deep); border: 1px solid var(--glass-border); border-radius: 8px; color: var(--text);">
+            <option value="3">3 Days</option>
+            <option value="5">5 Days</option>
+            <option value="7" selected>7 Days</option>
+            <option value="10">10 Days</option>
+          </select>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeAuctionModal()">Cancel</button>
+        <button class="btn btn-accent" onclick="submitAuction()">Start Auction</button>
+      </div>
+    </div>
+  </div>
+
   <script>
     const API_URL = '/api';
     let cards = [];
@@ -1577,6 +1810,28 @@
 
         // Pair uploaded
         if (data.type === 'pair_uploaded') {
+          loadStatus();
+        }
+
+        // eBay listing events
+        if (data.type === 'card_listed') {
+          showToast(`Card listed on eBay!`, 'success');
+          loadCards();
+          loadStatus();
+        }
+        if (data.type === 'bulk_listings_complete') {
+          showToast(`Bulk listing: ${data.successCount} successful, ${data.errorCount} failed`, 'success');
+          loadCards();
+          loadStatus();
+        }
+        if (data.type === 'lot_listed') {
+          showToast(`Lot created with ${data.cardCount} cards!`, 'success');
+          loadCards();
+          loadStatus();
+        }
+        if (data.type === 'auction_listed') {
+          showToast('Auction started!', 'success');
+          loadCards();
           loadStatus();
         }
 
@@ -1693,7 +1948,10 @@
             </div>
             <div class="card-actions">
               <button class="btn btn-secondary" onclick="editCard('${card.id}')">Edit</button>
-              ${card.status === 'priced' && card.recommended_price ? `<button class="btn btn-accent" onclick="listOnEbay('${card.id}')">List to eBay</button>` : `<button class="btn btn-success" onclick="approveCard('${card.id}')">Approve</button>`}
+              ${card.status === 'priced' && card.recommended_price ? `
+                <button class="btn btn-accent" onclick="listOnEbay('${card.id}')">List</button>
+                <button class="btn btn-success" onclick="showAuctionModal('${card.id}')" title="Create Auction">Auction</button>
+              ` : `<button class="btn btn-success" onclick="approveCard('${card.id}')">Approve</button>`}
               <button class="btn btn-secondary" onclick="deleteCard('${card.id}')">Delete</button>
             </div>
           </div>
@@ -1874,6 +2132,9 @@
           document.getElementById('ebay-payment-policy').textContent = data.policies.paymentPolicyId ? 'Configured' : 'Not Set';
           document.getElementById('ebay-return-policy').textContent = data.policies.returnPolicyId ? 'Configured' : 'Not Set';
           document.getElementById('ebay-shipping-policy').textContent = data.policies.fulfillmentPolicyId ? 'Configured' : 'Not Set';
+
+          // Load shipping settings
+          loadShippingSettings();
         } else {
           indicator.style.background = 'var(--error)';
           indicator.style.boxShadow = 'none';
@@ -1912,6 +2173,36 @@
       }
     }
 
+    async function loadShippingSettings() {
+      try {
+        const data = await api('/ebay/shipping-settings');
+        if (data?.settings) {
+          document.getElementById('ebay-default-shipping').value = data.settings.defaultMethod || 'calculated';
+          document.getElementById('ebay-flat-rate').value = data.settings.flatRatePrice || 4.99;
+          document.getElementById('ebay-free-min').value = data.settings.freeShippingMinimum || 50;
+        }
+      } catch (e) {
+        console.error('Failed to load shipping settings:', e);
+      }
+    }
+
+    async function saveShippingSettings() {
+      try {
+        await api('/ebay/shipping-settings', {
+          method: 'PUT',
+          body: JSON.stringify({
+            defaultMethod: document.getElementById('ebay-default-shipping').value,
+            flatRatePrice: parseFloat(document.getElementById('ebay-flat-rate').value) || 4.99,
+            freeShippingMinimum: parseFloat(document.getElementById('ebay-free-min').value) || 50
+          })
+        });
+        showToast('Shipping settings saved', 'success');
+      } catch (e) {
+        showToast('Failed to save shipping settings: ' + e.message, 'error');
+      }
+    }
+
+    // Single card listing with modal options
     async function listOnEbay(cardId) {
       const card = cards.find(c => c.id === cardId);
       if (!card) return;
@@ -1940,6 +2231,332 @@
         }
       } catch (e) {
         showToast('Failed to list: ' + e.message, 'error');
+      }
+    }
+
+    // ==========================================
+    // BULK LISTING FUNCTIONS
+    // ==========================================
+    let bulkListingCards = [];
+    let selectedCardIds = new Set();
+
+    function showBulkListingModal() {
+      // Get all priced cards that aren't listed
+      const pricedCards = cards.filter(c => c.status === 'priced' && c.recommended_price);
+      if (pricedCards.length === 0) {
+        showToast('No priced cards available to list', 'error');
+        return;
+      }
+
+      bulkListingCards = pricedCards.map(c => ({
+        id: c.id,
+        player: c.player,
+        year: c.year,
+        set_name: c.set_name,
+        price: c.recommended_price,
+        customPrice: c.recommended_price,
+        front: c.front,
+        selected: true,
+        shippingMethod: 'calculated'
+      }));
+
+      selectedCardIds = new Set(bulkListingCards.map(c => c.id));
+      renderBulkCardsList();
+      updateBulkSummary();
+      document.getElementById('bulk-listing-modal').classList.add('open');
+    }
+
+    function closeBulkListingModal() {
+      document.getElementById('bulk-listing-modal').classList.remove('open');
+      bulkListingCards = [];
+      selectedCardIds.clear();
+    }
+
+    function renderBulkCardsList() {
+      const container = document.getElementById('bulk-cards-list');
+      container.innerHTML = bulkListingCards.map((card, idx) => `
+        <div class="bulk-card-row" style="display: flex; align-items: center; gap: 12px; padding: 12px; background: var(--glass); border-radius: 8px; margin-bottom: 8px;">
+          <input type="checkbox" ${card.selected ? 'checked' : ''} onchange="toggleBulkCard(${idx})" style="width: 18px; height: 18px;">
+          <div style="width: 50px; height: 70px; background: var(--bg-deep); border-radius: 4px; overflow: hidden;">
+            <img src="/images/3-priced/${card.front}" style="width: 100%; height: 100%; object-fit: cover;" onerror="this.style.display='none'">
+          </div>
+          <div style="flex: 1;">
+            <div style="font-weight: 600;">${card.player}</div>
+            <div style="font-size: 12px; color: var(--text-muted);">${card.year} ${card.set_name || ''}</div>
+          </div>
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <span style="color: var(--text-muted); font-size: 12px;">$</span>
+            <input type="number" value="${card.customPrice.toFixed(2)}" step="0.01" min="0.99"
+                   onchange="updateBulkCardPrice(${idx}, this.value)"
+                   style="width: 80px; padding: 8px; background: var(--bg-deep); border: 1px solid var(--glass-border); border-radius: 6px; color: var(--text); text-align: right;">
+          </div>
+        </div>
+      `).join('');
+    }
+
+    function toggleBulkCard(idx) {
+      bulkListingCards[idx].selected = !bulkListingCards[idx].selected;
+      if (bulkListingCards[idx].selected) {
+        selectedCardIds.add(bulkListingCards[idx].id);
+      } else {
+        selectedCardIds.delete(bulkListingCards[idx].id);
+      }
+      updateBulkSummary();
+    }
+
+    function updateBulkCardPrice(idx, value) {
+      bulkListingCards[idx].customPrice = parseFloat(value) || 0;
+      updateBulkSummary();
+    }
+
+    function updateBulkShipping() {
+      const method = document.getElementById('bulk-shipping-method').value;
+      const noteEl = document.getElementById('bulk-shipping-note');
+
+      const notes = {
+        standard_envelope: 'eBay Standard Envelope: Best for single cards valued under $20. Cards ship in PWE.',
+        calculated: 'Calculated: eBay determines shipping cost based on buyer location and package weight.',
+        flat_rate: 'Flat Rate: Consistent $4.99 shipping for all buyers regardless of location.',
+        free: 'Free Shipping: Shipping cost is included in your listing price.'
+      };
+
+      noteEl.textContent = notes[method] || '';
+
+      bulkListingCards.forEach(c => c.shippingMethod = method);
+    }
+
+    function updateBulkSummary() {
+      const selected = bulkListingCards.filter(c => c.selected);
+      const totalValue = selected.reduce((sum, c) => sum + c.customPrice, 0);
+      const totalFees = selected.reduce((sum, c) => sum + (c.customPrice * 0.1325 + 0.30), 0);
+      const netProfit = totalValue - totalFees;
+
+      document.getElementById('bulk-card-count').textContent = selected.length;
+      document.getElementById('bulk-total-value').textContent = '$' + totalValue.toFixed(2);
+      document.getElementById('bulk-total-fees').textContent = '$' + totalFees.toFixed(2);
+      document.getElementById('bulk-net-profit').textContent = '$' + netProfit.toFixed(2);
+    }
+
+    async function submitBulkListing() {
+      const selected = bulkListingCards.filter(c => c.selected);
+      if (selected.length === 0) {
+        showToast('No cards selected', 'error');
+        return;
+      }
+
+      const btn = document.getElementById('bulk-list-btn');
+      btn.disabled = true;
+      btn.textContent = 'Listing...';
+
+      try {
+        const listings = selected.map(c => ({
+          cardId: c.id,
+          price: c.customPrice,
+          shippingMethod: c.shippingMethod
+        }));
+
+        const result = await api('/ebay/bulk-create', {
+          method: 'POST',
+          body: JSON.stringify({ listings })
+        });
+
+        if (result?.success) {
+          showToast(`Listed ${result.summary.successful} of ${result.summary.total} cards!`, 'success');
+          closeBulkListingModal();
+          loadCards();
+        } else {
+          showToast(result?.error || 'Bulk listing failed', 'error');
+        }
+      } catch (e) {
+        showToast('Failed to create listings: ' + e.message, 'error');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'List All on eBay';
+      }
+    }
+
+    // ==========================================
+    // LOT LISTING FUNCTIONS
+    // ==========================================
+    let lotCards = [];
+
+    function showLotListingModal() {
+      const pricedCards = cards.filter(c => c.status === 'priced' && c.recommended_price);
+      if (pricedCards.length < 2) {
+        showToast('Need at least 2 priced cards for a lot listing', 'error');
+        return;
+      }
+
+      lotCards = pricedCards.map(c => ({
+        id: c.id,
+        player: c.player,
+        year: c.year,
+        set_name: c.set_name,
+        sport: c.sport,
+        price: c.recommended_price,
+        front: c.front,
+        selected: true
+      }));
+
+      renderLotCardsList();
+      updateLotSummary();
+      document.getElementById('lot-listing-modal').classList.add('open');
+    }
+
+    function closeLotListingModal() {
+      document.getElementById('lot-listing-modal').classList.remove('open');
+      lotCards = [];
+    }
+
+    function renderLotCardsList() {
+      const container = document.getElementById('lot-cards-list');
+      container.innerHTML = lotCards.map((card, idx) => `
+        <div style="display: flex; align-items: center; gap: 12px; padding: 10px; background: var(--glass); border-radius: 8px; margin-bottom: 6px;">
+          <input type="checkbox" ${card.selected ? 'checked' : ''} onchange="toggleLotCard(${idx})" style="width: 16px; height: 16px;">
+          <div style="width: 40px; height: 56px; background: var(--bg-deep); border-radius: 4px; overflow: hidden;">
+            <img src="/images/3-priced/${card.front}" style="width: 100%; height: 100%; object-fit: cover;" onerror="this.style.display='none'">
+          </div>
+          <div style="flex: 1; font-size: 13px;">
+            <div style="font-weight: 500;">${card.player}</div>
+            <div style="color: var(--text-muted); font-size: 11px;">${card.year}</div>
+          </div>
+          <div style="color: var(--success); font-size: 13px;">$${card.price.toFixed(2)}</div>
+        </div>
+      `).join('');
+    }
+
+    function toggleLotCard(idx) {
+      lotCards[idx].selected = !lotCards[idx].selected;
+      updateLotSummary();
+    }
+
+    function updateLotSummary() {
+      const selected = lotCards.filter(c => c.selected);
+      const totalValue = selected.reduce((sum, c) => sum + c.price, 0);
+      const suggestedPrice = Math.round(totalValue * 0.88 * 100) / 100; // 12% discount for lots
+      const toploadersNeeded = Math.ceil(selected.length / 2);
+      const requiresBubbleMailer = selected.length >= 7;
+
+      document.getElementById('lot-card-count').textContent = selected.length;
+      document.getElementById('lot-individual-value').textContent = '$' + totalValue.toFixed(2);
+      document.getElementById('lot-suggested-price').textContent = '$' + suggestedPrice.toFixed(2);
+      document.getElementById('lot-price').value = suggestedPrice.toFixed(2);
+      document.getElementById('lot-toploaders').textContent = toploadersNeeded;
+      document.getElementById('lot-packaging').textContent = requiresBubbleMailer ? 'Bubble Mailer Required' : 'Standard Envelope OK';
+
+      // Generate default title
+      const sports = [...new Set(selected.map(c => c.sport).filter(Boolean))];
+      const years = [...new Set(selected.map(c => c.year))].sort();
+      const yearRange = years.length > 1 ? `${years[0]}-${years[years.length - 1]}` : years[0] || '';
+      document.getElementById('lot-title').value = `LOT of ${selected.length} ${sports.join('/') || 'Sports'} Cards ${yearRange}`;
+    }
+
+    async function submitLotListing() {
+      const selected = lotCards.filter(c => c.selected);
+      if (selected.length < 2) {
+        showToast('Need at least 2 cards for a lot', 'error');
+        return;
+      }
+
+      const price = parseFloat(document.getElementById('lot-price').value);
+      if (!price || price < 0.99) {
+        showToast('Please enter a valid price', 'error');
+        return;
+      }
+
+      const btn = document.getElementById('lot-list-btn');
+      btn.disabled = true;
+      btn.textContent = 'Creating Lot...';
+
+      try {
+        const result = await api('/ebay/create-lot', {
+          method: 'POST',
+          body: JSON.stringify({
+            cardIds: selected.map(c => c.id),
+            title: document.getElementById('lot-title').value,
+            price: price,
+            gridSize: document.getElementById('lot-grid-size').value,
+            shippingMethod: document.getElementById('lot-shipping-method').value,
+            generateCollageImage: document.getElementById('lot-generate-collage').checked
+          })
+        });
+
+        if (result?.success) {
+          showToast(`Lot listing created! ${result.cardCount} cards`, 'success');
+          if (result.listingUrl) window.open(result.listingUrl, '_blank');
+          closeLotListingModal();
+          loadCards();
+        } else {
+          showToast(result?.error || 'Failed to create lot', 'error');
+        }
+      } catch (e) {
+        showToast('Failed to create lot: ' + e.message, 'error');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Create Lot Listing';
+      }
+    }
+
+    // ==========================================
+    // AUCTION FUNCTIONS
+    // ==========================================
+    let auctionCardId = null;
+
+    function showAuctionModal(cardId) {
+      const card = cards.find(c => c.id === cardId);
+      if (!card) return;
+
+      auctionCardId = cardId;
+      const folder = getCardFolder(card);
+
+      document.getElementById('auction-card-img').src = card.front ? `/images/${folder}/${card.front}` : '';
+      document.getElementById('auction-card-player').textContent = card.player || 'Unknown';
+      document.getElementById('auction-card-set').textContent = `${card.year || ''} ${card.set_name || ''}`;
+      document.getElementById('auction-card-price').textContent = card.recommended_price ? `Market: $${card.recommended_price.toFixed(2)}` : '';
+      document.getElementById('auction-start-price').value = (card.recommended_price * 0.5 || 0.99).toFixed(2);
+      document.getElementById('auction-bin-price').value = card.recommended_price ? card.recommended_price.toFixed(2) : '';
+
+      document.getElementById('auction-modal').classList.add('open');
+    }
+
+    function closeAuctionModal() {
+      document.getElementById('auction-modal').classList.remove('open');
+      auctionCardId = null;
+    }
+
+    async function submitAuction() {
+      if (!auctionCardId) return;
+
+      const startPrice = parseFloat(document.getElementById('auction-start-price').value);
+      if (!startPrice || startPrice < 0.99) {
+        showToast('Starting price must be at least $0.99', 'error');
+        return;
+      }
+
+      const binPrice = parseFloat(document.getElementById('auction-bin-price').value) || null;
+      const duration = parseInt(document.getElementById('auction-duration').value);
+
+      try {
+        const result = await api('/ebay/create-auction', {
+          method: 'POST',
+          body: JSON.stringify({
+            cardId: auctionCardId,
+            startingPrice: startPrice,
+            buyItNowPrice: binPrice,
+            duration: duration
+          })
+        });
+
+        if (result?.success) {
+          showToast('Auction created!', 'success');
+          if (result.listingUrl) window.open(result.listingUrl, '_blank');
+          closeAuctionModal();
+          loadCards();
+        } else {
+          showToast(result?.error || 'Failed to create auction', 'error');
+        }
+      } catch (e) {
+        showToast('Failed to create auction: ' + e.message, 'error');
       }
     }
 

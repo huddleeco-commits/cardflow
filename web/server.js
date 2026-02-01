@@ -2136,6 +2136,953 @@ app.get('/api/ebay/preview/:cardId', authenticateToken, async (req, res) => {
 });
 
 // ============================================
+// SHIPPING METHODS & POLICIES
+// ============================================
+
+// Shipping method configurations (matching SlabTrack)
+const SHIPPING_METHODS = {
+  standard_envelope: {
+    name: 'Standard Envelope',
+    description: 'eBay Standard Envelope - best for single cards under $20',
+    price: 1.32,
+    maxValue: 20,
+    maxCards: 2,
+    service: 'USPSFirstClass',
+    carrier: 'USPS'
+  },
+  calculated: {
+    name: 'Calculated Shipping',
+    description: 'USPS calculates based on buyer location',
+    price: null, // Calculated by eBay
+    maxCards: 999,
+    service: 'USPSFirstClass',
+    carrier: 'USPS'
+  },
+  flat_rate: {
+    name: 'Flat Rate',
+    description: 'Fixed shipping price you set',
+    price: 4.99,
+    maxCards: 999,
+    service: 'USPSFirstClass',
+    carrier: 'USPS'
+  },
+  free: {
+    name: 'Free Shipping',
+    description: 'Free shipping (built into price)',
+    price: 0,
+    maxCards: 999,
+    service: 'USPSFirstClass',
+    carrier: 'USPS'
+  }
+};
+
+// Get shipping methods
+app.get('/api/ebay/shipping-methods', authenticateToken, (req, res) => {
+  res.json({ success: true, methods: SHIPPING_METHODS });
+});
+
+// Calculate smart shipping recommendation
+function getSmartShipping(cards, totalValue) {
+  const cardCount = cards.length;
+  const toploadersNeeded = Math.ceil(cardCount / 2);
+
+  // Rules from SlabTrack:
+  // - 7+ cards = bubble mailer required (no standard envelope)
+  // - Total value > $20 = no standard envelope
+  // - 1-2 cards under $20 = standard envelope eligible
+
+  if (cardCount >= 7 || totalValue > 20) {
+    return {
+      method: 'calculated',
+      reason: cardCount >= 7
+        ? 'Bubble mailer required for 7+ cards'
+        : 'Value exceeds standard envelope limit',
+      toploaders: toploadersNeeded,
+      requiresBubbleMailer: true
+    };
+  }
+
+  if (cardCount <= 2 && totalValue <= 20) {
+    return {
+      method: 'standard_envelope',
+      reason: 'Eligible for eBay Standard Envelope',
+      toploaders: toploadersNeeded,
+      requiresBubbleMailer: false
+    };
+  }
+
+  return {
+    method: 'flat_rate',
+    reason: 'Flat rate shipping recommended',
+    toploaders: toploadersNeeded,
+    requiresBubbleMailer: false
+  };
+}
+
+// Update user shipping settings
+app.put('/api/ebay/shipping-settings', authenticateToken, async (req, res) => {
+  try {
+    const { defaultMethod, flatRatePrice, freeShippingMinimum } = req.body;
+
+    await pool.query(`
+      UPDATE users SET
+        ebay_default_shipping = $1,
+        ebay_flat_rate_price = $2,
+        ebay_free_shipping_minimum = $3
+      WHERE id = $4
+    `, [defaultMethod, flatRatePrice || 4.99, freeShippingMinimum || 50, req.user.id]);
+
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ success: false, error: 'Failed to update shipping settings' });
+  }
+});
+
+// Get user shipping settings
+app.get('/api/ebay/shipping-settings', authenticateToken, async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT ebay_default_shipping, ebay_flat_rate_price, ebay_free_shipping_minimum
+      FROM users WHERE id = $1
+    `, [req.user.id]);
+
+    const settings = result.rows[0] || {};
+    res.json({
+      success: true,
+      settings: {
+        defaultMethod: settings.ebay_default_shipping || 'calculated',
+        flatRatePrice: settings.ebay_flat_rate_price || 4.99,
+        freeShippingMinimum: settings.ebay_free_shipping_minimum || 50
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: 'Failed to get shipping settings' });
+  }
+});
+
+// ============================================
+// BULK LISTING ROUTES
+// ============================================
+
+// Get bulk listing preview for multiple cards
+app.post('/api/ebay/bulk-preview', authenticateToken, async (req, res) => {
+  try {
+    const { cardIds } = req.body;
+
+    if (!cardIds || !Array.isArray(cardIds) || cardIds.length === 0) {
+      return res.status(400).json({ success: false, error: 'Card IDs required' });
+    }
+
+    const result = await pool.query(`
+      SELECT * FROM cards WHERE id = ANY($1) AND user_id = $2
+    `, [cardIds, req.user.id]);
+
+    const cards = result.rows.map(row => ({
+      id: row.id,
+      ...row.card_data,
+      front: row.front_image_path,
+      title: generateListingTitle(row.card_data),
+      suggestedPrice: row.card_data.recommended_price || 9.99
+    }));
+
+    // Calculate totals
+    const totalValue = cards.reduce((sum, c) => sum + (c.suggestedPrice || 0), 0);
+    const shipping = getSmartShipping(cards, totalValue);
+
+    // Calculate eBay fees (approximate: 13.25% + $0.30)
+    const totalFees = cards.reduce((sum, c) => {
+      const price = c.suggestedPrice || 9.99;
+      return sum + (price * 0.1325 + 0.30);
+    }, 0);
+
+    res.json({
+      success: true,
+      cards,
+      summary: {
+        count: cards.length,
+        totalValue: Math.round(totalValue * 100) / 100,
+        totalFees: Math.round(totalFees * 100) / 100,
+        netProfit: Math.round((totalValue - totalFees) * 100) / 100
+      },
+      shippingRecommendation: shipping
+    });
+
+  } catch (error) {
+    console.error('Bulk preview error:', error);
+    res.status(500).json({ success: false, error: 'Failed to generate preview' });
+  }
+});
+
+// Create bulk listings (multiple individual cards)
+app.post('/api/ebay/bulk-create', authenticateToken, async (req, res) => {
+  try {
+    const { listings } = req.body;
+
+    if (!listings || !Array.isArray(listings) || listings.length === 0) {
+      return res.status(400).json({ success: false, error: 'Listings array required' });
+    }
+
+    console.log(`[eBay] Creating ${listings.length} bulk listings...`);
+
+    const accessToken = await getUserEbayToken(req.user.id);
+
+    // Get user's policy IDs
+    const userResult = await pool.query(
+      'SELECT ebay_payment_policy_id, ebay_return_policy_id, ebay_fulfillment_policy_id FROM users WHERE id = $1',
+      [req.user.id]
+    );
+
+    const policies = userResult.rows[0];
+    if (!policies.ebay_payment_policy_id) {
+      return res.status(400).json({
+        success: false,
+        error: 'eBay business policies not set up'
+      });
+    }
+
+    const results = [];
+    let successCount = 0;
+    let errorCount = 0;
+
+    for (const listing of listings) {
+      const { cardId, price, title: customTitle, shippingMethod = 'calculated', shippingPrice } = listing;
+
+      try {
+        // Get card
+        const cardResult = await pool.query(
+          'SELECT * FROM cards WHERE id = $1 AND user_id = $2',
+          [cardId, req.user.id]
+        );
+
+        if (cardResult.rows.length === 0) {
+          results.push({ cardId, success: false, error: 'Card not found' });
+          errorCount++;
+          continue;
+        }
+
+        const row = cardResult.rows[0];
+        const card = row.card_data;
+        const title = customTitle || generateListingTitle(card);
+        const description = generateListingDescription(card);
+        const sku = `CF-${cardId}-${Date.now()}`;
+
+        // Create fulfillment policy for this shipping method
+        let fulfillmentPolicyId = policies.ebay_fulfillment_policy_id;
+
+        // Create inventory item
+        const inventoryPayload = {
+          availability: { shipToLocationAvailability: { quantity: 1 } },
+          condition: card.is_graded ? 'NEW' : 'USED_EXCELLENT',
+          product: {
+            title,
+            description,
+            aspects: {
+              'Sport': [card.sport || 'Baseball'],
+              'Player': [card.player],
+              'Team': [card.team || 'N/A'],
+              'Year': [String(card.year)],
+              'Card Number': [card.card_number || 'N/A']
+            }
+          }
+        };
+
+        await axios.put(
+          `https://api.ebay.com/sell/inventory/v1/inventory_item/${sku}`,
+          inventoryPayload,
+          {
+            headers: {
+              'Authorization': `Bearer ${accessToken}`,
+              'Content-Type': 'application/json',
+              'Content-Language': 'en-US'
+            }
+          }
+        );
+
+        // Build offer based on shipping method
+        const offerPayload = {
+          sku,
+          marketplaceId: 'EBAY_US',
+          format: 'FIXED_PRICE',
+          availableQuantity: 1,
+          categoryId: '261328',
+          listingDescription: description,
+          listingPolicies: {
+            fulfillmentPolicyId,
+            paymentPolicyId: policies.ebay_payment_policy_id,
+            returnPolicyId: policies.ebay_return_policy_id
+          },
+          pricingSummary: {
+            price: { value: String(price), currency: 'USD' }
+          }
+        };
+
+        const offerResponse = await axios.post(
+          'https://api.ebay.com/sell/inventory/v1/offer',
+          offerPayload,
+          {
+            headers: {
+              'Authorization': `Bearer ${accessToken}`,
+              'Content-Type': 'application/json'
+            }
+          }
+        );
+
+        const offerId = offerResponse.data.offerId;
+
+        // Publish
+        const publishResponse = await axios.post(
+          `https://api.ebay.com/sell/inventory/v1/offer/${offerId}/publish`,
+          {},
+          {
+            headers: {
+              'Authorization': `Bearer ${accessToken}`,
+              'Content-Type': 'application/json'
+            }
+          }
+        );
+
+        const listingId = publishResponse.data.listingId;
+
+        // Save to database
+        await pool.query(`
+          INSERT INTO ebay_listings (card_id, user_id, ebay_listing_id, ebay_url, sku, offer_id, price, status, shipping_method)
+          VALUES ($1, $2, $3, $4, $5, $6, $7, 'active', $8)
+        `, [cardId, req.user.id, listingId, `https://www.ebay.com/itm/${listingId}`, sku, offerId, price, shippingMethod]);
+
+        // Update card status
+        await pool.query(`
+          UPDATE cards SET status = 'listed', card_data = card_data || $1::jsonb WHERE id = $2
+        `, [JSON.stringify({ ebay_listing_id: listingId, ebay_price: price, listed_at: new Date().toISOString() }), cardId]);
+
+        results.push({
+          cardId,
+          success: true,
+          listingId,
+          listingUrl: `https://www.ebay.com/itm/${listingId}`
+        });
+        successCount++;
+
+        // Rate limit
+        await new Promise(r => setTimeout(r, 500));
+
+      } catch (error) {
+        console.error(`[eBay] Error listing card ${cardId}:`, error.response?.data || error.message);
+        results.push({
+          cardId,
+          success: false,
+          error: error.response?.data?.errors?.[0]?.message || error.message
+        });
+        errorCount++;
+      }
+    }
+
+    broadcast({ type: 'bulk_listings_complete', successCount, errorCount, userId: req.user.id });
+
+    res.json({
+      success: true,
+      results,
+      summary: {
+        total: listings.length,
+        successful: successCount,
+        failed: errorCount
+      }
+    });
+
+  } catch (error) {
+    console.error('Bulk create error:', error);
+    res.status(500).json({ success: false, error: 'Failed to create bulk listings' });
+  }
+});
+
+// ============================================
+// COLLAGE SERVICE
+// ============================================
+
+const sharp = require('sharp');
+const cloudinary = require('cloudinary').v2;
+
+// Configure Cloudinary
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET
+});
+
+// Grid presets (matching SlabTrack)
+const GRID_PRESETS = {
+  large: { cols: 4, rows: 5, cardsPerPage: 20, cellWidth: 300, cellHeight: 420 },
+  medium: { cols: 5, rows: 6, cardsPerPage: 30, cellWidth: 240, cellHeight: 336 },
+  small: { cols: 6, rows: 7, cardsPerPage: 42, cellWidth: 200, cellHeight: 280 }
+};
+
+// Generate collage from card images
+async function generateCollage(imagePaths, gridSize = 'medium') {
+  const grid = GRID_PRESETS[gridSize] || GRID_PRESETS.medium;
+  const { cols, rows, cellWidth, cellHeight } = grid;
+
+  const totalWidth = cols * cellWidth;
+  const totalHeight = rows * cellHeight;
+
+  console.log(`[Collage] Creating ${cols}x${rows} grid (${totalWidth}x${totalHeight}px)`);
+
+  // Create blank canvas
+  const compositeImages = [];
+
+  for (let i = 0; i < Math.min(imagePaths.length, cols * rows); i++) {
+    const imagePath = imagePaths[i];
+    const col = i % cols;
+    const row = Math.floor(i / cols);
+
+    try {
+      // Resize image to fit cell
+      const resizedImage = await sharp(imagePath)
+        .resize(cellWidth - 10, cellHeight - 10, { fit: 'contain', background: { r: 255, g: 255, b: 255, alpha: 1 } })
+        .toBuffer();
+
+      compositeImages.push({
+        input: resizedImage,
+        left: col * cellWidth + 5,
+        top: row * cellHeight + 5
+      });
+    } catch (err) {
+      console.error(`[Collage] Error processing image ${imagePath}:`, err.message);
+    }
+  }
+
+  // Create collage
+  const collageBuffer = await sharp({
+    create: {
+      width: totalWidth,
+      height: totalHeight,
+      channels: 3,
+      background: { r: 255, g: 255, b: 255 }
+    }
+  })
+    .composite(compositeImages)
+    .jpeg({ quality: 90 })
+    .toBuffer();
+
+  console.log(`[Collage] Generated ${collageBuffer.length} bytes`);
+
+  return collageBuffer;
+}
+
+// Upload collage to Cloudinary
+async function uploadCollageToCloudinary(collageBuffer, lotId) {
+  return new Promise((resolve, reject) => {
+    const uploadStream = cloudinary.uploader.upload_stream(
+      {
+        folder: 'cardflow-lots',
+        public_id: `lot-${lotId}`,
+        resource_type: 'image'
+      },
+      (error, result) => {
+        if (error) reject(error);
+        else resolve(result);
+      }
+    );
+
+    const Readable = require('stream').Readable;
+    const stream = new Readable();
+    stream.push(collageBuffer);
+    stream.push(null);
+    stream.pipe(uploadStream);
+  });
+}
+
+// Generate collage preview endpoint
+app.post('/api/ebay/lot-preview', authenticateToken, async (req, res) => {
+  try {
+    const { cardIds, gridSize = 'medium' } = req.body;
+
+    if (!cardIds || cardIds.length < 2) {
+      return res.status(400).json({ success: false, error: 'At least 2 cards required for lot' });
+    }
+
+    // Get cards
+    const result = await pool.query(`
+      SELECT * FROM cards WHERE id = ANY($1) AND user_id = $2
+    `, [cardIds, req.user.id]);
+
+    const cards = result.rows;
+
+    // Calculate totals
+    const totalValue = cards.reduce((sum, c) => sum + (c.card_data.recommended_price || 0), 0);
+    const grid = GRID_PRESETS[gridSize] || GRID_PRESETS.medium;
+    const pagesNeeded = Math.ceil(cards.length / grid.cardsPerPage);
+
+    // Calculate toploaders and shipping
+    const toploadersNeeded = Math.ceil(cards.length / 2);
+    const requiresBubbleMailer = cards.length >= 7;
+
+    // Lot pricing suggestion (10-15% discount)
+    const suggestedLotPrice = Math.round(totalValue * 0.88 * 100) / 100;
+
+    // Generate lot title
+    const sports = [...new Set(cards.map(c => c.card_data.sport))];
+    const years = [...new Set(cards.map(c => c.card_data.year))].sort();
+    const yearRange = years.length > 1 ? `${years[0]}-${years[years.length - 1]}` : years[0];
+
+    const lotTitle = `LOT of ${cards.length} ${sports.join('/')} Cards ${yearRange} - Mixed`;
+
+    res.json({
+      success: true,
+      preview: {
+        cardCount: cards.length,
+        gridSize,
+        pagesNeeded,
+        totalIndividualValue: Math.round(totalValue * 100) / 100,
+        suggestedLotPrice,
+        lotTitle,
+        cards: cards.map(c => ({
+          id: c.id,
+          player: c.card_data.player,
+          year: c.card_data.year,
+          price: c.card_data.recommended_price
+        }))
+      },
+      shipping: {
+        toploadersNeeded,
+        requiresBubbleMailer,
+        recommendedMethod: requiresBubbleMailer ? 'calculated' : 'flat_rate'
+      }
+    });
+
+  } catch (error) {
+    console.error('Lot preview error:', error);
+    res.status(500).json({ success: false, error: 'Failed to generate lot preview' });
+  }
+});
+
+// Create lot listing
+app.post('/api/ebay/create-lot', authenticateToken, async (req, res) => {
+  try {
+    const {
+      cardIds,
+      title: customTitle,
+      price,
+      gridSize = 'medium',
+      shippingMethod = 'calculated',
+      shippingPrice,
+      generateCollageImage = true
+    } = req.body;
+
+    if (!cardIds || cardIds.length < 2) {
+      return res.status(400).json({ success: false, error: 'At least 2 cards required' });
+    }
+
+    if (!price || price <= 0) {
+      return res.status(400).json({ success: false, error: 'Price required' });
+    }
+
+    console.log(`[eBay] Creating lot listing with ${cardIds.length} cards...`);
+
+    const accessToken = await getUserEbayToken(req.user.id);
+
+    // Get cards
+    const cardsResult = await pool.query(`
+      SELECT * FROM cards WHERE id = ANY($1) AND user_id = $2
+    `, [cardIds, req.user.id]);
+
+    const cards = cardsResult.rows;
+
+    if (cards.length !== cardIds.length) {
+      return res.status(400).json({ success: false, error: 'Some cards not found' });
+    }
+
+    // Get user's policies
+    const userResult = await pool.query(
+      'SELECT ebay_payment_policy_id, ebay_return_policy_id, ebay_fulfillment_policy_id FROM users WHERE id = $1',
+      [req.user.id]
+    );
+
+    const policies = userResult.rows[0];
+    if (!policies.ebay_payment_policy_id) {
+      return res.status(400).json({ success: false, error: 'eBay business policies not set up' });
+    }
+
+    // Generate lot ID and SKU
+    const lotId = `LOT-${Date.now()}`;
+    const sku = `CF-${lotId}`;
+
+    // Generate collage if requested
+    let collageUrl = null;
+    if (generateCollageImage) {
+      try {
+        const imagePaths = cards.map(c => {
+          const folder = c.status === 'priced' ? FOLDERS.priced :
+                        c.status === 'identified' ? FOLDERS.identified : FOLDERS.new;
+          return path.join(folder, c.front_image_path);
+        }).filter(p => fs.existsSync(p));
+
+        if (imagePaths.length >= 2) {
+          const collageBuffer = await generateCollage(imagePaths, gridSize);
+          const uploadResult = await uploadCollageToCloudinary(collageBuffer, lotId);
+          collageUrl = uploadResult.secure_url;
+          console.log('[eBay] Collage uploaded:', collageUrl);
+        }
+      } catch (err) {
+        console.error('[eBay] Collage generation failed:', err.message);
+        // Continue without collage
+      }
+    }
+
+    // Generate title
+    const sports = [...new Set(cards.map(c => c.card_data.sport))];
+    const years = [...new Set(cards.map(c => c.card_data.year))].sort();
+    const yearRange = years.length > 1 ? `${years[0]}-${years[years.length - 1]}` : years[0];
+    const title = customTitle || `LOT of ${cards.length} ${sports.join('/')} Cards ${yearRange}`;
+
+    // Generate description
+    const description = generateLotDescription(cards, collageUrl);
+
+    // Create inventory item
+    const inventoryPayload = {
+      availability: { shipToLocationAvailability: { quantity: 1 } },
+      condition: 'USED_EXCELLENT',
+      product: {
+        title: title.substring(0, 80),
+        description,
+        aspects: {
+          'Sport': sports,
+          'Card Condition': ['Excellent'],
+          'Features': ['Lot']
+        },
+        imageUrls: collageUrl ? [collageUrl] : []
+      }
+    };
+
+    await axios.put(
+      `https://api.ebay.com/sell/inventory/v1/inventory_item/${sku}`,
+      inventoryPayload,
+      {
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+          'Content-Language': 'en-US'
+        }
+      }
+    );
+
+    // Create offer
+    const offerPayload = {
+      sku,
+      marketplaceId: 'EBAY_US',
+      format: 'FIXED_PRICE',
+      availableQuantity: 1,
+      categoryId: '261328',
+      listingDescription: description,
+      listingPolicies: {
+        fulfillmentPolicyId: policies.ebay_fulfillment_policy_id,
+        paymentPolicyId: policies.ebay_payment_policy_id,
+        returnPolicyId: policies.ebay_return_policy_id
+      },
+      pricingSummary: {
+        price: { value: String(price), currency: 'USD' }
+      }
+    };
+
+    const offerResponse = await axios.post(
+      'https://api.ebay.com/sell/inventory/v1/offer',
+      offerPayload,
+      {
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json'
+        }
+      }
+    );
+
+    const offerId = offerResponse.data.offerId;
+
+    // Publish
+    const publishResponse = await axios.post(
+      `https://api.ebay.com/sell/inventory/v1/offer/${offerId}/publish`,
+      {},
+      {
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json'
+        }
+      }
+    );
+
+    const listingId = publishResponse.data.listingId;
+    console.log('[eBay] Lot listing published:', listingId);
+
+    // Save lot listing
+    await pool.query(`
+      INSERT INTO ebay_listings (user_id, ebay_listing_id, ebay_url, sku, offer_id, price, status, listing_type, lot_card_ids, collage_url)
+      VALUES ($1, $2, $3, $4, $5, $6, 'active', 'lot', $7, $8)
+    `, [req.user.id, listingId, `https://www.ebay.com/itm/${listingId}`, sku, offerId, price, cardIds, collageUrl]);
+
+    // Update all cards as listed
+    await pool.query(`
+      UPDATE cards SET status = 'listed', card_data = card_data || $1::jsonb
+      WHERE id = ANY($2)
+    `, [JSON.stringify({ lot_listing_id: listingId, lot_id: lotId, listed_at: new Date().toISOString() }), cardIds]);
+
+    broadcast({ type: 'lot_listed', lotId, listingId, cardCount: cards.length, userId: req.user.id });
+
+    res.json({
+      success: true,
+      listingId,
+      listingUrl: `https://www.ebay.com/itm/${listingId}`,
+      lotId,
+      collageUrl,
+      message: `Lot of ${cards.length} cards listed successfully!`
+    });
+
+  } catch (error) {
+    console.error('[eBay] Lot listing error:', error.response?.data || error.message);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to create lot listing',
+      details: error.response?.data?.errors?.[0]?.message || error.message
+    });
+  }
+});
+
+// Generate lot description HTML
+function generateLotDescription(cards, collageUrl) {
+  const players = cards.map(c => c.card_data.player).slice(0, 10);
+  const hasMore = cards.length > 10;
+
+  return `
+    <div style="font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto;">
+      <h2 style="color: #0654ba; text-align: center;">Lot of ${cards.length} Trading Cards</h2>
+
+      ${collageUrl ? `<div style="text-align: center; margin: 20px 0;"><img src="${collageUrl}" style="max-width: 100%; border: 1px solid #ddd; border-radius: 8px;" alt="Card Lot Preview"></div>` : ''}
+
+      <div style="background: #f7f7f7; padding: 20px; border-radius: 8px; margin: 20px 0;">
+        <h3 style="margin-top: 0; color: #333;">Lot Contents</h3>
+        <p><strong>${cards.length} cards total</strong></p>
+        <ul style="list-style: disc; padding-left: 20px;">
+          ${players.map(p => `<li>${p}</li>`).join('')}
+          ${hasMore ? `<li><em>...and ${cards.length - 10} more!</em></li>` : ''}
+        </ul>
+      </div>
+
+      <div style="background: #e8f4f8; padding: 20px; border-radius: 8px; margin: 20px 0;">
+        <h3 style="margin-top: 0; color: #333;">Shipping Info</h3>
+        <ul style="list-style: none; padding: 0;">
+          <li>Ships within 1 business day</li>
+          <li>Cards in sleeves & toploaders</li>
+          <li>Securely packed in bubble mailer</li>
+        </ul>
+      </div>
+
+      <p style="text-align: center; color: #666; font-size: 12px;">Listed via <strong>CardFlow</strong></p>
+    </div>
+  `.trim();
+}
+
+// ============================================
+// AUCTION LISTING
+// ============================================
+
+app.post('/api/ebay/create-auction', authenticateToken, async (req, res) => {
+  try {
+    const {
+      cardId,
+      startingPrice,
+      buyItNowPrice,
+      duration = 7, // days
+      shippingMethod = 'calculated'
+    } = req.body;
+
+    if (!cardId || !startingPrice) {
+      return res.status(400).json({ success: false, error: 'Card ID and starting price required' });
+    }
+
+    console.log(`[eBay] Creating auction for card ${cardId}...`);
+
+    const accessToken = await getUserEbayToken(req.user.id);
+
+    // Get card
+    const cardResult = await pool.query(
+      'SELECT * FROM cards WHERE id = $1 AND user_id = $2',
+      [cardId, req.user.id]
+    );
+
+    if (cardResult.rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'Card not found' });
+    }
+
+    const row = cardResult.rows[0];
+    const card = row.card_data;
+
+    // Get policies
+    const userResult = await pool.query(
+      'SELECT ebay_payment_policy_id, ebay_return_policy_id, ebay_fulfillment_policy_id FROM users WHERE id = $1',
+      [req.user.id]
+    );
+
+    const policies = userResult.rows[0];
+
+    const title = generateListingTitle(card);
+    const description = generateListingDescription(card);
+    const sku = `CF-AUC-${cardId}-${Date.now()}`;
+
+    // Create inventory item
+    await axios.put(
+      `https://api.ebay.com/sell/inventory/v1/inventory_item/${sku}`,
+      {
+        availability: { shipToLocationAvailability: { quantity: 1 } },
+        condition: card.is_graded ? 'NEW' : 'USED_EXCELLENT',
+        product: {
+          title,
+          description,
+          aspects: {
+            'Sport': [card.sport || 'Baseball'],
+            'Player': [card.player],
+            'Year': [String(card.year)]
+          }
+        }
+      },
+      {
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+          'Content-Language': 'en-US'
+        }
+      }
+    );
+
+    // Create auction offer
+    const offerPayload = {
+      sku,
+      marketplaceId: 'EBAY_US',
+      format: 'AUCTION',
+      availableQuantity: 1,
+      categoryId: '261328',
+      listingDescription: description,
+      listingPolicies: {
+        fulfillmentPolicyId: policies.ebay_fulfillment_policy_id,
+        paymentPolicyId: policies.ebay_payment_policy_id,
+        returnPolicyId: policies.ebay_return_policy_id
+      },
+      pricingSummary: {
+        auctionStartPrice: { value: String(startingPrice), currency: 'USD' },
+        ...(buyItNowPrice && { buyItNowPrice: { value: String(buyItNowPrice), currency: 'USD' } })
+      },
+      listingDuration: `DAYS_${duration}`
+    };
+
+    const offerResponse = await axios.post(
+      'https://api.ebay.com/sell/inventory/v1/offer',
+      offerPayload,
+      {
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json'
+        }
+      }
+    );
+
+    const offerId = offerResponse.data.offerId;
+
+    // Publish
+    const publishResponse = await axios.post(
+      `https://api.ebay.com/sell/inventory/v1/offer/${offerId}/publish`,
+      {},
+      {
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json'
+        }
+      }
+    );
+
+    const listingId = publishResponse.data.listingId;
+    console.log('[eBay] Auction published:', listingId);
+
+    // Save listing
+    await pool.query(`
+      INSERT INTO ebay_listings (card_id, user_id, ebay_listing_id, ebay_url, sku, offer_id, price, status, listing_type)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, 'active', 'auction')
+    `, [cardId, req.user.id, listingId, `https://www.ebay.com/itm/${listingId}`, sku, offerId, startingPrice]);
+
+    // Update card
+    await pool.query(`
+      UPDATE cards SET status = 'listed', card_data = card_data || $1::jsonb WHERE id = $2
+    `, [JSON.stringify({
+      ebay_listing_id: listingId,
+      listing_type: 'auction',
+      auction_start_price: startingPrice,
+      listed_at: new Date().toISOString()
+    }), cardId]);
+
+    broadcast({ type: 'auction_listed', cardId, listingId, userId: req.user.id });
+
+    res.json({
+      success: true,
+      listingId,
+      listingUrl: `https://www.ebay.com/itm/${listingId}`,
+      message: 'Auction created successfully!'
+    });
+
+  } catch (error) {
+    console.error('[eBay] Auction error:', error.response?.data || error.message);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to create auction',
+      details: error.response?.data?.errors?.[0]?.message || error.message
+    });
+  }
+});
+
+// End listing
+app.post('/api/ebay/end-listing/:listingId', authenticateToken, async (req, res) => {
+  try {
+    const { listingId } = req.params;
+
+    const listingResult = await pool.query(
+      'SELECT * FROM ebay_listings WHERE ebay_listing_id = $1 AND user_id = $2',
+      [listingId, req.user.id]
+    );
+
+    if (listingResult.rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'Listing not found' });
+    }
+
+    const accessToken = await getUserEbayToken(req.user.id);
+
+    // End the listing via eBay API
+    await axios.post(
+      `https://api.ebay.com/sell/inventory/v1/offer/${listingResult.rows[0].offer_id}/withdraw`,
+      {},
+      {
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json'
+        }
+      }
+    );
+
+    // Update database
+    await pool.query(
+      'UPDATE ebay_listings SET status = $1 WHERE ebay_listing_id = $2',
+      ['ended', listingId]
+    );
+
+    // Update card status back to priced
+    if (listingResult.rows[0].card_id) {
+      await pool.query(
+        'UPDATE cards SET status = $1 WHERE id = $2',
+        ['priced', listingResult.rows[0].card_id]
+      );
+    }
+
+    res.json({ success: true, message: 'Listing ended' });
+
+  } catch (error) {
+    console.error('End listing error:', error.response?.data || error.message);
+    res.status(500).json({ success: false, error: 'Failed to end listing' });
+  }
+});
+
+// ============================================
 // WEBSOCKET
 // ============================================
 

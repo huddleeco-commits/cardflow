@@ -125,9 +125,12 @@ CREATE TABLE IF NOT EXISTS ebay_listings (
   offer_id VARCHAR(255),
   status VARCHAR(50) DEFAULT 'active',
   price DECIMAL(10,2),
+  listing_type VARCHAR(50) DEFAULT 'single',
+  shipping_method VARCHAR(50),
+  lot_card_ids UUID[],
+  collage_url TEXT,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  ended_at TIMESTAMP,
-  UNIQUE(card_id)
+  ended_at TIMESTAMP
 );
 
 -- Add eBay policy columns to users (if not exist)
@@ -140,6 +143,12 @@ BEGIN
     ALTER TABLE users ADD COLUMN ebay_marketplace_id VARCHAR(50) DEFAULT 'EBAY_US';
     ALTER TABLE users ADD COLUMN ebay_currency VARCHAR(10) DEFAULT 'USD';
     ALTER TABLE users ADD COLUMN ebay_country_code VARCHAR(10) DEFAULT 'US';
+  END IF;
+  -- Shipping settings columns
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'users' AND column_name = 'ebay_default_shipping') THEN
+    ALTER TABLE users ADD COLUMN ebay_default_shipping VARCHAR(50) DEFAULT 'calculated';
+    ALTER TABLE users ADD COLUMN ebay_flat_rate_price DECIMAL(10,2) DEFAULT 4.99;
+    ALTER TABLE users ADD COLUMN ebay_free_shipping_minimum DECIMAL(10,2) DEFAULT 50.00;
   END IF;
 END $$;
 
