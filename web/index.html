@@ -1131,6 +1131,41 @@
       display: block;
     }
 
+    .pair-slot.drag-over {
+      border-color: var(--purple);
+      background: rgba(123, 47, 247, 0.2);
+    }
+
+    .pair-slot img {
+      cursor: grab;
+    }
+
+    .pair-slot img:active {
+      cursor: grabbing;
+    }
+
+    .swap-btn {
+      background: var(--glass);
+      border: 1px solid var(--glass-border);
+      border-radius: 50%;
+      width: 28px;
+      height: 28px;
+      cursor: pointer;
+      font-size: 14px;
+      color: var(--cyan);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.2s;
+      flex-shrink: 0;
+    }
+
+    .swap-btn:hover {
+      background: var(--cyan);
+      color: #000;
+      transform: scale(1.1);
+    }
+
     .unpaired-images {
       margin-top: 20px;
       padding: 16px;
@@ -2197,6 +2232,7 @@
 
       grid.innerHTML = cards.map(card => {
         const frontSrc = getImageUrl(card.front, card);
+        const backSrc = card.back ? getImageUrl(card.back, card) : '';
         const gradeInfo = card.is_graded ? `${card.grading_company} ${card.grade}` : '';
         const parallelInfo = card.parallel && card.parallel !== 'Base' ? card.parallel : '';
 
@@ -2221,6 +2257,12 @@
                 ${frontSrc ? `<img src="${frontSrc}" alt="Front" loading="lazy">` : '<div class="no-image">No Image</div>'}
                 <div class="img-label">Front</div>
               </div>
+              ${backSrc ? `
+              <div class="card-img-wrapper" onclick="openLightbox('${backSrc}')">
+                <img src="${backSrc}" alt="Back" loading="lazy">
+                <div class="img-label">Back</div>
+              </div>
+              ` : ''}
             </div>
             <div class="card-info">
               <div class="card-header">
@@ -3164,13 +3206,30 @@
       const grid = document.getElementById('pair-grid');
       grid.innerHTML = cardPairs.map((pair, idx) => `
         <div class="pair-card ${pair.front && pair.back ? 'complete' : ''}" data-idx="${idx}">
-          <div class="pair-slot has-image" ondrop="dropOnSlot(event, ${idx}, 'front')" ondragover="event.preventDefault()">
-            ${pair.front ? `<img src="${URL.createObjectURL(pair.front)}" alt="Front">` : ''}
+          <div class="pair-slot ${pair.front ? 'has-image' : ''}"
+               ondrop="dropOnSlot(event, ${idx}, 'front')"
+               ondragover="event.preventDefault(); this.classList.add('drag-over')"
+               ondragleave="this.classList.remove('drag-over')">
+            ${pair.front ? `
+              <img src="${URL.createObjectURL(pair.front)}" alt="Front"
+                   draggable="true"
+                   ondragstart="startDrag(event, ${idx}, 'front')">
+            ` : '<span style="color: var(--text-muted); font-size: 12px;">Drop Front</span>'}
             <span class="pair-slot-label">Front</span>
             ${pair.front ? `<button class="remove-btn" onclick="removeFromPair(${idx}, 'front')">×</button>` : ''}
           </div>
-          <div class="pair-slot ${pair.back ? 'has-image' : ''}" ondrop="dropOnSlot(event, ${idx}, 'back')" ondragover="event.preventDefault()">
-            ${pair.back ? `<img src="${URL.createObjectURL(pair.back)}" alt="Back">` : '<span style="color: var(--text-muted); font-size: 12px;">+ Back<br>(optional)</span>'}
+          ${pair.front && pair.back ? `
+            <button class="swap-btn" onclick="swapFrontBack(${idx})" title="Swap Front/Back">⇄</button>
+          ` : ''}
+          <div class="pair-slot ${pair.back ? 'has-image' : ''}"
+               ondrop="dropOnSlot(event, ${idx}, 'back')"
+               ondragover="event.preventDefault(); this.classList.add('drag-over')"
+               ondragleave="this.classList.remove('drag-over')">
+            ${pair.back ? `
+              <img src="${URL.createObjectURL(pair.back)}" alt="Back"
+                   draggable="true"
+                   ondragstart="startDrag(event, ${idx}, 'back')">
+            ` : '<span style="color: var(--text-muted); font-size: 12px;">+ Back<br>(optional)</span>'}
             ${pair.back ? '<span class="pair-slot-label">Back</span>' : ''}
             ${pair.back ? `<button class="remove-btn" onclick="removeFromPair(${idx}, 'back')">×</button>` : ''}
           </div>
@@ -3183,6 +3242,20 @@
           <span style="color: var(--text-muted);">+ Add Another Card</span>
         </div>
       `;
+    }
+
+    function startDrag(e, idx, slot) {
+      e.dataTransfer.setData('fileIdx', `${idx}-${slot}`);
+      e.dataTransfer.effectAllowed = 'move';
+    }
+
+    function swapFrontBack(idx) {
+      if (cardPairs[idx]) {
+        const temp = cardPairs[idx].front;
+        cardPairs[idx].front = cardPairs[idx].back;
+        cardPairs[idx].back = temp;
+        renderPairModal();
+      }
     }
 
     function addEmptyPair() {
