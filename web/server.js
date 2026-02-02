@@ -4831,6 +4831,163 @@ app.post('/api/export/json', authenticateToken, async (req, res) => {
   }
 });
 
+// Export for CardLadder (CSV format for their bulk upload)
+app.post('/api/export/cardladder', authenticateToken, async (req, res) => {
+  try {
+    const { cardIds } = req.body;
+    const userId = req.user.id;
+
+    if (!cardIds || cardIds.length === 0) {
+      return res.status(400).json({ error: 'No cards selected' });
+    }
+
+    const placeholders = cardIds.map((_, i) => `$${i + 1}`).join(',');
+    const result = await pool.query(`
+      SELECT * FROM cards
+      WHERE id IN (${placeholders}) AND user_id = $${cardIds.length + 1}
+    `, [...cardIds, userId]);
+
+    // CardLadder CSV format columns (based on their template)
+    const headers = [
+      'Year',
+      'Set',
+      'Player',
+      'Card Number',
+      'Variation',
+      'Grading Company',
+      'Grade',
+      'Cert Number',
+      'Purchase Price',
+      'Purchase Date',
+      'Notes'
+    ];
+
+    const rows = result.rows.map(card => {
+      const data = typeof card.card_data === 'string' ? JSON.parse(card.card_data) : card.card_data;
+      return [
+        data.year || '',
+        data.set_name || '',
+        data.player || data.subject || '',
+        data.card_number || '',
+        data.parallel && data.parallel !== 'Base' ? data.parallel : '',
+        data.is_graded ? (data.grading_company || '') : '',
+        data.is_graded ? (data.grade || '') : '',
+        data.cert_number || '',
+        '', // Purchase price - user can fill in
+        '', // Purchase date - user can fill in
+        data.notes || ''
+      ];
+    });
+
+    // Build CSV
+    const escapeCSV = (val) => {
+      if (val === null || val === undefined) return '';
+      const str = String(val);
+      if (str.includes(',') || str.includes('"') || str.includes('\n')) {
+        return '"' + str.replace(/"/g, '""') + '"';
+      }
+      return str;
+    };
+
+    const csv = [
+      headers.join(','),
+      ...rows.map(row => row.map(escapeCSV).join(','))
+    ].join('\n');
+
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', `attachment; filename="CardFlow-CardLadder-${Date.now()}.csv"`);
+    res.send(csv);
+
+  } catch (e) {
+    console.error('CardLadder export error:', e);
+    res.status(500).json({ error: 'Export failed' });
+  }
+});
+
+// Export for SportsCardsPro (CSV format for their collection)
+app.post('/api/export/sportscardspro', authenticateToken, async (req, res) => {
+  try {
+    const { cardIds } = req.body;
+    const userId = req.user.id;
+
+    if (!cardIds || cardIds.length === 0) {
+      return res.status(400).json({ error: 'No cards selected' });
+    }
+
+    const placeholders = cardIds.map((_, i) => `$${i + 1}`).join(',');
+    const result = await pool.query(`
+      SELECT * FROM cards
+      WHERE id IN (${placeholders}) AND user_id = $${cardIds.length + 1}
+    `, [...cardIds, userId]);
+
+    // SportsCardsPro format (matches their text import)
+    // Format: "Year Set Player #Number [Parallel] [Company Grade]"
+    const headers = [
+      'Card Name',
+      'Year',
+      'Set',
+      'Player',
+      'Card Number',
+      'Parallel',
+      'Grading Company',
+      'Grade',
+      'Cert',
+      'Quantity'
+    ];
+
+    const rows = result.rows.map(card => {
+      const data = typeof card.card_data === 'string' ? JSON.parse(card.card_data) : card.card_data;
+
+      // Build card name in SportsCardsPro format
+      const nameParts = [];
+      if (data.year) nameParts.push(data.year);
+      if (data.set_name) nameParts.push(data.set_name);
+      if (data.player || data.subject) nameParts.push(data.player || data.subject);
+      if (data.card_number) nameParts.push(`#${data.card_number}`);
+      if (data.parallel && data.parallel !== 'Base') nameParts.push(data.parallel);
+      if (data.is_graded && data.grading_company && data.grade) {
+        nameParts.push(`${data.grading_company} ${data.grade}`);
+      }
+
+      return [
+        nameParts.join(' '),
+        data.year || '',
+        data.set_name || '',
+        data.player || data.subject || '',
+        data.card_number || '',
+        data.parallel && data.parallel !== 'Base' ? data.parallel : '',
+        data.is_graded ? (data.grading_company || '') : '',
+        data.is_graded ? (data.grade || '') : '',
+        data.cert_number || '',
+        '1' // Quantity
+      ];
+    });
+
+    // Build CSV
+    const escapeCSV = (val) => {
+      if (val === null || val === undefined) return '';
+      const str = String(val);
+      if (str.includes(',') || str.includes('"') || str.includes('\n')) {
+        return '"' + str.replace(/"/g, '""') + '"';
+      }
+      return str;
+    };
+
+    const csv = [
+      headers.join(','),
+      ...rows.map(row => row.map(escapeCSV).join(','))
+    ].join('\n');
+
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', `attachment; filename="CardFlow-SportsCardsPro-${Date.now()}.csv"`);
+    res.send(csv);
+
+  } catch (e) {
+    console.error('SportsCardsPro export error:', e);
+    res.status(500).json({ error: 'Export failed' });
+  }
+});
+
 // ============================================
 // WEBSOCKET
 // ============================================

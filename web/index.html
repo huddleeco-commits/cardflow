@@ -1636,7 +1636,6 @@
       </div>
       <div class="batch-header-right">
         <button class="btn btn-secondary" onclick="showLinkMatrix()" title="Price Check Links">🔗 Link Matrix</button>
-        <button class="btn btn-secondary" onclick="showSocialStylePicker()" title="Generate Social Images">📸 Social</button>
         <button class="btn btn-secondary" onclick="showExportModal('batch')" title="Export Cards">📤 Export</button>
         <button class="btn btn-accent" onclick="saveToCollection()">Save to Collection</button>
         <button class="btn btn-secondary btn-sm" onclick="closeBatchView()">Cancel</button>
@@ -2467,40 +2466,70 @@
           <span id="export-card-count">0</span> cards selected for export
         </p>
 
-        <div style="display: grid; gap: 12px;">
+        <!-- SlabTrack - Premium Option -->
+        <div style="margin-bottom: 20px;">
+          <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+            <span style="font-size: 11px; text-transform: uppercase; color: var(--success); font-weight: 600;">Recommended</span>
+            <span style="font-size: 10px; background: var(--success); color: #000; padding: 2px 6px; border-radius: 4px;">WITH IMAGES</span>
+          </div>
+          <button class="btn" onclick="exportTo('slabtrack')" style="width: 100%; padding: 20px; font-size: 15px; background: linear-gradient(135deg, #00f6ff, #7b2ff7); border: 2px solid var(--cyan); text-align: left; display: flex; align-items: center; gap: 16px; box-shadow: 0 0 30px rgba(0, 246, 255, 0.3);">
+            <span style="font-size: 32px;">🎯</span>
+            <div>
+              <div style="font-weight: 700; font-size: 17px;">Export to SlabTrack</div>
+              <div style="font-size: 12px; opacity: 0.9;">Full collection import with front/back images, pricing & all card data</div>
+            </div>
+          </button>
+        </div>
+
+        <!-- Other Platforms -->
+        <div style="font-size: 11px; text-transform: uppercase; color: var(--text-muted); margin-bottom: 8px;">Other Platforms</div>
+        <div style="display: grid; gap: 10px; margin-bottom: 16px;">
           <!-- Whatnot Export -->
-          <button class="btn" onclick="exportTo('whatnot')" style="width: 100%; padding: 16px; font-size: 15px; background: linear-gradient(135deg, #7c3aed, #a855f7); border: none; text-align: left; display: flex; align-items: center; gap: 12px;">
-            <span style="font-size: 24px;">🎬</span>
+          <button class="btn" onclick="exportTo('whatnot')" style="width: 100%; padding: 14px; font-size: 14px; background: linear-gradient(135deg, #7c3aed, #a855f7); border: none; text-align: left; display: flex; align-items: center; gap: 12px;">
+            <span style="font-size: 22px;">🎬</span>
             <div>
-              <div style="font-weight: 600;">Export to Whatnot</div>
-              <div style="font-size: 11px; opacity: 0.8;">CSV with images ready for Whatnot upload</div>
+              <div style="font-weight: 600;">Whatnot</div>
+              <div style="font-size: 11px; opacity: 0.8;">Live selling format</div>
             </div>
           </button>
 
-          <!-- SlabTrack Export -->
-          <button class="btn" onclick="exportTo('slabtrack')" style="width: 100%; padding: 16px; font-size: 15px; background: linear-gradient(135deg, #00f6ff, #7b2ff7); border: none; text-align: left; display: flex; align-items: center; gap: 12px;">
-            <span style="font-size: 24px;">🎯</span>
+          <!-- CardLadder Export -->
+          <button class="btn btn-secondary" onclick="exportTo('cardladder')" style="width: 100%; padding: 14px; font-size: 14px; text-align: left; display: flex; align-items: center; gap: 12px;">
+            <span style="font-size: 22px;">📈</span>
             <div>
-              <div style="font-weight: 600;">Export to SlabTrack</div>
-              <div style="font-size: 11px; opacity: 0.8;">Full card data with image URLs</div>
+              <div style="font-weight: 600;">CardLadder</div>
+              <div style="font-size: 11px; opacity: 0.7;">Portfolio tracking format</div>
             </div>
           </button>
 
+          <!-- SportsCardsPro Export -->
+          <button class="btn btn-secondary" onclick="exportTo('sportscardspro')" style="width: 100%; padding: 14px; font-size: 14px; text-align: left; display: flex; align-items: center; gap: 12px;">
+            <span style="font-size: 22px;">💰</span>
+            <div>
+              <div style="font-weight: 600;">SportsCardsPro</div>
+              <div style="font-size: 11px; opacity: 0.7;">Price guide format</div>
+            </div>
+          </button>
+        </div>
+
+        <!-- Generic Formats -->
+        <div style="font-size: 11px; text-transform: uppercase; color: var(--text-muted); margin-bottom: 8px;">Generic Formats</div>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
           <!-- Generic CSV -->
-          <button class="btn btn-secondary" onclick="exportTo('csv')" style="width: 100%; padding: 16px; font-size: 15px; text-align: left; display: flex; align-items: center; gap: 12px;">
-            <span style="font-size: 24px;">📄</span>
+          <button class="btn btn-secondary" onclick="exportTo('csv')" style="width: 100%; padding: 12px; font-size: 13px; text-align: left; display: flex; align-items: center; gap: 10px;">
+            <span style="font-size: 18px;">📄</span>
             <div>
-              <div style="font-weight: 600;">Generic CSV</div>
-              <div style="font-size: 11px; opacity: 0.7;">Standard spreadsheet format</div>
+              <div style="font-weight: 600;">CSV</div>
+              <div style="font-size: 10px; opacity: 0.7;">Spreadsheet</div>
             </div>
           </button>
 
           <!-- JSON Export -->
-          <button class="btn btn-secondary" onclick="exportTo('json')" style="width: 100%; padding: 16px; font-size: 15px; text-align: left; display: flex; align-items: center; gap: 12px;">
-            <span style="font-size: 24px;">{ }</span>
+          <button class="btn btn-secondary" onclick="exportTo('json')" style="width: 100%; padding: 12px; font-size: 13px; text-align: left; display: flex; align-items: center; gap: 10px;">
+            <span style="font-size: 18px;">{ }</span>
             <div>
-              <div style="font-weight: 600;">JSON (API Format)</div>
-              <div style="font-size: 11px; opacity: 0.7;">For developers & integrations</div>
+              <div style="font-weight: 600;">JSON</div>
+              <div style="font-size: 10px; opacity: 0.7;">Developer API</div>
             </div>
           </button>
         </div>
@@ -2587,89 +2616,6 @@
       </div>
     </div>
   </div>
-
-  <!-- Social Media Generator Modal -->
-  <div class="modal" id="social-modal">
-    <div class="modal-content" style="max-width: 500px;">
-      <div class="modal-header">
-        <h2>📸 Generate Social Content</h2>
-        <button class="modal-close" onclick="closeSocialModal()">&times;</button>
-      </div>
-      <div class="modal-body">
-        <p style="color: var(--text-muted); margin-bottom: 20px;">
-          Create social media images for your cards with professional overlays
-        </p>
-
-        <!-- Style Selection -->
-        <h4 style="margin-bottom: 12px;">Choose Style</h4>
-        <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-bottom: 24px;">
-          <div class="social-style-option selected" data-style="default" onclick="selectSocialStyle('default')">
-            <div style="height: 60px; background: linear-gradient(135deg, #1a1a2e, #0f3460); border-radius: 8px; margin-bottom: 8px;"></div>
-            <span>Default (Blue)</span>
-          </div>
-          <div class="social-style-option" data-style="fire" onclick="selectSocialStyle('fire')">
-            <div style="height: 60px; background: linear-gradient(135deg, #1a0a0a, #4a1010); border-radius: 8px; margin-bottom: 8px;"></div>
-            <span>Fire (Red)</span>
-          </div>
-          <div class="social-style-option" data-style="gold" onclick="selectSocialStyle('gold')">
-            <div style="height: 60px; background: linear-gradient(135deg, #1a1500, #3d3000); border-radius: 8px; margin-bottom: 8px;"></div>
-            <span>Gold</span>
-          </div>
-          <div class="social-style-option" data-style="minimal" onclick="selectSocialStyle('minimal')">
-            <div style="height: 60px; background: linear-gradient(135deg, #ffffff, #f0f0f0); border-radius: 8px; margin-bottom: 8px; border: 1px solid #ddd;"></div>
-            <span>Minimal (Light)</span>
-          </div>
-        </div>
-
-        <!-- Preview -->
-        <div id="social-preview" style="text-align: center; margin-bottom: 20px; display: none;">
-          <img id="social-preview-img" style="max-width: 100%; max-height: 300px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.3);">
-          <p style="margin-top: 8px; font-size: 12px; color: var(--text-muted);">Preview</p>
-        </div>
-
-        <!-- Caption -->
-        <div id="social-caption-section" style="display: none; margin-bottom: 20px;">
-          <h4 style="margin-bottom: 8px;">Caption</h4>
-          <textarea id="social-caption" style="width: 100%; height: 120px; padding: 12px; background: var(--bg-deep); border: 1px solid var(--glass-border); border-radius: 8px; color: var(--text); font-size: 13px; resize: none;"></textarea>
-          <button class="btn btn-secondary btn-sm" onclick="copySocialCaption()" style="margin-top: 8px;">Copy Caption</button>
-        </div>
-
-        <!-- Generation status -->
-        <div id="social-status" style="text-align: center; padding: 20px; display: none;">
-          <div style="font-size: 24px; margin-bottom: 8px;">⏳</div>
-          <span id="social-status-text">Generating...</span>
-        </div>
-      </div>
-      <div class="modal-footer">
-        <button class="btn btn-secondary" onclick="closeSocialModal()">Close</button>
-        <button class="btn btn-primary" id="social-generate-btn" onclick="generateSocialContent()">Generate All</button>
-        <button class="btn btn-accent" id="social-download-btn" onclick="downloadSocialImages()" style="display: none;">Download All</button>
-      </div>
-    </div>
-  </div>
-
-  <style>
-    .social-style-option {
-      padding: 12px;
-      background: var(--glass);
-      border: 2px solid var(--glass-border);
-      border-radius: 12px;
-      cursor: pointer;
-      text-align: center;
-      transition: all 0.2s;
-    }
-    .social-style-option:hover {
-      border-color: var(--cyan);
-    }
-    .social-style-option.selected {
-      border-color: var(--cyan);
-      background: rgba(0, 246, 255, 0.1);
-    }
-    .social-style-option span {
-      font-size: 12px;
-      color: var(--text-muted);
-    }
-  </style>
 
   <!-- Link Matrix Modal -->
   <div class="modal" id="link-matrix-modal">
@@ -3484,8 +3430,7 @@
         <div class="batch-status">
           <span class="batch-status-badge identifying">SCANNING</span>
           <div style="display: flex; flex-direction: column; gap: 8px; margin-top: 12px;">
-            <button class="btn btn-secondary btn-sm" onclick="generateSingleSocial('${cardId}')" title="Generate Social Image" style="font-size: 12px;">📸 Social</button>
-            <button class="btn btn-secondary btn-sm" onclick="fetchBatchCardPricing('${cardId}')" title="Get SportsCardPro Pricing" style="font-size: 12px;">💰 Price</button>
+            <button class="btn btn-secondary btn-sm" onclick="fetchBatchCardPricing('${cardId}')" title="Get Pricing" style="font-size: 12px;">💰 Price</button>
             <button class="batch-delete" onclick="deleteBatchCard('${cardId}')" title="Remove">🗑️</button>
           </div>
         </div>
@@ -3681,126 +3626,6 @@
       } catch (e) {
         showToast('Error removing card', 'error');
       }
-    }
-
-    // ========================
-    // SOCIAL CONTENT GENERATION
-    // ========================
-
-    let selectedSocialStyle = 'default';
-    let generatedSocialImages = [];
-
-    function showSocialStylePicker() {
-      if (batchCards.length === 0) {
-        showToast('No cards to generate social images for', 'error');
-        return;
-      }
-      document.getElementById('social-modal').classList.add('open');
-      document.getElementById('social-preview').style.display = 'none';
-      document.getElementById('social-caption-section').style.display = 'none';
-      document.getElementById('social-status').style.display = 'none';
-      document.getElementById('social-generate-btn').style.display = 'inline-block';
-      document.getElementById('social-download-btn').style.display = 'none';
-      generatedSocialImages = [];
-    }
-
-    function closeSocialModal() {
-      document.getElementById('social-modal').classList.remove('open');
-    }
-
-    function selectSocialStyle(style) {
-      selectedSocialStyle = style;
-      document.querySelectorAll('.social-style-option').forEach(el => {
-        el.classList.toggle('selected', el.dataset.style === style);
-      });
-    }
-
-    async function generateSocialContent() {
-      const identifiedCards = batchCards.filter(id => {
-        const data = batchCardData[id]?.data;
-        return data && data.player;
-      });
-
-      if (identifiedCards.length === 0) {
-        showToast('No identified cards to generate images for', 'error');
-        return;
-      }
-
-      document.getElementById('social-status').style.display = 'block';
-      document.getElementById('social-generate-btn').style.display = 'none';
-      document.getElementById('social-status-text').textContent = `Generating ${identifiedCards.length} images...`;
-
-      try {
-        const response = await api('/social/batch-images', {
-          method: 'POST',
-          body: JSON.stringify({
-            cardIds: identifiedCards,
-            style: selectedSocialStyle
-          })
-        });
-
-        if (response && response.images) {
-          generatedSocialImages = response.images;
-          document.getElementById('social-status').style.display = 'none';
-          document.getElementById('social-download-btn').style.display = 'inline-block';
-
-          // Show preview of first image
-          if (generatedSocialImages.length > 0) {
-            const first = generatedSocialImages[0];
-            if (first.url) {
-              document.getElementById('social-preview-img').src = first.url;
-            } else if (first.base64) {
-              document.getElementById('social-preview-img').src = `data:image/png;base64,${first.base64}`;
-            }
-            document.getElementById('social-preview').style.display = 'block';
-          }
-
-          showToast(`Generated ${generatedSocialImages.length} social images`, 'success');
-        }
-      } catch (e) {
-        document.getElementById('social-status').style.display = 'none';
-        document.getElementById('social-generate-btn').style.display = 'inline-block';
-        showToast('Error generating images', 'error');
-      }
-    }
-
-    async function generateSingleSocial(cardId) {
-      try {
-        // Open image in new tab
-        const url = `${API_URL}/cards/${cardId}/social-image?style=${selectedSocialStyle}`;
-        window.open(url, '_blank');
-
-        // Also fetch caption
-        const captionRes = await api(`/cards/${cardId}/social-caption?style=hype`);
-        if (captionRes && captionRes.caption) {
-          // Copy to clipboard
-          await navigator.clipboard.writeText(captionRes.caption);
-          showToast('Caption copied to clipboard', 'success');
-        }
-      } catch (e) {
-        showToast('Error generating social content', 'error');
-      }
-    }
-
-    async function downloadSocialImages() {
-      for (const img of generatedSocialImages) {
-        if (img.url) {
-          // Open in new tab for download
-          window.open(img.url, '_blank');
-        } else if (img.base64) {
-          // Create download link
-          const link = document.createElement('a');
-          link.href = `data:image/png;base64,${img.base64}`;
-          link.download = `${img.player || 'card'}-social.png`;
-          link.click();
-        }
-      }
-    }
-
-    function copySocialCaption() {
-      const caption = document.getElementById('social-caption').value;
-      navigator.clipboard.writeText(caption);
-      showToast('Caption copied', 'success');
     }
 
     // Check authentication
@@ -4158,7 +3983,6 @@
             <div class="card-actions">
               <button class="btn btn-secondary btn-sm" onclick="priceCheckCard('${card.id}')" title="Quick Price Check">🔍</button>
               <button class="btn btn-secondary btn-sm" onclick="setCardPrice('${card.id}')" title="Set Price">💲</button>
-              <button class="btn btn-secondary btn-sm" onclick="generateSingleSocial('${card.id}')" title="Generate Social Image">📸</button>
               <button class="btn btn-secondary" onclick="editCard('${card.id}')">Edit</button>
               ${card.status === 'listed' ? `
                 <button class="btn btn-accent" onclick="window.open(cards.find(c=>c.id==='${card.id}')?.ebay_listing_url || 'https://ebay.com', '_blank')">View on eBay</button>
@@ -5814,8 +5638,10 @@
       }
 
       const formatNames = {
+        slabtrack: 'SlabTrack',
         whatnot: 'Whatnot CSV',
-        slabtrack: 'SlabTrack CSV',
+        cardladder: 'CardLadder CSV',
+        sportscardspro: 'SportsCardsPro CSV',
         csv: 'CSV',
         json: 'JSON'
       };
