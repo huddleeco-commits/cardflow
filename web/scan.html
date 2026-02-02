@@ -724,24 +724,40 @@
 
       recognition.onerror = (event) => {
         console.log('Voice error:', event.error);
-        if (event.error === 'no-speech' || event.error === 'aborted') {
-          // Restart if still enabled
-          if (voiceEnabled) {
-            setTimeout(() => {
-              if (voiceEnabled) recognition.start();
-            }, 100);
-          }
-        }
-      };
-
-      recognition.onend = () => {
-        // Restart if still enabled (recognition stops after periods of silence)
-        if (voiceEnabled) {
+        // Restart on any error if still enabled
+        if (voiceEnabled && event.error !== 'not-allowed') {
           setTimeout(() => {
             if (voiceEnabled) {
               try { recognition.start(); } catch(e) {}
             }
-          }, 100);
+          }, 300);
+        }
+        if (event.error === 'not-allowed') {
+          alert('Microphone access denied. Please allow microphone access and try again.');
+          voiceEnabled = false;
+          document.getElementById('voice-btn').classList.remove('active');
+        }
+      };
+
+      recognition.onstart = () => {
+        console.log('Voice recognition started');
+        document.getElementById('voice-btn').textContent = '🔴';
+      };
+
+      recognition.onend = () => {
+        console.log('Voice recognition ended');
+        // Restart if still enabled (recognition stops after periods of silence)
+        if (voiceEnabled) {
+          document.getElementById('voice-btn').textContent = '🎤';
+          setTimeout(() => {
+            if (voiceEnabled) {
+              try {
+                recognition.start();
+              } catch(e) {
+                console.log('Restart failed:', e);
+              }
+            }
+          }, 300);
         }
       };
 
@@ -757,12 +773,19 @@
 
       if (voiceEnabled) {
         btn.classList.add('active');
+        btn.textContent = '🔴';
+        indicator.textContent = 'Listening...';
         indicator.classList.add('show');
         setTimeout(() => indicator.classList.remove('show'), 1500);
-        recognition.start();
+        try {
+          recognition.start();
+        } catch(e) {
+          console.log('Start error:', e);
+        }
         playSound('front'); // Feedback beep
       } else {
         btn.classList.remove('active');
+        btn.textContent = '🎤';
         indicator.classList.remove('show');
         recognition.stop();
       }
@@ -773,7 +796,7 @@
       const indicator = document.getElementById('voice-indicator');
 
       // Capture commands
-      const captureWords = ['capture', 'next', 'snap', 'go', 'take', 'shoot', 'got it', 'got', 'front', 'back', 'yes', 'yep', 'okay'];
+      const captureWords = ['capture', 'next', 'snap', 'go', 'take', 'shoot', 'got it', 'got', 'front', 'back', 'yes', 'yep', 'okay', 'cap'];
       // Done commands (for bulk mode)
       const doneWords = ['done', 'finished', 'flip', 'switch', 'backs now', 'do backs'];
 
@@ -790,6 +813,11 @@
         indicator.classList.add('show');
         setTimeout(() => indicator.classList.remove('show'), 1000);
         finishFronts();
+      } else {
+        // Show what was heard for debugging
+        indicator.textContent = `Heard: "${command}"`;
+        indicator.classList.add('show');
+        setTimeout(() => indicator.classList.remove('show'), 1200);
       }
     }
   </script>
