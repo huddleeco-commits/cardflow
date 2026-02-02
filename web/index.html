@@ -1559,6 +1559,7 @@
         <button class="btn btn-secondary" onclick="bulkSetStatus()">📋 Set Status</button>
         <button class="btn btn-accent" onclick="bulkListSelected()">📦 List Selected</button>
         <button class="btn btn-success" onclick="bulkMarkSold()">💰 Mark Sold</button>
+        <button class="btn btn-secondary" onclick="showLinkMatrix()">🔗 Link Matrix</button>
         <button class="btn btn-primary" onclick="exportSelected('csv')">📄 Export CSV</button>
         <button class="btn btn-primary" onclick="exportSelected('excel')">📊 Export Excel</button>
         <button class="btn btn-danger" onclick="bulkDeleteSelected()">🗑️ Delete</button>
@@ -1593,6 +1594,7 @@
         <span class="batch-count" id="batch-count">0 cards scanned</span>
       </div>
       <div class="batch-header-right">
+        <button class="btn btn-secondary" onclick="showLinkMatrix()" title="Price Check Links">🔗 Link Matrix</button>
         <button class="btn btn-secondary" onclick="showSocialStylePicker()" title="Generate Social Images">📸 Social</button>
         <button class="btn btn-secondary" onclick="showExportModal('batch')" title="Export Cards">📤 Export</button>
         <button class="btn btn-accent" onclick="saveToCollection()">Save to Collection</button>
@@ -2603,6 +2605,150 @@
     .social-style-option span {
       font-size: 12px;
       color: var(--text-muted);
+    }
+  </style>
+
+  <!-- Link Matrix Modal -->
+  <div class="modal" id="link-matrix-modal">
+    <div class="modal-content" style="max-width: 1000px; max-height: 90vh;">
+      <div class="modal-header">
+        <h2>🔗 Link Matrix</h2>
+        <button class="modal-close" onclick="closeLinkMatrix()">&times;</button>
+      </div>
+      <div class="modal-body" style="padding: 0; overflow: auto; max-height: calc(90vh - 120px);">
+        <div class="link-matrix-header">
+          <div class="link-matrix-legend">
+            <span class="legend-item"><span class="legend-dot ebay-sold"></span> eBay Sold</span>
+            <span class="legend-item"><span class="legend-dot ebay-bin"></span> eBay BIN</span>
+            <span class="legend-item"><span class="legend-dot comc"></span> COMC</span>
+            <span class="legend-item"><span class="legend-dot psa"></span> PSA Cert</span>
+            <span class="legend-item"><span class="legend-dot p130"></span> 130point</span>
+            <span class="legend-item"><span class="legend-dot google"></span> Google</span>
+          </div>
+          <div class="link-matrix-actions">
+            <button class="btn btn-sm" style="background: #f59e0b; color: white;" onclick="openAllLinks('ebay-sold')">Open All eBay Sold</button>
+            <button class="btn btn-sm" style="background: #3b82f6; color: white;" onclick="openAllLinks('ebay-bin')">Open All BIN</button>
+            <button class="btn btn-sm" style="background: #8b5cf6; color: white;" onclick="openAllLinks('p130')">Open All 130point</button>
+          </div>
+        </div>
+        <div class="link-matrix-grid" id="link-matrix-grid">
+          <!-- Cards will be rendered here -->
+        </div>
+      </div>
+      <div class="modal-footer">
+        <span id="link-matrix-count" style="color: var(--text-muted);">0 cards</span>
+        <button class="btn btn-secondary" onclick="closeLinkMatrix()">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <style>
+    .link-matrix-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 16px 20px;
+      background: var(--bg-card);
+      border-bottom: 1px solid var(--glass-border);
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+    .link-matrix-legend {
+      display: flex;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 11px;
+      color: var(--text-muted);
+    }
+    .legend-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+    }
+    .legend-dot.ebay-sold { background: #f59e0b; }
+    .legend-dot.ebay-bin { background: #3b82f6; }
+    .legend-dot.comc { background: #10b981; }
+    .legend-dot.psa { background: #ef4444; }
+    .legend-dot.p130 { background: #8b5cf6; }
+    .legend-dot.google { background: #6b7280; }
+
+    .link-matrix-grid {
+      display: flex;
+      flex-direction: column;
+    }
+    .link-matrix-row {
+      display: grid;
+      grid-template-columns: 60px 1fr auto;
+      gap: 16px;
+      padding: 12px 20px;
+      border-bottom: 1px solid var(--glass-border);
+      align-items: center;
+      transition: background 0.2s;
+    }
+    .link-matrix-row:hover {
+      background: rgba(0, 246, 255, 0.03);
+    }
+    .link-matrix-img {
+      width: 50px;
+      height: 70px;
+      object-fit: cover;
+      border-radius: 6px;
+      border: 1px solid var(--glass-border);
+    }
+    .link-matrix-info {
+      min-width: 0;
+    }
+    .link-matrix-player {
+      font-weight: 600;
+      font-size: 14px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .link-matrix-details {
+      font-size: 12px;
+      color: var(--text-muted);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .link-matrix-links {
+      display: flex;
+      gap: 8px;
+    }
+    .link-btn {
+      width: 36px;
+      height: 36px;
+      border-radius: 8px;
+      border: none;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+      transition: all 0.2s;
+      text-decoration: none;
+    }
+    .link-btn:hover {
+      transform: scale(1.1);
+      filter: brightness(1.2);
+    }
+    .link-btn.ebay-sold { background: #f59e0b; color: white; }
+    .link-btn.ebay-bin { background: #3b82f6; color: white; }
+    .link-btn.comc { background: #10b981; color: white; }
+    .link-btn.psa { background: #ef4444; color: white; }
+    .link-btn.p130 { background: #8b5cf6; color: white; }
+    .link-btn.google { background: #6b7280; color: white; }
+    .link-btn.disabled {
+      opacity: 0.3;
+      cursor: not-allowed;
+      pointer-events: none;
     }
   </style>
 
@@ -5477,6 +5623,176 @@
     async function exportAll(format) {
       exportCardIds = cards.map(c => c.id);
       await exportTo(format);
+    }
+
+    // ==========================================
+    // LINK MATRIX FUNCTIONS
+    // ==========================================
+
+    function showLinkMatrix(source = 'auto') {
+      let cardIds;
+
+      // Determine source automatically if not specified
+      if (source === 'auto') {
+        source = document.getElementById('batch-view').style.display !== 'none' ? 'batch' : 'collection';
+      }
+
+      // Get card IDs based on source
+      if (source === 'batch') {
+        // batchCards is an array of card IDs
+        cardIds = batchCards.filter(id => {
+          const card = cards.find(c => c.id === id);
+          return card && card.card_data;
+        });
+      } else if (selectedCards.size > 0) {
+        cardIds = Array.from(selectedCards);
+      } else {
+        cardIds = cards.map(c => c.id);
+      }
+
+      if (cardIds.length === 0) {
+        showToast('No identified cards to show in Link Matrix', 'error');
+        return;
+      }
+
+      renderLinkMatrixGrid(cardIds);
+      document.getElementById('link-matrix-modal').classList.add('open');
+    }
+
+    function closeLinkMatrix() {
+      document.getElementById('link-matrix-modal').classList.remove('open');
+    }
+
+    function renderLinkMatrixGrid(cardIds) {
+      const grid = document.getElementById('link-matrix-grid');
+      const count = document.getElementById('link-matrix-count');
+
+      const selectedCardsData = cards.filter(c => cardIds.includes(c.id));
+      count.textContent = `${selectedCardsData.length} cards`;
+
+      grid.innerHTML = selectedCardsData.map(card => {
+        const data = card.card_data || {};
+        const player = data.player || data.subject || 'Unknown';
+        const year = data.year || '';
+        const setName = data.set_name || data.set || '';
+        const cardNumber = data.card_number || '';
+        const parallel = data.parallel || '';
+        const graded = data.graded || data.is_graded;
+        const grade = data.grade || '';
+        const company = data.grading_company || '';
+        const certNumber = data.cert_number || data.certification_number || '';
+
+        // Build search query
+        const query = buildSearchQuery(data);
+        const encodedQuery = encodeURIComponent(query);
+
+        // Generate links
+        const links = {
+          ebaySold: `https://www.ebay.com/sch/i.html?_nkw=${encodedQuery}&LH_Complete=1&LH_Sold=1&_sop=13`,
+          ebayBin: `https://www.ebay.com/sch/i.html?_nkw=${encodedQuery}&LH_BIN=1&_sop=15`,
+          comc: `https://www.comc.com/Cards?search=${encodedQuery}`,
+          psa: certNumber ? `https://www.psacard.com/cert/${certNumber}` : null,
+          p130: `https://130point.com/sales/?search=${encodedQuery}`,
+          google: `https://www.google.com/search?q=${encodedQuery}+card+price`
+        };
+
+        const imgSrc = card.front_image_path ?
+          (card.front_image_path.startsWith('http') ? card.front_image_path : `${API_URL.replace('/api', '')}${card.front_image_path}`) :
+          '';
+
+        const details = [year, setName, cardNumber ? `#${cardNumber}` : '', parallel].filter(Boolean).join(' ');
+        const gradeInfo = graded && company && grade ? ` | ${company} ${grade}` : '';
+
+        return `
+          <div class="link-matrix-row" data-card-id="${card.id}">
+            <img class="link-matrix-img" src="${imgSrc}" alt="${player}" onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 140%22><rect fill=%22%23333%22 width=%22100%22 height=%22140%22/><text x=%2250%22 y=%2270%22 fill=%22%23666%22 text-anchor=%22middle%22>No Image</text></svg>'">
+            <div class="link-matrix-info">
+              <div class="link-matrix-player">${player}</div>
+              <div class="link-matrix-details">${details}${gradeInfo}</div>
+            </div>
+            <div class="link-matrix-links">
+              <a href="${links.ebaySold}" target="_blank" class="link-btn ebay-sold" title="eBay Sold">$</a>
+              <a href="${links.ebayBin}" target="_blank" class="link-btn ebay-bin" title="eBay BIN">B</a>
+              <a href="${links.comc}" target="_blank" class="link-btn comc" title="COMC">C</a>
+              <a href="${links.psa || '#'}" target="_blank" class="link-btn psa ${!links.psa ? 'disabled' : ''}" title="PSA Cert">P</a>
+              <a href="${links.p130}" target="_blank" class="link-btn p130" title="130point">1</a>
+              <a href="${links.google}" target="_blank" class="link-btn google" title="Google">G</a>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function buildSearchQuery(data) {
+      const parts = [];
+
+      // Add year
+      if (data.year) parts.push(data.year);
+
+      // Add set name
+      if (data.set_name || data.set) parts.push(data.set_name || data.set);
+
+      // Add player/subject
+      if (data.player || data.subject) parts.push(data.player || data.subject);
+
+      // Add card number
+      if (data.card_number) parts.push(`#${data.card_number}`);
+
+      // Add parallel/variant
+      if (data.parallel) parts.push(data.parallel);
+
+      // Add grading info if graded
+      if (data.graded || data.is_graded) {
+        if (data.grading_company) parts.push(data.grading_company);
+        if (data.grade) parts.push(data.grade);
+      }
+
+      return parts.join(' ');
+    }
+
+    function openAllLinks(marketplace) {
+      const cardIds = selectedCards.size > 0 ? Array.from(selectedCards) : cards.map(c => c.id);
+      const selectedCardsData = cards.filter(c => cardIds.includes(c.id));
+
+      // Limit to prevent browser from blocking too many popups
+      const maxTabs = 10;
+      const cardsToOpen = selectedCardsData.slice(0, maxTabs);
+
+      if (selectedCardsData.length > maxTabs) {
+        showToast(`Opening first ${maxTabs} cards (browser limits)`, 'info');
+      }
+
+      cardsToOpen.forEach((card, index) => {
+        const data = card.card_data || {};
+        const query = buildSearchQuery(data);
+        const encodedQuery = encodeURIComponent(query);
+
+        let url;
+        switch(marketplace) {
+          case 'ebay-sold':
+            url = `https://www.ebay.com/sch/i.html?_nkw=${encodedQuery}&LH_Complete=1&LH_Sold=1&_sop=13`;
+            break;
+          case 'ebay-bin':
+            url = `https://www.ebay.com/sch/i.html?_nkw=${encodedQuery}&LH_BIN=1&_sop=15`;
+            break;
+          case 'comc':
+            url = `https://www.comc.com/Cards?search=${encodedQuery}`;
+            break;
+          case 'p130':
+            url = `https://130point.com/sales/?search=${encodedQuery}`;
+            break;
+          case 'google':
+            url = `https://www.google.com/search?q=${encodedQuery}+card+price`;
+            break;
+          default:
+            return;
+        }
+
+        // Stagger opening to avoid popup blockers
+        setTimeout(() => {
+          window.open(url, '_blank');
+        }, index * 200);
+      });
     }
 
     // ==========================================
