@@ -1599,10 +1599,15 @@
       </div>
     </div>
     <div class="batch-grid" id="batch-grid">
-      <div class="batch-empty">
-        <div style="font-size: 48px; margin-bottom: 16px;">📱</div>
-        <h3>Waiting for scans...</h3>
-        <p style="color: var(--text-muted);">Scan cards from your phone - they'll appear here as they're identified</p>
+      <div class="batch-empty" id="batch-empty">
+        <div class="qr-container">
+          <img id="scan-qr" class="scan-qr" alt="Scan QR code" />
+          <div class="qr-label">Scan with phone to start</div>
+        </div>
+        <div class="batch-empty-text">
+          <h3>Waiting for scans...</h3>
+          <p style="color: var(--text-muted);">Scan the QR code or go to <span id="scan-url" class="scan-url"></span></p>
+        </div>
       </div>
     </div>
   </section>
@@ -1647,8 +1652,34 @@
     }
     .batch-empty {
       text-align: center;
-      padding: 60px 20px;
+      padding: 40px 20px;
       color: var(--text-muted);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 24px;
+    }
+    .qr-container {
+      background: white;
+      padding: 16px;
+      border-radius: 12px;
+      display: inline-block;
+    }
+    .scan-qr {
+      width: 180px;
+      height: 180px;
+      display: block;
+    }
+    .qr-label {
+      margin-top: 8px;
+      font-size: 12px;
+      color: #333;
+      font-weight: 600;
+    }
+    .scan-url {
+      color: var(--cyan);
+      font-family: monospace;
+      user-select: all;
     }
     /* Batch Card - Horizontal Layout */
     .batch-card {
@@ -3062,11 +3093,21 @@
       document.getElementById('batch-view').style.display = 'block';
       document.getElementById('cards-grid').style.display = 'none';
       document.getElementById('batch-count').textContent = '0 cards scanned';
+
+      // Generate QR code URL for scan page
+      const scanUrl = `${window.location.origin}/scan.html`;
+      const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(scanUrl)}`;
+
       document.getElementById('batch-grid').innerHTML = `
-        <div class="batch-empty">
-          <div style="font-size: 48px; margin-bottom: 16px;">📱</div>
-          <h3>Waiting for scans...</h3>
-          <p style="color: var(--text-muted);">Scan cards from your phone - they'll appear here as they're identified</p>
+        <div class="batch-empty" id="batch-empty">
+          <div class="qr-container">
+            <img src="${qrUrl}" class="scan-qr" alt="Scan QR code" />
+            <div class="qr-label">Scan with phone to start</div>
+          </div>
+          <div class="batch-empty-text">
+            <h3>Waiting for scans...</h3>
+            <p style="color: var(--text-muted);">Scan the QR code or go to <span class="scan-url">${scanUrl}</span></p>
+          </div>
         </div>
       `;
       showToast('Batch mode started - scan cards from your phone', 'success');
