@@ -954,6 +954,181 @@ app.get('/api/admin/analytics', authenticateToken, requireAdmin, async (req, res
   }
 });
 
+// Admin: Get detailed scan history with filtering
+app.get('/api/admin/scan-history', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const { userId, source, startDate, endDate, limit = 50, offset = 0 } = req.query;
+
+    let query = `
+      SELECT
+        a.id,
+        a.user_id,
+        u.email,
+        u.name as full_name,
+        a.operation,
+        a.model_used,
+        a.tokens_input,
+        a.tokens_output,
+        a.cost,
+        a.card_id,
+        a.metadata,
+        a.timestamp
+      FROM api_usage a
+      LEFT JOIN users u ON a.user_id = u.id
+      WHERE a.operation = 'identify'
+    `;
+
+    const params = [];
+    let paramIndex = 1;
+
+    if (userId) {
+      query += ` AND a.user_id = $${paramIndex++}`;
+      params.push(userId);
+    }
+
+    if (source) {
+      query += ` AND a.metadata->>'scan_source' = $${paramIndex++}`;
+      params.push(source);
+    }
+
+    if (startDate) {
+      query += ` AND DATE(a.timestamp) >= $${paramIndex++}`;
+      params.push(startDate);
+    }
+
+    if (endDate) {
+      query += ` AND DATE(a.timestamp) <= $${paramIndex++}`;
+      params.push(endDate);
+    }
+
+    query += ` ORDER BY a.timestamp DESC LIMIT $${paramIndex++} OFFSET $${paramIndex++}`;
+    params.push(parseInt(limit), parseInt(offset));
+
+    const scans = await pool.query(query, params);
+
+    // Calculate summary stats
+    const summaryQuery = await pool.query(`
+      SELECT
+        COUNT(*) as total_scans,
+        COALESCE(SUM(cost), 0) as total_cost,
+        COALESCE(SUM(tokens_input + tokens_output), 0) as total_tokens,
+        COUNT(CASE WHEN metadata->>'scan_source' = 'batch' THEN 1 END) as batch_scans,
+        COUNT(CASE WHEN metadata->>'scan_source' = 'platform' THEN 1 END) as platform_scans,
+        COUNT(CASE WHEN (metadata->>'image_count')::int = 1 THEN 1 END) as single_image_scans,
+        COUNT(CASE WHEN (metadata->>'image_count')::int = 2 THEN 1 END) as double_image_scans
+      FROM api_usage
+      WHERE operation = 'identify'
+      AND timestamp > NOW() - INTERVAL '30 days'
+    `);
+
+    const summary = summaryQuery.rows[0] || {};
+
+    res.json({
+      success: true,
+      scans: scans.rows.map(scan => ({
+        ...scan,
+        metadata: typeof scan.metadata === 'string' ? JSON.parse(scan.metadata) : scan.metadata
+      })),
+      summary: {
+        totalScans: parseInt(summary.total_scans || 0),
+        totalCost: parseFloat(summary.total_cost || 0),
+        totalTokens: parseInt(summary.total_tokens || 0),
+        batchScans: parseInt(summary.batch_scans || 0),
+        platformScans: parseInt(summary.platform_scans || 0),
+        singleImageScans: parseInt(summary.single_image_scans || 0),
+        doubleImageScans: parseInt(summary.double_image_scans || 0),
+        avgCostPerScan: parseInt(summary.total_scans) > 0
+          ? (parseFloat(summary.total_cost) / parseInt(summary.total_scans)).toFixed(6)
+          : '0'
+      }
+    });
+
+  } catch (e) {
+    console.error('Scan history error:', e);
+    res.status(500).json({ error: 'Failed to get scan history' });
+  }
+});
+
+// Admin: Get scan stats overview
+app.get('/api/admin/scan-stats', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    // Today's scans
+    const todayScans = await pool.query(`
+      SELECT
+        COUNT(*) as count,
+        COALESCE(SUM(cost), 0) as cost,
+        COALESCE(SUM(tokens_input + tokens_output), 0) as tokens
+      FROM api_usage
+      WHERE operation = 'identify'
+      AND timestamp > NOW() - INTERVAL '24 hours'
+    `);
+
+    // This month's scans
+    const monthScans = await pool.query(`
+      SELECT
+        COUNT(*) as count,
+        COALESCE(SUM(cost), 0) as cost,
+        COALESCE(SUM(tokens_input + tokens_output), 0) as tokens
+      FROM api_usage
+      WHERE operation = 'identify'
+      AND timestamp > DATE_TRUNC('month', NOW())
+    `);
+
+    // Cost trend last 7 days
+    const costTrend = await pool.query(`
+      SELECT
+        DATE(timestamp) as date,
+        COUNT(*) as scans,
+        COALESCE(SUM(cost), 0) as cost,
+        COALESCE(SUM(tokens_input + tokens_output), 0) as tokens
+      FROM api_usage
+      WHERE operation = 'identify'
+      AND timestamp > NOW() - INTERVAL '7 days'
+      GROUP BY DATE(timestamp)
+      ORDER BY date DESC
+    `);
+
+    // Recent scans (last 10)
+    const recentScans = await pool.query(`
+      SELECT
+        a.id,
+        u.email,
+        u.name,
+        a.cost,
+        a.tokens_input + a.tokens_output as tokens,
+        a.metadata,
+        a.timestamp
+      FROM api_usage a
+      LEFT JOIN users u ON a.user_id = u.id
+      WHERE a.operation = 'identify'
+      ORDER BY a.timestamp DESC
+      LIMIT 10
+    `);
+
+    res.json({
+      today: {
+        scans: parseInt(todayScans.rows[0]?.count || 0),
+        cost: parseFloat(todayScans.rows[0]?.cost || 0),
+        tokens: parseInt(todayScans.rows[0]?.tokens || 0)
+      },
+      month: {
+        scans: parseInt(monthScans.rows[0]?.count || 0),
+        cost: parseFloat(monthScans.rows[0]?.cost || 0),
+        tokens: parseInt(monthScans.rows[0]?.tokens || 0)
+      },
+      costTrend: costTrend.rows,
+      recentScans: recentScans.rows.map(scan => ({
+        ...scan,
+        metadata: typeof scan.metadata === 'string' ? JSON.parse(scan.metadata) : scan.metadata
+      }))
+    });
+
+  } catch (e) {
+    console.error('Scan stats error:', e);
+    res.status(500).json({ error: 'Failed to get scan stats' });
+  }
+});
+
 // ============================================
 // FILE UPLOAD ENDPOINT
 // ============================================
@@ -1325,11 +1500,18 @@ Return ONLY a JSON object with these fields (no other text):
       WHERE id = $2
     `, [JSON.stringify(cardData), cardId]);
 
-    // Log usage
+    // Log usage with full metadata for admin tracking
+    const metadata = {
+      front_image: card.front_image_path,
+      back_image: card.back_image_path,
+      card_data: cardData,
+      scan_source: 'batch',
+      image_count: card.back_image_path ? 2 : 1
+    };
     await pool.query(`
-      INSERT INTO api_usage (user_id, operation, model_used, tokens_input, tokens_output, cost, card_id)
-      VALUES ($1, 'identify', 'sonnet4', $2, $3, $4, $5)
-    `, [userId, inputTokens, outputTokens, cost, cardId]);
+      INSERT INTO api_usage (user_id, operation, model_used, tokens_input, tokens_output, cost, card_id, metadata)
+      VALUES ($1, 'identify', 'sonnet4', $2, $3, $4, $5, $6)
+    `, [userId, inputTokens, outputTokens, cost, cardId, JSON.stringify(metadata)]);
 
     console.log(`[Batch] Card ${cardId} identified: ${cardData.player}`);
 
@@ -1490,11 +1672,18 @@ Return ONLY a JSON object with these fields (no other text):
             WHERE id = $2
           `, [JSON.stringify(cardData), card.id]);
 
-          // Track API usage
+          // Track API usage with full metadata
+          const usageMetadata = {
+            front_image: card.front_image_path,
+            back_image: card.back_image_path,
+            card_data: cardData,
+            scan_source: 'platform',
+            image_count: card.back_image_path ? 2 : 1
+          };
           await pool.query(`
-            INSERT INTO api_usage (user_id, operation, model_used, tokens_input, tokens_output, cost)
-            VALUES ($1, 'identify', 'sonnet4', $2, $3, $4)
-          `, [userId, inputTokens, outputTokens, cost]);
+            INSERT INTO api_usage (user_id, operation, model_used, tokens_input, tokens_output, cost, card_id, metadata)
+            VALUES ($1, 'identify', 'sonnet4', $2, $3, $4, $5, $6)
+          `, [userId, inputTokens, outputTokens, cost, card.id, JSON.stringify(usageMetadata)]);
 
           // Move local images to identified folder (skip for Cloudinary URLs)
           const isCloudinaryFront = card.front_image_path.startsWith('http');

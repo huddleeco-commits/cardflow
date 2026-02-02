@@ -378,6 +378,110 @@
     }
 
     /* Chart placeholder */
+    /* Scan History Styles */
+    .scan-stats-row {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+    .scan-stat-box {
+      background: var(--glass);
+      border: 1px solid var(--glass-border);
+      border-radius: 12px;
+      padding: 16px;
+      text-align: center;
+    }
+    .scan-stat-value {
+      font-size: 28px;
+      font-weight: 700;
+      font-family: monospace;
+    }
+    .scan-stat-value.cost { color: #ff4466; }
+    .scan-stat-value.scans { color: var(--cyan); }
+    .scan-stat-value.tokens { color: var(--purple); }
+    .scan-stat-label {
+      font-size: 11px;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      margin-top: 4px;
+    }
+    .scans-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+    .scans-table th {
+      padding: 12px;
+      text-align: left;
+      font-size: 11px;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      border-bottom: 1px solid var(--glass-border);
+    }
+    .scans-table td {
+      padding: 12px;
+      border-bottom: 1px solid var(--glass-border);
+    }
+    .scans-table tr:hover {
+      background: rgba(0, 246, 255, 0.03);
+      cursor: pointer;
+    }
+    .source-badge {
+      padding: 4px 8px;
+      border-radius: 8px;
+      font-size: 10px;
+      font-weight: 600;
+      text-transform: uppercase;
+    }
+    .source-batch { background: rgba(0, 246, 255, 0.15); color: var(--cyan); }
+    .source-platform { background: rgba(0, 255, 136, 0.15); color: var(--success); }
+    .scan-expanded {
+      background: rgba(0, 0, 0, 0.3);
+      padding: 20px;
+    }
+    .scan-images {
+      display: flex;
+      gap: 16px;
+      margin-bottom: 16px;
+    }
+    .scan-image-box {
+      flex: 1;
+    }
+    .scan-image-box img {
+      width: 100%;
+      max-height: 300px;
+      object-fit: contain;
+      background: rgba(0, 0, 0, 0.5);
+      border-radius: 8px;
+      border: 1px solid var(--glass-border);
+    }
+    .scan-image-label {
+      font-size: 11px;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      margin-bottom: 8px;
+    }
+    .scan-card-data {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+      gap: 12px;
+    }
+    .scan-data-item {
+      background: var(--glass);
+      padding: 10px;
+      border-radius: 8px;
+    }
+    .scan-data-label {
+      font-size: 10px;
+      color: var(--text-muted);
+      text-transform: uppercase;
+    }
+    .scan-data-value {
+      font-weight: 600;
+      color: var(--text);
+    }
+
     .chart-container {
       height: 200px;
       background: rgba(0, 0, 0, 0.2);
@@ -540,17 +644,22 @@
       `;
     }
 
+    let expandedScanId = null;
+
     async function loadDashboard() {
       try {
-        const [analytics, usersData] = await Promise.all([
+        const [analytics, usersData, scanHistory] = await Promise.all([
           api('/admin/analytics'),
-          api('/admin/users')
+          api('/admin/users'),
+          api('/admin/scan-history?limit=50')
         ]);
 
         if (!analytics || !usersData) return;
 
         const { overview, dailyStats, topUsers } = analytics;
         const { users } = usersData;
+        const scans = scanHistory?.scans || [];
+        const scanSummary = scanHistory?.summary || {};
 
         // Render dashboard
         document.getElementById('main-content').innerHTML = `
@@ -676,6 +785,160 @@
               </div>
             </div>
           </div>
+
+          <!-- SCAN TRACKING PANEL -->
+          <div class="panel" style="margin-top: 24px;">
+            <div class="panel-header">
+              <div class="panel-title">🔍 Scan Tracking (All Users)</div>
+              <span style="color: var(--text-muted); font-size: 13px;">
+                Last 30 days
+              </span>
+            </div>
+            <div class="panel-body">
+              <!-- Scan Stats -->
+              <div class="scan-stats-row">
+                <div class="scan-stat-box">
+                  <div class="scan-stat-value scans">${scanSummary.totalScans || 0}</div>
+                  <div class="scan-stat-label">Total Scans</div>
+                </div>
+                <div class="scan-stat-box">
+                  <div class="scan-stat-value cost">$${(scanSummary.totalCost || 0).toFixed(4)}</div>
+                  <div class="scan-stat-label">Total Cost</div>
+                </div>
+                <div class="scan-stat-box">
+                  <div class="scan-stat-value tokens">${(scanSummary.totalTokens || 0).toLocaleString()}</div>
+                  <div class="scan-stat-label">Total Tokens</div>
+                </div>
+                <div class="scan-stat-box">
+                  <div class="scan-stat-value" style="color: var(--warning);">$${scanSummary.avgCostPerScan || '0'}</div>
+                  <div class="scan-stat-label">Avg Cost/Scan</div>
+                </div>
+              </div>
+
+              <!-- Scan Breakdown -->
+              <div style="display: flex; gap: 24px; margin-bottom: 20px; font-size: 13px;">
+                <div>
+                  <span style="color: var(--text-muted);">Batch:</span>
+                  <span style="color: var(--cyan); font-weight: 600;">${scanSummary.batchScans || 0}</span>
+                </div>
+                <div>
+                  <span style="color: var(--text-muted);">Platform:</span>
+                  <span style="color: var(--success); font-weight: 600;">${scanSummary.platformScans || 0}</span>
+                </div>
+                <div>
+                  <span style="color: var(--text-muted);">Single Image:</span>
+                  <span style="color: var(--purple); font-weight: 600;">${scanSummary.singleImageScans || 0}</span>
+                </div>
+                <div>
+                  <span style="color: var(--text-muted);">Front+Back:</span>
+                  <span style="color: var(--pink); font-weight: 600;">${scanSummary.doubleImageScans || 0}</span>
+                </div>
+              </div>
+
+              <!-- Scans Table -->
+              <div style="overflow-x: auto;">
+                <table class="scans-table" id="scans-table">
+                  <thead>
+                    <tr>
+                      <th>Time</th>
+                      <th>User</th>
+                      <th>Source</th>
+                      <th>Images</th>
+                      <th>Cost</th>
+                      <th>Tokens</th>
+                      <th>Card</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    ${scans.length === 0 ? `
+                      <tr><td colspan="7" style="text-align: center; color: var(--text-muted); padding: 40px;">
+                        No scans recorded yet. Scans will appear here with images and costs.
+                      </td></tr>
+                    ` : scans.map(scan => `
+                      <tr onclick="toggleScanExpand('${scan.id}')">
+                        <td style="font-family: monospace; font-size: 12px;">
+                          ${new Date(scan.timestamp).toLocaleString()}
+                        </td>
+                        <td>
+                          <div style="font-weight: 500;">${scan.full_name || 'Unknown'}</div>
+                          <div style="font-size: 11px; color: var(--text-muted);">${scan.email || ''}</div>
+                        </td>
+                        <td>
+                          <span class="source-badge source-${scan.metadata?.scan_source || 'platform'}">
+                            ${scan.metadata?.scan_source || 'platform'}
+                          </span>
+                        </td>
+                        <td style="text-align: center; font-weight: 600; color: var(--purple);">
+                          ${scan.metadata?.image_count || 1}
+                        </td>
+                        <td style="font-family: monospace; color: #ff4466; font-weight: 600;">
+                          $${parseFloat(scan.cost || 0).toFixed(6)}
+                        </td>
+                        <td style="font-family: monospace; color: var(--cyan);">
+                          ${((scan.tokens_input || 0) + (scan.tokens_output || 0)).toLocaleString()}
+                        </td>
+                        <td style="max-width: 200px; overflow: hidden; text-overflow: ellipsis;">
+                          ${scan.metadata?.card_data?.player || '-'}
+                        </td>
+                      </tr>
+                      <tr id="scan-expand-${scan.id}" style="display: none;">
+                        <td colspan="7" class="scan-expanded">
+                          <div class="scan-images">
+                            ${scan.metadata?.front_image ? `
+                              <div class="scan-image-box">
+                                <div class="scan-image-label">Front</div>
+                                <img src="${scan.metadata.front_image}" alt="Front" />
+                              </div>
+                            ` : ''}
+                            ${scan.metadata?.back_image ? `
+                              <div class="scan-image-box">
+                                <div class="scan-image-label">Back</div>
+                                <img src="${scan.metadata.back_image}" alt="Back" />
+                              </div>
+                            ` : ''}
+                          </div>
+                          ${scan.metadata?.card_data ? `
+                            <div class="scan-card-data">
+                              <div class="scan-data-item">
+                                <div class="scan-data-label">Player</div>
+                                <div class="scan-data-value">${scan.metadata.card_data.player || '-'}</div>
+                              </div>
+                              <div class="scan-data-item">
+                                <div class="scan-data-label">Year</div>
+                                <div class="scan-data-value">${scan.metadata.card_data.year || '-'}</div>
+                              </div>
+                              <div class="scan-data-item">
+                                <div class="scan-data-label">Set</div>
+                                <div class="scan-data-value">${scan.metadata.card_data.set_name || '-'}</div>
+                              </div>
+                              <div class="scan-data-item">
+                                <div class="scan-data-label">Card #</div>
+                                <div class="scan-data-value">${scan.metadata.card_data.card_number || '-'}</div>
+                              </div>
+                              <div class="scan-data-item">
+                                <div class="scan-data-label">Parallel</div>
+                                <div class="scan-data-value">${scan.metadata.card_data.parallel || 'Base'}</div>
+                              </div>
+                              <div class="scan-data-item">
+                                <div class="scan-data-label">Sport</div>
+                                <div class="scan-data-value">${scan.metadata.card_data.sport || '-'}</div>
+                              </div>
+                              ${scan.metadata.card_data.is_graded ? `
+                                <div class="scan-data-item">
+                                  <div class="scan-data-label">Grade</div>
+                                  <div class="scan-data-value">${scan.metadata.card_data.grading_company} ${scan.metadata.card_data.grade}</div>
+                                </div>
+                              ` : ''}
+                            </div>
+                          ` : '<div style="color: var(--text-muted);">No card data</div>'}
+                        </td>
+                      </tr>
+                    `).join('')}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
         `;
 
       } catch (e) {
@@ -695,6 +958,24 @@
       localStorage.removeItem('token');
       localStorage.removeItem('user');
       window.location.href = '/login';
+    }
+
+    function toggleScanExpand(scanId) {
+      const row = document.getElementById(`scan-expand-${scanId}`);
+      if (!row) return;
+
+      if (expandedScanId === scanId) {
+        row.style.display = 'none';
+        expandedScanId = null;
+      } else {
+        // Close previously expanded
+        if (expandedScanId) {
+          const prev = document.getElementById(`scan-expand-${expandedScanId}`);
+          if (prev) prev.style.display = 'none';
+        }
+        row.style.display = 'table-row';
+        expandedScanId = scanId;
+      }
     }
 
     // Load dashboard
