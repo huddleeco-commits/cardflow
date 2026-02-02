@@ -93,6 +93,45 @@
       color: #00f6ff;
     }
 
+    /* Voice control */
+    .voice-btn {
+      padding: 8px 14px;
+      background: rgba(255,255,255,0.1);
+      border: 1px solid rgba(255,255,255,0.2);
+      border-radius: 20px;
+      color: #fff;
+      font-size: 14px;
+      cursor: pointer;
+      margin-left: 8px;
+    }
+    .voice-btn.active {
+      background: rgba(255, 59, 48, 0.3);
+      border-color: #ff3b30;
+      color: #ff3b30;
+      animation: voicePulse 1.5s infinite;
+    }
+    @keyframes voicePulse {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(255, 59, 48, 0.4); }
+      50% { box-shadow: 0 0 0 8px rgba(255, 59, 48, 0); }
+    }
+
+    .voice-indicator {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      padding: 16px 32px;
+      background: rgba(0, 0, 0, 0.9);
+      border: 2px solid #ff3b30;
+      border-radius: 12px;
+      font-size: 18px;
+      font-weight: 600;
+      color: #ff3b30;
+      z-index: 50;
+      display: none;
+    }
+    .voice-indicator.show { display: block; }
+
     /* State badge */
     .state-badge {
       position: absolute;
@@ -292,8 +331,13 @@
         <div class="logo">CARDFLOW</div>
         <div class="connection" id="connection">Connecting...</div>
       </div>
-      <button class="mode-toggle" id="mode-toggle" onclick="toggleMode()">PAIR MODE</button>
+      <div style="display: flex; align-items: center;">
+        <button class="mode-toggle" id="mode-toggle" onclick="toggleMode()">PAIR MODE</button>
+        <button class="voice-btn" id="voice-btn" onclick="toggleVoice()">🎤</button>
+      </div>
     </div>
+
+    <div class="voice-indicator" id="voice-indicator">Listening...</div>
 
     <div class="state-badge" id="state-badge">FRONT</div>
 
@@ -329,6 +373,10 @@
     let video, canvas, ctx;
     let audioCtx = null;
     let frameRect = null;
+
+    // Voice recognition
+    let recognition = null;
+    let voiceEnabled = false;
 
     // Mode: 'pair' (front-back-front-back) or 'bulk' (all fronts, then all backs)
     let scanMode = 'pair';
@@ -654,6 +702,96 @@
     document.addEventListener('touchstart', e => {
       if (e.touches.length > 1) e.preventDefault();
     }, { passive: false });
+
+    // Voice recognition setup
+    function initVoiceRecognition() {
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+      if (!SpeechRecognition) {
+        alert('Voice commands not supported in this browser');
+        return false;
+      }
+
+      recognition = new SpeechRecognition();
+      recognition.continuous = true;
+      recognition.interimResults = false;
+      recognition.lang = 'en-US';
+
+      recognition.onresult = (event) => {
+        const last = event.results.length - 1;
+        const command = event.results[last][0].transcript.toLowerCase().trim();
+        handleVoiceCommand(command);
+      };
+
+      recognition.onerror = (event) => {
+        console.log('Voice error:', event.error);
+        if (event.error === 'no-speech' || event.error === 'aborted') {
+          // Restart if still enabled
+          if (voiceEnabled) {
+            setTimeout(() => {
+              if (voiceEnabled) recognition.start();
+            }, 100);
+          }
+        }
+      };
+
+      recognition.onend = () => {
+        // Restart if still enabled (recognition stops after periods of silence)
+        if (voiceEnabled) {
+          setTimeout(() => {
+            if (voiceEnabled) {
+              try { recognition.start(); } catch(e) {}
+            }
+          }, 100);
+        }
+      };
+
+      return true;
+    }
+
+    function toggleVoice() {
+      if (!recognition && !initVoiceRecognition()) return;
+
+      voiceEnabled = !voiceEnabled;
+      const btn = document.getElementById('voice-btn');
+      const indicator = document.getElementById('voice-indicator');
+
+      if (voiceEnabled) {
+        btn.classList.add('active');
+        indicator.classList.add('show');
+        setTimeout(() => indicator.classList.remove('show'), 1500);
+        recognition.start();
+        playSound('front'); // Feedback beep
+      } else {
+        btn.classList.remove('active');
+        indicator.classList.remove('show');
+        recognition.stop();
+      }
+    }
+
+    function handleVoiceCommand(command) {
+      console.log('Voice command:', command);
+      const indicator = document.getElementById('voice-indicator');
+
+      // Capture commands
+      const captureWords = ['capture', 'next', 'snap', 'go', 'take', 'shoot', 'got it', 'got'];
+      // Done commands (for bulk mode)
+      const doneWords = ['done', 'finished', 'flip', 'backs', 'switch'];
+
+      const isCapture = captureWords.some(w => command.includes(w));
+      const isDone = doneWords.some(w => command.includes(w));
+
+      if (isCapture) {
+        indicator.textContent = '📸 Captured!';
+        indicator.classList.add('show');
+        setTimeout(() => indicator.classList.remove('show'), 800);
+        capture();
+      } else if (isDone && scanMode === 'bulk' && bulkPhase === 'fronts' && bulkFronts.length > 0) {
+        indicator.textContent = '✓ Switching to backs';
+        indicator.classList.add('show');
+        setTimeout(() => indicator.classList.remove('show'), 1000);
+        finishFronts();
+      }
+    }
   </script>
 </body>
 </html>
