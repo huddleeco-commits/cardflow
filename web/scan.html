@@ -8,344 +8,356 @@
     * { margin: 0; padding: 0; box-sizing: border-box; }
 
     :root {
-      --bg: #0a0e1a;
+      --bg: #000;
       --cyan: #00f6ff;
       --purple: #7b2ff7;
       --success: #00ff88;
       --warning: #ffaa00;
       --error: #ff4466;
-      --text: #e6edf3;
-      --text-muted: rgba(255,255,255,0.5);
+      --text: #fff;
     }
 
     body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      font-family: -apple-system, BlinkMacSystemFont, sans-serif;
       background: var(--bg);
       color: var(--text);
-      min-height: 100vh;
-      overflow: hidden;
-      touch-action: manipulation;
-    }
-
-    .scanner-container {
-      display: flex;
-      flex-direction: column;
       height: 100vh;
       height: 100dvh;
+      overflow: hidden;
+      touch-action: manipulation;
+      -webkit-user-select: none;
+      user-select: none;
     }
 
-    /* Header */
-    .scan-header {
+    /* Full screen camera */
+    .scanner {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+    }
+
+    #video {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    /* Card guide overlay */
+    .guide-overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      pointer-events: none;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .card-frame {
+      width: 65%;
+      max-width: 260px;
+      aspect-ratio: 2.5/3.5;
+      border: 3px solid rgba(255,255,255,0.3);
+      border-radius: 12px;
+      position: relative;
+      transition: all 0.3s;
+    }
+
+    .card-frame.detecting {
+      border-color: var(--warning);
+      box-shadow: 0 0 30px rgba(255,170,0,0.3);
+    }
+
+    .card-frame.stable {
+      border-color: var(--cyan);
+      box-shadow: 0 0 30px rgba(0,246,255,0.4);
+    }
+
+    .card-frame.capturing {
+      border-color: var(--success);
+      box-shadow: 0 0 50px rgba(0,255,136,0.6);
+      animation: captureFlash 0.3s;
+    }
+
+    @keyframes captureFlash {
+      0%, 100% { background: transparent; }
+      50% { background: rgba(255,255,255,0.3); }
+    }
+
+    /* Status bar at top */
+    .status-bar {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      padding: 16px;
+      background: linear-gradient(to bottom, rgba(0,0,0,0.7), transparent);
       display: flex;
       justify-content: space-between;
       align-items: center;
-      padding: 12px 16px;
-      background: rgba(0,0,0,0.5);
       z-index: 10;
     }
 
-    .scan-logo {
-      font-size: 18px;
+    .status-left {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .logo {
+      font-size: 16px;
       font-weight: 700;
       background: linear-gradient(135deg, var(--cyan), var(--purple));
       -webkit-background-clip: text;
       -webkit-text-fill-color: transparent;
     }
 
-    .scan-status {
+    .connection {
       display: flex;
       align-items: center;
-      gap: 8px;
-      font-size: 12px;
+      gap: 6px;
+      font-size: 11px;
+      opacity: 0.7;
     }
 
-    .status-dot {
-      width: 10px;
-      height: 10px;
+    .connection-dot {
+      width: 8px;
+      height: 8px;
       border-radius: 50%;
       background: var(--error);
     }
 
-    .status-dot.connected {
+    .connection-dot.connected {
       background: var(--success);
-      box-shadow: 0 0 10px var(--success);
     }
 
-    /* Camera View */
-    .camera-container {
-      flex: 1;
-      position: relative;
-      background: #000;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
-
-    #camera-video {
-      width: 100%;
-      height: 100%;
-      object-fit: cover;
-    }
-
-    .camera-overlay {
+    /* Current state indicator */
+    .state-badge {
       position: absolute;
-      top: 0;
-      left: 0;
-      right: 0;
-      bottom: 0;
-      pointer-events: none;
+      top: 80px;
+      left: 50%;
+      transform: translateX(-50%);
+      padding: 12px 32px;
+      background: rgba(0,0,0,0.85);
+      border-radius: 30px;
+      font-size: 20px;
+      font-weight: 700;
+      letter-spacing: 3px;
+      z-index: 10;
+      transition: all 0.3s;
     }
 
-    /* Card frame guide */
-    .card-guide {
+    .state-badge.front {
+      color: var(--cyan);
+      border: 2px solid var(--cyan);
+    }
+
+    .state-badge.back {
+      color: var(--purple);
+      border: 2px solid var(--purple);
+    }
+
+    .state-badge.complete {
+      color: var(--success);
+      border: 2px solid var(--success);
+    }
+
+    /* Stability progress ring */
+    .stability-ring {
+      position: absolute;
+      bottom: 180px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 60px;
+      height: 60px;
+    }
+
+    .stability-ring svg {
+      transform: rotate(-90deg);
+    }
+
+    .stability-ring circle {
+      fill: none;
+      stroke-width: 4;
+    }
+
+    .stability-bg {
+      stroke: rgba(255,255,255,0.2);
+    }
+
+    .stability-fill {
+      stroke: var(--cyan);
+      stroke-linecap: round;
+      transition: stroke-dashoffset 0.1s;
+    }
+
+    .stability-text {
       position: absolute;
       top: 50%;
       left: 50%;
       transform: translate(-50%, -50%);
-      width: 70%;
-      max-width: 280px;
-      aspect-ratio: 2.5/3.5;
-      border: 3px solid rgba(0, 246, 255, 0.5);
-      border-radius: 12px;
-      box-shadow: 0 0 0 9999px rgba(0,0,0,0.4);
+      font-size: 14px;
+      font-weight: 600;
     }
 
-    .card-guide::before {
-      content: '';
-      position: absolute;
-      top: -8px;
-      left: -8px;
-      right: -8px;
-      bottom: -8px;
-      border: 2px dashed rgba(0, 246, 255, 0.3);
-      border-radius: 16px;
-    }
-
-    /* Current state indicator */
-    .state-indicator {
-      position: absolute;
-      top: 20px;
-      left: 50%;
-      transform: translateX(-50%);
-      padding: 12px 24px;
-      background: rgba(0,0,0,0.8);
-      border-radius: 30px;
-      font-size: 18px;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: 2px;
-      border: 2px solid var(--cyan);
-    }
-
-    .state-indicator.front {
-      border-color: var(--cyan);
-      color: var(--cyan);
-    }
-
-    .state-indicator.back {
-      border-color: var(--purple);
-      color: var(--purple);
-    }
-
-    .state-indicator.processing {
-      border-color: var(--warning);
-      color: var(--warning);
-      animation: pulse 1s infinite;
-    }
-
-    @keyframes pulse {
-      0%, 100% { opacity: 1; }
-      50% { opacity: 0.5; }
-    }
-
-    /* Preview thumbnails */
+    /* Captured preview strip */
     .preview-strip {
       position: absolute;
-      bottom: 20px;
+      bottom: 100px;
       left: 50%;
       transform: translateX(-50%);
       display: flex;
-      gap: 12px;
+      gap: 16px;
+      z-index: 10;
     }
 
-    .preview-thumb {
-      width: 60px;
-      height: 84px;
+    .preview-box {
+      width: 70px;
+      height: 98px;
       background: rgba(0,0,0,0.6);
-      border: 2px solid var(--text-muted);
-      border-radius: 6px;
+      border: 2px solid rgba(255,255,255,0.2);
+      border-radius: 8px;
       overflow: hidden;
       display: flex;
       align-items: center;
       justify-content: center;
-      font-size: 10px;
-      color: var(--text-muted);
+      position: relative;
     }
 
-    .preview-thumb.captured {
-      border-color: var(--success);
-    }
-
-    .preview-thumb img {
+    .preview-box img {
       width: 100%;
       height: 100%;
       object-fit: cover;
     }
 
-    /* Capture button */
-    .capture-area {
-      position: absolute;
-      top: 0;
-      left: 0;
-      right: 0;
-      bottom: 0;
-      cursor: pointer;
+    .preview-box.captured {
+      border-color: var(--success);
     }
 
-    .capture-btn {
+    .preview-box .label {
       position: absolute;
-      bottom: 130px;
+      bottom: 4px;
       left: 50%;
       transform: translateX(-50%);
-      width: 80px;
-      height: 80px;
-      border-radius: 50%;
-      background: linear-gradient(135deg, var(--cyan), var(--purple));
-      border: 4px solid #fff;
-      cursor: pointer;
-      transition: all 0.15s;
-      box-shadow: 0 0 30px rgba(0, 246, 255, 0.3);
+      font-size: 9px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      opacity: 0.7;
     }
 
-    .capture-btn:active {
-      transform: translateX(-50%) scale(0.9);
-    }
-
-    .capture-btn::after {
-      content: '';
+    /* Bottom stats */
+    .bottom-bar {
       position: absolute;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      width: 60px;
-      height: 60px;
-      border-radius: 50%;
-      background: #fff;
-      transition: all 0.1s;
-    }
-
-    .capture-btn:active::after {
-      width: 50px;
-      height: 50px;
-    }
-
-    /* Flash effect */
-    .flash {
-      position: absolute;
-      top: 0;
+      bottom: 0;
       left: 0;
       right: 0;
-      bottom: 0;
-      background: #fff;
-      opacity: 0;
-      pointer-events: none;
-      transition: opacity 0.1s;
-    }
-
-    .flash.active {
-      opacity: 0.8;
-    }
-
-    /* Footer stats */
-    .scan-footer {
+      padding: 20px;
+      background: linear-gradient(to top, rgba(0,0,0,0.8), transparent);
       display: flex;
       justify-content: space-around;
-      padding: 16px;
-      background: rgba(0,0,0,0.8);
+      z-index: 10;
     }
 
-    .scan-stat {
+    .stat {
       text-align: center;
     }
 
-    .scan-stat-value {
+    .stat-value {
       font-size: 28px;
       font-weight: 700;
-      color: var(--cyan);
     }
 
-    .scan-stat-label {
+    .stat-label {
       font-size: 10px;
-      color: var(--text-muted);
       text-transform: uppercase;
       letter-spacing: 1px;
+      opacity: 0.6;
     }
 
-    /* Toast messages */
-    .toast {
-      position: fixed;
-      top: 80px;
-      left: 50%;
-      transform: translateX(-50%);
-      padding: 12px 24px;
-      background: var(--success);
-      color: #000;
-      border-radius: 8px;
-      font-weight: 600;
-      z-index: 1000;
-      animation: toastIn 0.3s ease;
+    /* Instruction text */
+    .instruction {
+      position: absolute;
+      bottom: 200px;
+      left: 0;
+      right: 0;
+      text-align: center;
+      font-size: 14px;
+      opacity: 0.8;
+      z-index: 10;
     }
 
-    .toast.error {
-      background: var(--error);
-      color: #fff;
-    }
-
-    @keyframes toastIn {
-      from { opacity: 0; transform: translateX(-50%) translateY(-20px); }
-      to { opacity: 1; transform: translateX(-50%) translateY(0); }
-    }
-
-    /* Settings panel */
-    .settings-toggle {
-      background: none;
-      border: none;
-      color: var(--text);
-      font-size: 24px;
-      cursor: pointer;
-      padding: 8px;
-    }
-
-    /* Login prompt */
-    .login-prompt {
+    /* Captured card display (shows captured image cleanly) */
+    .captured-display {
       position: fixed;
       top: 0;
       left: 0;
       right: 0;
       bottom: 0;
-      background: var(--bg);
+      background: rgba(0,0,0,0.95);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+    }
+
+    .captured-display.show {
+      display: flex;
+    }
+
+    .captured-display img {
+      max-width: 80%;
+      max-height: 70%;
+      border-radius: 12px;
+      box-shadow: 0 0 60px rgba(0,246,255,0.3);
+    }
+
+    .captured-display .label {
+      position: absolute;
+      top: 40px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 24px;
+      font-weight: 700;
+      letter-spacing: 4px;
+    }
+
+    /* Login screen */
+    .login-screen {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: #0a0e1a;
       display: flex;
       flex-direction: column;
       align-items: center;
       justify-content: center;
       padding: 24px;
-      z-index: 100;
+      z-index: 200;
     }
 
-    .login-prompt h1 {
-      font-size: 28px;
+    .login-screen h1 {
+      font-size: 32px;
       margin-bottom: 8px;
       background: linear-gradient(135deg, var(--cyan), var(--purple));
       -webkit-background-clip: text;
       -webkit-text-fill-color: transparent;
     }
 
-    .login-prompt p {
-      color: var(--text-muted);
+    .login-screen p {
+      opacity: 0.6;
       margin-bottom: 32px;
     }
 
-    .login-prompt input {
+    .login-screen input {
       width: 100%;
       max-width: 300px;
       padding: 16px;
@@ -353,11 +365,11 @@
       background: rgba(255,255,255,0.05);
       border: 1px solid rgba(255,255,255,0.1);
       border-radius: 8px;
-      color: var(--text);
+      color: #fff;
       font-size: 16px;
     }
 
-    .login-prompt button {
+    .login-screen button {
       width: 100%;
       max-width: 300px;
       padding: 16px;
@@ -370,114 +382,150 @@
       cursor: pointer;
     }
 
-    /* Undo button */
-    .undo-btn {
+    /* Manual capture button (backup) */
+    .manual-capture {
       position: absolute;
-      top: 20px;
+      bottom: 20px;
       right: 20px;
-      padding: 10px 16px;
-      background: rgba(0,0,0,0.7);
-      border: 1px solid var(--text-muted);
-      border-radius: 8px;
-      color: var(--text);
-      font-size: 14px;
+      width: 60px;
+      height: 60px;
+      border-radius: 50%;
+      background: rgba(255,255,255,0.2);
+      border: 3px solid rgba(255,255,255,0.5);
+      z-index: 20;
+      cursor: pointer;
+    }
+
+    .manual-capture:active {
+      background: rgba(255,255,255,0.4);
+    }
+
+    /* Mode toggle */
+    .mode-toggle {
+      position: absolute;
+      top: 16px;
+      right: 16px;
+      padding: 8px 16px;
+      background: rgba(0,0,0,0.6);
+      border: 1px solid rgba(255,255,255,0.2);
+      border-radius: 20px;
+      color: #fff;
+      font-size: 12px;
       cursor: pointer;
       z-index: 20;
     }
 
-    .undo-btn:disabled {
-      opacity: 0.3;
-      cursor: not-allowed;
+    .mode-toggle.auto {
+      border-color: var(--cyan);
+      color: var(--cyan);
     }
   </style>
 </head>
 <body>
-  <!-- Login Prompt (shown if not authenticated) -->
-  <div class="login-prompt" id="login-prompt">
-    <h1>CardFlow Scanner</h1>
-    <p>Login to start scanning cards</p>
+  <!-- Login -->
+  <div class="login-screen" id="login-screen">
+    <h1>CardFlow</h1>
+    <p>Continuous Scanner</p>
     <input type="email" id="login-email" placeholder="Email">
     <input type="password" id="login-password" placeholder="Password">
-    <button onclick="doLogin()">Login</button>
+    <button onclick="doLogin()">Start Scanning</button>
   </div>
 
-  <!-- Main Scanner -->
-  <div class="scanner-container" id="scanner" style="display: none;">
-    <header class="scan-header">
-      <div class="scan-logo">CARDFLOW</div>
-      <div class="scan-status">
-        <div class="status-dot" id="status-dot"></div>
-        <span id="status-text">Connecting...</span>
-      </div>
-    </header>
+  <!-- Scanner -->
+  <div class="scanner" id="scanner" style="display: none;">
+    <video id="video" autoplay playsinline muted></video>
 
-    <div class="camera-container">
-      <video id="camera-video" autoplay playsinline></video>
-
-      <div class="camera-overlay">
-        <div class="card-guide"></div>
-        <div class="state-indicator front" id="state-indicator">FRONT</div>
-
-        <div class="preview-strip">
-          <div class="preview-thumb" id="preview-front">
-            <span>Front</span>
-          </div>
-          <div class="preview-thumb" id="preview-back">
-            <span>Back</span>
-          </div>
-        </div>
-
-        <button class="undo-btn" id="undo-btn" onclick="undoCapture()" disabled>Undo</button>
-      </div>
-
-      <div class="capture-area" onclick="capture()"></div>
-      <button class="capture-btn" onclick="capture()"></button>
-      <div class="flash" id="flash"></div>
+    <div class="guide-overlay">
+      <div class="card-frame" id="card-frame"></div>
     </div>
 
-    <footer class="scan-footer">
-      <div class="scan-stat">
-        <div class="scan-stat-value" id="session-count">0</div>
-        <div class="scan-stat-label">This Session</div>
+    <div class="status-bar">
+      <div class="status-left">
+        <span class="logo">CARDFLOW</span>
+        <div class="connection">
+          <div class="connection-dot" id="connection-dot"></div>
+          <span id="connection-text">Connecting</span>
+        </div>
       </div>
-      <div class="scan-stat">
-        <div class="scan-stat-value" id="total-count">0</div>
-        <div class="scan-stat-label">Total Cards</div>
+      <button class="mode-toggle auto" id="mode-toggle" onclick="toggleMode()">AUTO</button>
+    </div>
+
+    <div class="state-badge front" id="state-badge">FRONT</div>
+
+    <div class="stability-ring" id="stability-ring">
+      <svg width="60" height="60">
+        <circle class="stability-bg" cx="30" cy="30" r="26"></circle>
+        <circle class="stability-fill" id="stability-circle" cx="30" cy="30" r="26"
+                stroke-dasharray="163.36" stroke-dashoffset="163.36"></circle>
+      </svg>
+      <div class="stability-text" id="stability-text">0%</div>
+    </div>
+
+    <div class="instruction" id="instruction">Place card in frame - hold steady</div>
+
+    <div class="preview-strip">
+      <div class="preview-box" id="preview-front">
+        <span class="label">Front</span>
       </div>
-      <div class="scan-stat">
-        <div class="scan-stat-value" id="queue-count">0</div>
-        <div class="scan-stat-label">Processing</div>
+      <div class="preview-box" id="preview-back">
+        <span class="label">Back</span>
       </div>
-    </footer>
+    </div>
+
+    <button class="manual-capture" id="manual-capture" onclick="manualCapture()"></button>
+
+    <div class="bottom-bar">
+      <div class="stat">
+        <div class="stat-value" id="session-count">0</div>
+        <div class="stat-label">Session</div>
+      </div>
+      <div class="stat">
+        <div class="stat-value" id="queue-count">0</div>
+        <div class="stat-label">Queue</div>
+      </div>
+    </div>
   </div>
 
-  <!-- Hidden canvas for capture -->
-  <canvas id="capture-canvas" style="display: none;"></canvas>
+  <!-- Captured display -->
+  <div class="captured-display" id="captured-display">
+    <div class="label" id="captured-label">FRONT</div>
+    <img id="captured-img" src="">
+  </div>
 
-  <!-- Audio elements -->
-  <audio id="sound-front" preload="auto"></audio>
-  <audio id="sound-back" preload="auto"></audio>
-  <audio id="sound-complete" preload="auto"></audio>
+  <!-- Hidden canvas -->
+  <canvas id="canvas" style="display:none;"></canvas>
 
   <script>
     const API_URL = window.location.origin + '/api';
     let token = localStorage.getItem('token');
     let ws = null;
     let stream = null;
+    let video, canvas, ctx;
+    let audioCtx = null;
 
     // Scan state
-    let scanState = 'front'; // 'front', 'back', 'processing'
-    let frontImage = null;
-    let backImage = null;
-    let sessionCount = 0;
-    let processingQueue = 0;
+    let mode = 'auto'; // 'auto' or 'manual'
+    let scanPhase = 'front'; // 'front', 'back', 'uploading'
+    let frontBlob = null;
+    let backBlob = null;
 
-    // Audio context for sounds
-    let audioContext = null;
+    // Auto-detection state
+    let lastHash = null;
+    let stableFrames = 0;
+    let lastBounds = null;
+    let cooldown = false;
+    let sessionCount = 0;
+    let queueCount = 0;
+
+    // Thresholds
+    const STABLE_THRESHOLD = 12; // frames needed for stability
+    const HASH_MATCH_THRESHOLD = 0.92; // similarity for "same frame"
+    const NEW_CARD_THRESHOLD = 0.80; // below this = different card
+    const COOLDOWN_MS = 1200;
 
     // Check auth
     if (token) {
-      showScanner();
+      initScanner();
     }
 
     async function doLogin() {
@@ -485,103 +533,45 @@
       const password = document.getElementById('login-password').value;
 
       try {
-        const response = await fetch(`${API_URL}/auth/login`, {
+        const res = await fetch(`${API_URL}/auth/login`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ email, password })
         });
-
-        const data = await response.json();
+        const data = await res.json();
 
         if (data.token) {
           token = data.token;
           localStorage.setItem('token', token);
-          localStorage.setItem('user', JSON.stringify(data.user));
-          showScanner();
+          initScanner();
         } else {
           alert(data.error || 'Login failed');
         }
       } catch (e) {
-        alert('Login failed: ' + e.message);
+        alert('Login failed');
       }
     }
 
-    async function showScanner() {
-      document.getElementById('login-prompt').style.display = 'none';
-      document.getElementById('scanner').style.display = 'flex';
+    async function initScanner() {
+      document.getElementById('login-screen').style.display = 'none';
+      document.getElementById('scanner').style.display = 'block';
 
-      // Initialize audio
-      initAudio();
+      video = document.getElementById('video');
+      canvas = document.getElementById('canvas');
+      ctx = canvas.getContext('2d', { willReadFrequently: true });
 
-      // Start camera
+      // Init audio on first interaction
+      document.body.addEventListener('click', initAudio, { once: true });
+      document.body.addEventListener('touchstart', initAudio, { once: true });
+
       await startCamera();
-
-      // Connect WebSocket
-      connectWebSocket();
-
-      // Load stats
-      loadStats();
+      connectWS();
+      startDetectionLoop();
     }
 
     function initAudio() {
-      // Create audio context on user interaction
-      audioContext = new (window.AudioContext || window.webkitAudioContext)();
-    }
-
-    function playSound(type) {
-      if (!audioContext) return;
-
-      const oscillator = audioContext.createOscillator();
-      const gainNode = audioContext.createGain();
-
-      oscillator.connect(gainNode);
-      gainNode.connect(audioContext.destination);
-
-      if (type === 'front') {
-        // Single beep - 880Hz
-        oscillator.frequency.value = 880;
-        oscillator.type = 'sine';
-        gainNode.gain.value = 0.3;
-        oscillator.start();
-        oscillator.stop(audioContext.currentTime + 0.1);
-      } else if (type === 'back') {
-        // Double beep - 988Hz
-        oscillator.frequency.value = 988;
-        oscillator.type = 'sine';
-        gainNode.gain.value = 0.3;
-        oscillator.start();
-        oscillator.stop(audioContext.currentTime + 0.08);
-
-        setTimeout(() => {
-          const osc2 = audioContext.createOscillator();
-          const gain2 = audioContext.createGain();
-          osc2.connect(gain2);
-          gain2.connect(audioContext.destination);
-          osc2.frequency.value = 988;
-          osc2.type = 'sine';
-          gain2.gain.value = 0.3;
-          osc2.start();
-          osc2.stop(audioContext.currentTime + 0.08);
-        }, 120);
-      } else if (type === 'complete') {
-        // Rising ding - success sound
-        oscillator.frequency.value = 523;
-        oscillator.type = 'sine';
-        gainNode.gain.value = 0.3;
-        oscillator.start();
-
-        oscillator.frequency.setValueAtTime(523, audioContext.currentTime);
-        oscillator.frequency.linearRampToValueAtTime(784, audioContext.currentTime + 0.1);
-        oscillator.frequency.linearRampToValueAtTime(1047, audioContext.currentTime + 0.2);
-
-        oscillator.stop(audioContext.currentTime + 0.3);
-      } else if (type === 'error') {
-        // Low buzz
-        oscillator.frequency.value = 200;
-        oscillator.type = 'sawtooth';
-        gainNode.gain.value = 0.2;
-        oscillator.start();
-        oscillator.stop(audioContext.currentTime + 0.3);
+      if (!audioCtx) {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
       }
     }
 
@@ -592,231 +582,375 @@
             facingMode: 'environment',
             width: { ideal: 1920 },
             height: { ideal: 1080 }
-          },
-          audio: false
+          }
         });
+        video.srcObject = stream;
+        await video.play();
 
-        document.getElementById('camera-video').srcObject = stream;
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
       } catch (e) {
-        console.error('Camera error:', e);
-        showToast('Camera access denied', 'error');
+        alert('Camera access required');
       }
     }
 
-    function connectWebSocket() {
-      const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-      ws = new WebSocket(`${wsProtocol}//${window.location.host}`);
+    function connectWS() {
+      const wsProto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+      ws = new WebSocket(`${wsProto}//${location.host}`);
 
       ws.onopen = () => {
-        document.getElementById('status-dot').classList.add('connected');
-        document.getElementById('status-text').textContent = 'Connected';
+        document.getElementById('connection-dot').classList.add('connected');
+        document.getElementById('connection-text').textContent = 'Live';
         ws.send(JSON.stringify({ type: 'auth', token }));
       };
 
-      ws.onmessage = (event) => {
-        const data = JSON.parse(event.data);
-
-        if (data.type === 'scan_uploaded') {
-          processingQueue++;
-          updateQueueCount();
-        }
-
-        if (data.type === 'identify_complete' || data.type === 'card_identified') {
-          processingQueue = Math.max(0, processingQueue - 1);
-          updateQueueCount();
-        }
+      ws.onclose = () => {
+        document.getElementById('connection-dot').classList.remove('connected');
+        document.getElementById('connection-text').textContent = 'Reconnecting';
+        setTimeout(connectWS, 2000);
       };
 
-      ws.onclose = () => {
-        document.getElementById('status-dot').classList.remove('connected');
-        document.getElementById('status-text').textContent = 'Reconnecting...';
-        setTimeout(connectWebSocket, 3000);
+      ws.onmessage = (e) => {
+        const data = JSON.parse(e.data);
+        if (data.type === 'card_identified' || data.type === 'identify_complete') {
+          queueCount = Math.max(0, queueCount - 1);
+          updateStats();
+        }
       };
     }
 
-    async function capture() {
-      if (scanState === 'processing') return;
+    // ========================
+    // DETECTION LOOP
+    // ========================
 
-      const video = document.getElementById('camera-video');
-      const canvas = document.getElementById('capture-canvas');
-      const ctx = canvas.getContext('2d');
+    function startDetectionLoop() {
+      requestAnimationFrame(detect);
+    }
 
-      // Set canvas size to video size
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
+    function detect() {
+      if (mode !== 'auto' || cooldown || scanPhase === 'uploading') {
+        requestAnimationFrame(detect);
+        return;
+      }
 
-      // Draw video frame to canvas
+      // Capture frame
       ctx.drawImage(video, 0, 0);
+      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
 
-      // Get image as blob
-      const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.92));
+      // Calculate perceptual hash
+      const hash = calculateHash(imageData);
+
+      // Compare to last frame
+      if (lastHash) {
+        const similarity = compareHashes(hash, lastHash);
+
+        if (similarity > HASH_MATCH_THRESHOLD) {
+          // Frame is stable
+          stableFrames++;
+          updateStabilityUI(stableFrames / STABLE_THRESHOLD);
+
+          if (stableFrames >= STABLE_THRESHOLD) {
+            // Ready to capture!
+            captureFrame();
+          }
+        } else if (similarity < NEW_CARD_THRESHOLD && scanPhase === 'front') {
+          // Significant change - might be new card placement
+          stableFrames = 0;
+          updateStabilityUI(0);
+        } else {
+          // Minor movement - reset stability
+          stableFrames = Math.max(0, stableFrames - 2);
+          updateStabilityUI(stableFrames / STABLE_THRESHOLD);
+        }
+      }
+
+      lastHash = hash;
+      requestAnimationFrame(detect);
+    }
+
+    // ========================
+    // HASH FUNCTIONS
+    // ========================
+
+    function calculateHash(imageData) {
+      const w = imageData.width;
+      const h = imageData.height;
+      const data = imageData.data;
+      const blockSize = 8;
+      const blocks = [];
+
+      for (let by = 0; by < blockSize; by++) {
+        for (let bx = 0; bx < blockSize; bx++) {
+          const startX = Math.floor(bx * w / blockSize);
+          const endX = Math.floor((bx + 1) * w / blockSize);
+          const startY = Math.floor(by * h / blockSize);
+          const endY = Math.floor((by + 1) * h / blockSize);
+
+          let sum = 0, count = 0;
+          for (let y = startY; y < endY; y += 4) {
+            for (let x = startX; x < endX; x += 4) {
+              const idx = (y * w + x) * 4;
+              const gray = (data[idx] + data[idx+1] + data[idx+2]) / 3;
+              sum += gray;
+              count++;
+            }
+          }
+          blocks.push(sum / count);
+        }
+      }
+
+      const avg = blocks.reduce((a,b) => a+b, 0) / blocks.length;
+      return blocks.map(b => b > avg ? '1' : '0').join('');
+    }
+
+    function compareHashes(h1, h2) {
+      if (!h1 || !h2) return 0;
+      let same = 0;
+      for (let i = 0; i < h1.length; i++) {
+        if (h1[i] === h2[i]) same++;
+      }
+      return same / h1.length;
+    }
+
+    // ========================
+    // CAPTURE
+    // ========================
+
+    async function captureFrame() {
+      cooldown = true;
+      stableFrames = 0;
 
       // Flash effect
-      const flash = document.getElementById('flash');
-      flash.classList.add('active');
-      setTimeout(() => flash.classList.remove('active'), 100);
+      const frame = document.getElementById('card-frame');
+      frame.classList.add('capturing');
+      setTimeout(() => frame.classList.remove('capturing'), 300);
 
-      if (scanState === 'front') {
+      // Get high-quality capture
+      ctx.drawImage(video, 0, 0);
+      const blob = await new Promise(r => canvas.toBlob(r, 'image/jpeg', 0.92));
+      const dataUrl = canvas.toDataURL('image/jpeg', 0.92);
+
+      if (scanPhase === 'front') {
         // Captured front
-        frontImage = blob;
+        frontBlob = blob;
         playSound('front');
+        showCaptured(dataUrl, 'FRONT CAPTURED');
 
         // Update preview
-        document.getElementById('preview-front').innerHTML = `<img src="${URL.createObjectURL(blob)}">`;
+        document.getElementById('preview-front').innerHTML = `<img src="${dataUrl}">`;
         document.getElementById('preview-front').classList.add('captured');
 
         // Switch to back
-        scanState = 'back';
-        updateStateIndicator();
-        document.getElementById('undo-btn').disabled = false;
+        setTimeout(() => {
+          hideCaptured();
+          scanPhase = 'back';
+          updateStateUI();
+          setInstruction('Flip card - capture back');
 
-      } else if (scanState === 'back') {
+          // Reset hash so it detects the flipped card as new
+          lastHash = null;
+          cooldown = false;
+        }, 800);
+
+      } else if (scanPhase === 'back') {
         // Captured back
-        backImage = blob;
+        backBlob = blob;
         playSound('back');
+        showCaptured(dataUrl, 'BACK CAPTURED');
 
         // Update preview
-        document.getElementById('preview-back').innerHTML = `<img src="${URL.createObjectURL(blob)}">`;
+        document.getElementById('preview-back').innerHTML = `<img src="${dataUrl}">`;
         document.getElementById('preview-back').classList.add('captured');
 
-        // Upload pair
-        scanState = 'processing';
-        updateStateIndicator();
+        // Upload
+        setTimeout(async () => {
+          hideCaptured();
+          scanPhase = 'uploading';
+          updateStateUI();
+          setInstruction('Uploading...');
 
-        await uploadPair();
+          await uploadPair();
+
+          // Complete - play sound and reset
+          playSound('complete');
+          sessionCount++;
+          queueCount++;
+          updateStats();
+
+          // Reset for next card
+          setTimeout(() => {
+            resetForNextCard();
+            cooldown = false;
+          }, 600);
+        }, 600);
       }
     }
 
-    function undoCapture() {
-      if (scanState === 'back' && frontImage) {
-        // Go back to front state
-        frontImage = null;
-        scanState = 'front';
-        document.getElementById('preview-front').innerHTML = '<span>Front</span>';
-        document.getElementById('preview-front').classList.remove('captured');
-        updateStateIndicator();
-        document.getElementById('undo-btn').disabled = true;
-        playSound('error');
+    function manualCapture() {
+      if (scanPhase !== 'uploading' && !cooldown) {
+        captureFrame();
       }
     }
+
+    // ========================
+    // UPLOAD
+    // ========================
 
     async function uploadPair() {
-      try {
-        const formData = new FormData();
-        formData.append('front', frontImage, 'front.jpg');
-        if (backImage) {
-          formData.append('back', backImage, 'back.jpg');
-        }
+      const formData = new FormData();
+      formData.append('front', frontBlob, 'front.jpg');
+      if (backBlob) {
+        formData.append('back', backBlob, 'back.jpg');
+      }
 
-        const response = await fetch(`${API_URL}/upload-pair`, {
+      try {
+        const res = await fetch(`${API_URL}/upload-pair`, {
           method: 'POST',
           headers: { 'Authorization': `Bearer ${token}` },
           body: formData
         });
+        const data = await res.json();
 
-        const result = await response.json();
-
-        if (result.success || result.cardId) {
-          playSound('complete');
-          sessionCount++;
-          processingQueue++;
-          updateStats();
-          showToast('Card uploaded!');
-
-          // Notify dashboard
-          if (ws && ws.readyState === WebSocket.OPEN) {
-            ws.send(JSON.stringify({ type: 'scan_complete', cardId: result.cardId }));
-          }
-        } else {
-          playSound('error');
-          showToast(result.error || 'Upload failed', 'error');
+        if (ws && ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({ type: 'scan_complete', cardId: data.cardId }));
         }
       } catch (e) {
         playSound('error');
-        showToast('Upload failed: ' + e.message, 'error');
       }
-
-      // Reset for next card
-      resetForNextCard();
     }
 
-    function resetForNextCard() {
-      frontImage = null;
-      backImage = null;
-      scanState = 'front';
+    // ========================
+    // UI UPDATES
+    // ========================
 
-      document.getElementById('preview-front').innerHTML = '<span>Front</span>';
-      document.getElementById('preview-front').classList.remove('captured');
-      document.getElementById('preview-back').innerHTML = '<span>Back</span>';
-      document.getElementById('preview-back').classList.remove('captured');
-      document.getElementById('undo-btn').disabled = true;
+    function updateStabilityUI(progress) {
+      const pct = Math.min(1, Math.max(0, progress));
+      const circumference = 163.36;
+      const offset = circumference * (1 - pct);
+      document.getElementById('stability-circle').style.strokeDashoffset = offset;
+      document.getElementById('stability-text').textContent = Math.round(pct * 100) + '%';
 
-      updateStateIndicator();
-    }
-
-    function updateStateIndicator() {
-      const indicator = document.getElementById('state-indicator');
-      indicator.className = 'state-indicator ' + scanState;
-
-      if (scanState === 'front') {
-        indicator.textContent = 'FRONT';
-      } else if (scanState === 'back') {
-        indicator.textContent = 'BACK';
+      // Update frame color
+      const frame = document.getElementById('card-frame');
+      if (pct > 0.8) {
+        frame.classList.add('stable');
+        frame.classList.remove('detecting');
+      } else if (pct > 0.2) {
+        frame.classList.add('detecting');
+        frame.classList.remove('stable');
       } else {
-        indicator.textContent = 'UPLOADING...';
+        frame.classList.remove('detecting', 'stable');
       }
+    }
+
+    function updateStateUI() {
+      const badge = document.getElementById('state-badge');
+      badge.className = 'state-badge ' + scanPhase;
+      badge.textContent = scanPhase === 'uploading' ? 'UPLOADING' : scanPhase.toUpperCase();
+    }
+
+    function setInstruction(text) {
+      document.getElementById('instruction').textContent = text;
     }
 
     function updateStats() {
       document.getElementById('session-count').textContent = sessionCount;
+      document.getElementById('queue-count').textContent = queueCount;
     }
 
-    function updateQueueCount() {
-      document.getElementById('queue-count').textContent = processingQueue;
+    function showCaptured(dataUrl, label) {
+      document.getElementById('captured-img').src = dataUrl;
+      document.getElementById('captured-label').textContent = label;
+      document.getElementById('captured-display').classList.add('show');
     }
 
-    async function loadStats() {
-      try {
-        const response = await fetch(`${API_URL}/status`, {
-          headers: { 'Authorization': `Bearer ${token}` }
-        });
-        const data = await response.json();
+    function hideCaptured() {
+      document.getElementById('captured-display').classList.remove('show');
+    }
 
-        if (data.cards) {
-          document.getElementById('total-count').textContent = data.cards.total || 0;
-        }
-      } catch (e) {
-        console.error('Failed to load stats:', e);
+    function resetForNextCard() {
+      frontBlob = null;
+      backBlob = null;
+      scanPhase = 'front';
+      lastHash = null;
+      stableFrames = 0;
+
+      document.getElementById('preview-front').innerHTML = '<span class="label">Front</span>';
+      document.getElementById('preview-front').classList.remove('captured');
+      document.getElementById('preview-back').innerHTML = '<span class="label">Back</span>';
+      document.getElementById('preview-back').classList.remove('captured');
+
+      updateStateUI();
+      updateStabilityUI(0);
+      setInstruction('Place next card - hold steady');
+    }
+
+    function toggleMode() {
+      mode = mode === 'auto' ? 'manual' : 'auto';
+      const btn = document.getElementById('mode-toggle');
+      btn.textContent = mode.toUpperCase();
+      btn.classList.toggle('auto', mode === 'auto');
+
+      if (mode === 'manual') {
+        setInstruction('Tap button to capture');
+      } else {
+        setInstruction('Place card in frame - hold steady');
       }
     }
 
-    function showToast(message, type = 'success') {
-      const existing = document.querySelector('.toast');
-      if (existing) existing.remove();
+    // ========================
+    // AUDIO
+    // ========================
 
-      const toast = document.createElement('div');
-      toast.className = `toast ${type}`;
-      toast.textContent = message;
-      document.body.appendChild(toast);
+    function playSound(type) {
+      if (!audioCtx) return;
 
-      setTimeout(() => toast.remove(), 2000);
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+      gain.gain.value = 0.3;
+
+      if (type === 'front') {
+        // Single beep
+        osc.frequency.value = 880;
+        osc.start();
+        osc.stop(audioCtx.currentTime + 0.12);
+      } else if (type === 'back') {
+        // Double beep
+        osc.frequency.value = 988;
+        osc.start();
+        osc.stop(audioCtx.currentTime + 0.08);
+        setTimeout(() => {
+          const o2 = audioCtx.createOscillator();
+          const g2 = audioCtx.createGain();
+          o2.connect(g2);
+          g2.connect(audioCtx.destination);
+          g2.gain.value = 0.3;
+          o2.frequency.value = 988;
+          o2.start();
+          o2.stop(audioCtx.currentTime + 0.08);
+        }, 100);
+      } else if (type === 'complete') {
+        // Rising ding
+        osc.frequency.setValueAtTime(523, audioCtx.currentTime);
+        osc.frequency.linearRampToValueAtTime(784, audioCtx.currentTime + 0.1);
+        osc.frequency.linearRampToValueAtTime(1047, audioCtx.currentTime + 0.2);
+        osc.start();
+        osc.stop(audioCtx.currentTime + 0.3);
+      } else if (type === 'error') {
+        osc.frequency.value = 200;
+        osc.type = 'sawtooth';
+        gain.gain.value = 0.15;
+        osc.start();
+        osc.stop(audioCtx.currentTime + 0.25);
+      }
     }
 
-    // Prevent zoom on double tap
-    document.addEventListener('touchstart', (e) => {
-      if (e.touches.length > 1) {
-        e.preventDefault();
-      }
+    // Prevent zoom
+    document.addEventListener('touchstart', e => {
+      if (e.touches.length > 1) e.preventDefault();
     }, { passive: false });
-
-    let lastTouchEnd = 0;
-    document.addEventListener('touchend', (e) => {
-      const now = Date.now();
-      if (now - lastTouchEnd <= 300) {
-        e.preventDefault();
-      }
-      lastTouchEnd = now;
-    }, false);
   </script>
 </body>
 </html>
