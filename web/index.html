@@ -3176,8 +3176,8 @@
         </div>
         <div class="batch-status">
           <span class="batch-status-badge identifying">SCANNING</span>
-          <div style="display: flex; gap: 4px;">
-            <button class="batch-action-btn" onclick="generateSingleSocial('${cardId}')" title="Social Image" style="display: none;" id="social-btn-${cardId}">📸</button>
+          <div style="display: flex; flex-direction: column; gap: 8px; margin-top: 12px;">
+            <button class="btn btn-secondary btn-sm" onclick="generateSingleSocial('${cardId}')" title="Generate Social Image" style="font-size: 12px;">📸 Social</button>
             <button class="batch-delete" onclick="deleteBatchCard('${cardId}')" title="Remove">🗑️</button>
           </div>
         </div>
@@ -3210,10 +3210,6 @@
       const badge = cardEl.querySelector('.batch-status-badge');
       badge.className = 'batch-status-badge identified';
       badge.textContent = 'READY';
-
-      // Show social button
-      const socialBtn = document.getElementById(`social-btn-${cardId}`);
-      if (socialBtn) socialBtn.style.display = 'block';
 
       // Update all editable fields
       const fields = cardEl.querySelectorAll('[data-field]');
@@ -3696,6 +3692,7 @@
             <div class="card-actions">
               <button class="btn btn-secondary btn-sm" onclick="priceCheckCard('${card.id}')" title="Quick Price Check">🔍</button>
               <button class="btn btn-secondary btn-sm" onclick="setCardPrice('${card.id}')" title="Set Price">💲</button>
+              <button class="btn btn-secondary btn-sm" onclick="generateSingleSocial('${card.id}')" title="Generate Social Image">📸</button>
               <button class="btn btn-secondary" onclick="editCard('${card.id}')">Edit</button>
               ${card.status === 'listed' ? `
                 <button class="btn btn-accent" onclick="window.open(cards.find(c=>c.id==='${card.id}')?.ebay_listing_url || 'https://ebay.com', '_blank')">View on eBay</button>
