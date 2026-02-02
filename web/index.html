@@ -5683,18 +5683,24 @@
         const company = card.grading_company || '';
         const certNumber = card.cert_number || card.certification_number || '';
 
-        // Build search query
-        const query = buildSearchQuery(card);
-        const encodedQuery = encodeURIComponent(query);
+        // Build search queries - different formats for different sites
+        const ebayQuery = buildSearchQuery(card);
+        const encodedEbayQuery = encodeURIComponent(ebayQuery);
+
+        // COMC uses + for spaces and comma-separated params
+        const comcQuery = buildComcQuery(card);
+
+        // 130point uses optimized query with exclusions
+        const p130Query = build130pointQuery(card);
 
         // Generate links
         const links = {
-          ebaySold: `https://www.ebay.com/sch/i.html?_nkw=${encodedQuery}&LH_Complete=1&LH_Sold=1&_sop=13`,
-          ebayBin: `https://www.ebay.com/sch/i.html?_nkw=${encodedQuery}&LH_BIN=1&_sop=15`,
-          comc: `https://www.comc.com/Cards?search=${encodedQuery}`,
+          ebaySold: `https://www.ebay.com/sch/i.html?_nkw=${encodedEbayQuery}&LH_Complete=1&LH_Sold=1&_sop=13`,
+          ebayBin: `https://www.ebay.com/sch/i.html?_nkw=${encodedEbayQuery}&LH_BIN=1&_sop=15`,
+          comc: `https://www.comc.com/Cards,sr,=${comcQuery},fb,i100`,
           psa: certNumber ? `https://www.psacard.com/cert/${certNumber}` : null,
-          p130: `https://130point.com/sales/?search=${encodedQuery}`,
-          google: `https://www.google.com/search?q=${encodedQuery}+card+price`
+          p130: `https://130point.com/sales/?search=${encodeURIComponent(p130Query)}`,
+          google: `https://www.google.com/search?q=${encodedEbayQuery}+card+price`
         };
 
         // Image URL - card.front contains the image path
@@ -5750,6 +5756,86 @@
       return parts.join(' ');
     }
 
+    // COMC query builder - uses + for spaces, specific URL format
+    function buildComcQuery(card) {
+      const parts = [];
+
+      // Player first
+      if (card.player || card.subject) parts.push(card.player || card.subject);
+
+      // Year
+      if (card.year) parts.push(card.year);
+
+      // Set name
+      if (card.set_name || card.set) parts.push(card.set_name || card.set);
+
+      // Card number without #
+      if (card.card_number) parts.push(card.card_number);
+
+      // Parallel (skip Base)
+      if (card.parallel && card.parallel !== 'Base') parts.push(card.parallel);
+
+      // Return with + instead of spaces (COMC format)
+      return parts.filter(Boolean).join(' ').replace(/\s+/g, '+');
+    }
+
+    // 130point query builder - optimized for eBay sold data search
+    function build130pointQuery(card) {
+      const parts = [];
+
+      // Player name first
+      if (card.player || card.subject) {
+        parts.push(card.player || card.subject);
+      }
+
+      // Year with variations for season formats (e.g., 2023 also matches 22-23)
+      if (card.year) {
+        const year = String(card.year);
+        if (year.length === 4) {
+          const shortYear = year.slice(2);
+          const prevShortYear = String(parseInt(shortYear) - 1).padStart(2, '0');
+          // Add variation for season format
+          parts.push(`(${year}, ${prevShortYear}-${shortYear})`);
+        } else {
+          parts.push(year);
+        }
+      }
+
+      // Set name - remove common manufacturer noise
+      if (card.set_name || card.set) {
+        const cleanSet = (card.set_name || card.set)
+          .replace(/panini/gi, '')
+          .replace(/topps/gi, '')
+          .replace(/upper\s*deck/gi, '')
+          .replace(/bowman/gi, '')
+          .replace(/\s+/g, ' ')
+          .trim();
+        if (cleanSet) {
+          parts.push(cleanSet);
+        }
+      }
+
+      // Parallel (skip if base)
+      if (card.parallel && card.parallel.toLowerCase() !== 'base') {
+        parts.push(card.parallel);
+      }
+
+      // Grade with exact match syntax: PSA&10
+      if (card.is_graded && card.grading_company && card.grade) {
+        const company = card.grading_company.toUpperCase();
+        const grade = card.grade;
+        parts.push(`${company}&${grade}`);
+      }
+
+      // Build query and add exclusions for noise
+      let query = parts.filter(Boolean).join(' ').trim();
+
+      // Add exclusions for common eBay listing noise
+      const exclusions = '-box -case -break -lot -repack -mystery';
+
+      return `${query} ${exclusions}`.trim();
+    }
+
     function openAllLinks(marketplace) {
       const cardIds = selectedCards.size > 0 ? Array.from(selectedCards) : cards.map(c => c.id);
       const selectedCardsData = cards.filter(c => cardIds.includes(c.id));
@@ -5763,23 +5849,23 @@
       }
 
       cardsToOpen.forEach((card, index) => {
-        // Card properties are directly on card object (not nested)
-        const query = buildSearchQuery(card);
-        const encodedQuery = encodeURIComponent(query);
-
         let url;
         switch(marketplace) {
           case 'ebay-sold':
-            url = `https://www.ebay.com/sch/i.html?_nkw=${encodedQuery}&LH_Complete=1&LH_Sold=1&_sop=13`;
+            const ebayQuery = encodeURIComponent(buildSearchQuery(card));
+            url = `https://www.ebay.com/sch/i.html?_nkw=${ebayQuery}&LH_Complete=1&LH_Sold=1&_sop=13`;
             break;
           case 'ebay-bin':
-            url = `https://www.ebay.com/sch/i.html?_nkw=${encodedQuery}&LH_BIN=1&_sop=15`;
+            const ebayBinQuery = encodeURIComponent(buildSearchQuery(card));
+            url = `https://www.ebay.com/sch/i.html?_nkw=${ebayBinQuery}&LH_BIN=1&_sop=15`;
             break;
           case 'comc':
-            url = `https://www.comc.com/Cards?search=${encodedQuery}`;
+            const comcQuery = buildComcQuery(card);
+            url = `https://www.comc.com/Cards,sr,=${comcQuery},fb,i100`;
             break;
           case 'p130':
-            url = `https://130point.com/sales/?search=${encodedQuery}`;
+            const p130Query = build130pointQuery(card);
+            url = `https://130point.com/sales/?search=${encodeURIComponent(p130Query)}`;
             break;
           case 'google':
             url = `https://www.google.com/search?q=${encodedQuery}+card+price`;
