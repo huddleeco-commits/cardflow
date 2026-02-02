@@ -5044,14 +5044,19 @@ app.get('/api/agent/usage', authenticateToken, async (req, res) => {
     );
     const user = userResult.rows[0];
 
+    // Beta is enabled for: admins, users with their own API key, or users with beta flag
+    const isBetaEnabled = quotaCheck.isAdmin || quotaCheck.hasOwnKey || user?.beta_features?.agentAnalysis || false;
+
     res.json({
       quota: {
         used: quotaCheck.used || 0,
         limit: quotaCheck.limit || 3,
         remaining: quotaCheck.remaining || 0,
-        canAnalyze: quotaCheck.allowed
+        canAnalyze: quotaCheck.allowed,
+        isAdmin: quotaCheck.isAdmin || false,
+        hasOwnKey: quotaCheck.hasOwnKey || false
       },
-      betaEnabled: user?.beta_features?.agentAnalysis || false,
+      betaEnabled: isBetaEnabled,
       apiKeys: {
         anthropic: user?.anthropic_api_key ? '....' + user.anthropic_api_key.slice(-4) : null,
         openai: user?.openai_api_key ? '....' + user.openai_api_key.slice(-4) : null,
