@@ -5639,10 +5639,11 @@
 
       // Get card IDs based on source
       if (source === 'batch') {
-        // batchCards is an array of card IDs
+        // batchCards is an array of card IDs - filter to only identified cards
         cardIds = batchCards.filter(id => {
           const card = cards.find(c => c.id === id);
-          return card && card.card_data;
+          // Check for player/subject to confirm card has been identified
+          return card && (card.player || card.subject);
         });
       } else if (selectedCards.size > 0) {
         cardIds = Array.from(selectedCards);
@@ -5671,19 +5672,19 @@
       count.textContent = `${selectedCardsData.length} cards`;
 
       grid.innerHTML = selectedCardsData.map(card => {
-        const data = card.card_data || {};
-        const player = data.player || data.subject || 'Unknown';
-        const year = data.year || '';
-        const setName = data.set_name || data.set || '';
-        const cardNumber = data.card_number || '';
-        const parallel = data.parallel || '';
-        const graded = data.graded || data.is_graded;
-        const grade = data.grade || '';
-        const company = data.grading_company || '';
-        const certNumber = data.cert_number || data.certification_number || '';
+        // Card properties are flattened directly on the card object (not nested in card_data)
+        const player = card.player || card.subject || 'Unknown';
+        const year = card.year || '';
+        const setName = card.set_name || card.set || '';
+        const cardNumber = card.card_number || '';
+        const parallel = card.parallel || '';
+        const graded = card.is_graded;
+        const grade = card.grade || '';
+        const company = card.grading_company || '';
+        const certNumber = card.cert_number || card.certification_number || '';
 
         // Build search query
-        const query = buildSearchQuery(data);
+        const query = buildSearchQuery(card);
         const encodedQuery = encodeURIComponent(query);
 
         // Generate links
@@ -5696,9 +5697,8 @@
           google: `https://www.google.com/search?q=${encodedQuery}+card+price`
         };
 
-        const imgSrc = card.front_image_path ?
-          (card.front_image_path.startsWith('http') ? card.front_image_path : `${API_URL.replace('/api', '')}${card.front_image_path}`) :
-          '';
+        // Image URL - card.front contains the image path
+        const imgSrc = card.front ? getImageUrl(card.front, card) : '';
 
         const details = [year, setName, cardNumber ? `#${cardNumber}` : '', parallel].filter(Boolean).join(' ');
         const gradeInfo = graded && company && grade ? ` | ${company} ${grade}` : '';
@@ -5723,28 +5723,28 @@
       }).join('');
     }
 
-    function buildSearchQuery(data) {
+    function buildSearchQuery(card) {
       const parts = [];
 
       // Add year
-      if (data.year) parts.push(data.year);
+      if (card.year) parts.push(card.year);
 
       // Add set name
-      if (data.set_name || data.set) parts.push(data.set_name || data.set);
+      if (card.set_name || card.set) parts.push(card.set_name || card.set);
 
       // Add player/subject
-      if (data.player || data.subject) parts.push(data.player || data.subject);
+      if (card.player || card.subject) parts.push(card.player || card.subject);
 
       // Add card number
-      if (data.card_number) parts.push(`#${data.card_number}`);
+      if (card.card_number) parts.push(`#${card.card_number}`);
 
-      // Add parallel/variant
-      if (data.parallel) parts.push(data.parallel);
+      // Add parallel/variant (skip 'Base')
+      if (card.parallel && card.parallel !== 'Base') parts.push(card.parallel);
 
       // Add grading info if graded
-      if (data.graded || data.is_graded) {
-        if (data.grading_company) parts.push(data.grading_company);
-        if (data.grade) parts.push(data.grade);
+      if (card.is_graded) {
+        if (card.grading_company) parts.push(card.grading_company);
+        if (card.grade) parts.push(card.grade);
       }
 
       return parts.join(' ');
@@ -5763,8 +5763,8 @@
       }
 
       cardsToOpen.forEach((card, index) => {
-        const data = card.card_data || {};
-        const query = buildSearchQuery(data);
+        // Card properties are directly on card object (not nested)
+        const query = buildSearchQuery(card);
         const encodedQuery = encodeURIComponent(query);
 
         let url;
