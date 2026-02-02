@@ -37,6 +37,9 @@ const crypto = require('crypto');
 const axios = require('axios');
 const XLSX = require('xlsx');
 
+// SportsCardPro API Config
+const SPORTSCARDSPRO_API_KEY = process.env.SPORTSCARDSPRO_API_KEY || '16643d2a854926e78a7935490e4af893cd4027e8';
+
 // eBay OAuth Config
 const EBAY_APP_ID = process.env.EBAY_APP_ID;
 const EBAY_CERT_ID = process.env.EBAY_CERT_ID;
@@ -664,6 +667,203 @@ app.delete('/api/cards/:id', authenticateToken, async (req, res) => {
 
   } catch (e) {
     res.status(500).json({ error: 'Failed to delete card' });
+  }
+});
+
+// ============================================
+// SPORTSCARDSPRO PRICING API
+// ============================================
+
+// Get pricing for a single card from SportsCardPro
+app.get('/api/pricing/:cardId', authenticateToken, async (req, res) => {
+  try {
+    // Get card data
+    const cardResult = await pool.query(
+      'SELECT * FROM cards WHERE id = $1 AND user_id = $2',
+      [req.params.cardId, req.user.id]
+    );
+
+    if (cardResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Card not found' });
+    }
+
+    const card = cardResult.rows[0];
+    const cardData = card.card_data || {};
+
+    // Build search query for SportsCardPro
+    const searchParts = [];
+    if (cardData.player) searchParts.push(cardData.player);
+    if (cardData.year) searchParts.push(cardData.year);
+    if (cardData.set_name) searchParts.push(cardData.set_name);
+    if (cardData.card_number) searchParts.push(cardData.card_number);
+    if (cardData.parallel && cardData.parallel !== 'Base') searchParts.push(cardData.parallel);
+
+    const searchQuery = searchParts.join(' ');
+
+    if (!searchQuery) {
+      return res.json({ error: 'Insufficient card data for pricing lookup' });
+    }
+
+    // Call SportsCardPro API
+    const scpResponse = await axios.get('https://www.sportscardspro.com/api/product', {
+      params: {
+        t: SPORTSCARDSPRO_API_KEY,
+        q: searchQuery
+      },
+      timeout: 10000
+    });
+
+    if (scpResponse.data.status !== 'success') {
+      return res.json({ error: 'Card not found in SportsCardPro', query: searchQuery });
+    }
+
+    // Parse pricing data (prices are in pennies)
+    const pricing = {
+      source: 'sportscardspro',
+      query: searchQuery,
+      productId: scpResponse.data.id,
+      productName: scpResponse.data['product-name'],
+      setName: scpResponse.data['console-name'],
+      prices: {
+        raw: scpResponse.data['loose-price'] ? scpResponse.data['loose-price'] / 100 : null,
+        psa7: scpResponse.data['cib-price'] ? scpResponse.data['cib-price'] / 100 : null,
+        psa8: scpResponse.data['new-price'] ? scpResponse.data['new-price'] / 100 : null,
+        psa9: scpResponse.data['graded-price'] ? scpResponse.data['graded-price'] / 100 : null,
+        psa10: scpResponse.data['manual-only-price'] ? scpResponse.data['manual-only-price'] / 100 : null,
+        sgc10: scpResponse.data['condition-18-price'] ? scpResponse.data['condition-18-price'] / 100 : null,
+        cgc10: scpResponse.data['condition-17-price'] ? scpResponse.data['condition-17-price'] / 100 : null
+      }
+    };
+
+    res.json(pricing);
+
+  } catch (e) {
+    console.error('SportsCardPro pricing error:', e.message);
+    res.status(500).json({ error: 'Failed to fetch pricing', message: e.message });
+  }
+});
+
+// Get pricing for multiple cards (bulk)
+app.post('/api/pricing/bulk', authenticateToken, async (req, res) => {
+  try {
+    const { cardIds } = req.body;
+
+    if (!cardIds || !Array.isArray(cardIds) || cardIds.length === 0) {
+      return res.status(400).json({ error: 'cardIds array required' });
+    }
+
+    // Limit to 20 cards per request
+    const limitedIds = cardIds.slice(0, 20);
+
+    // Get card data
+    const cardsResult = await pool.query(
+      'SELECT * FROM cards WHERE id = ANY($1) AND user_id = $2',
+      [limitedIds, req.user.id]
+    );
+
+    const results = [];
+
+    for (const card of cardsResult.rows) {
+      const cardData = card.card_data || {};
+
+      // Build search query
+      const searchParts = [];
+      if (cardData.player) searchParts.push(cardData.player);
+      if (cardData.year) searchParts.push(cardData.year);
+      if (cardData.set_name) searchParts.push(cardData.set_name);
+      if (cardData.card_number) searchParts.push(cardData.card_number);
+      if (cardData.parallel && cardData.parallel !== 'Base') searchParts.push(cardData.parallel);
+
+      const searchQuery = searchParts.join(' ');
+
+      if (!searchQuery) {
+        results.push({ cardId: card.id, error: 'Insufficient data' });
+        continue;
+      }
+
+      try {
+        // Call SportsCardPro API
+        const scpResponse = await axios.get('https://www.sportscardspro.com/api/product', {
+          params: {
+            t: SPORTSCARDSPRO_API_KEY,
+            q: searchQuery
+          },
+          timeout: 10000
+        });
+
+        if (scpResponse.data.status !== 'success') {
+          results.push({ cardId: card.id, error: 'Not found', query: searchQuery });
+          continue;
+        }
+
+        results.push({
+          cardId: card.id,
+          source: 'sportscardspro',
+          productId: scpResponse.data.id,
+          productName: scpResponse.data['product-name'],
+          prices: {
+            raw: scpResponse.data['loose-price'] ? scpResponse.data['loose-price'] / 100 : null,
+            psa9: scpResponse.data['graded-price'] ? scpResponse.data['graded-price'] / 100 : null,
+            psa10: scpResponse.data['manual-only-price'] ? scpResponse.data['manual-only-price'] / 100 : null
+          }
+        });
+
+        // Small delay to avoid rate limiting
+        await new Promise(r => setTimeout(r, 200));
+
+      } catch (err) {
+        results.push({ cardId: card.id, error: err.message });
+      }
+    }
+
+    res.json({ results, total: results.length });
+
+  } catch (e) {
+    console.error('Bulk pricing error:', e.message);
+    res.status(500).json({ error: 'Failed to fetch bulk pricing' });
+  }
+});
+
+// Search SportsCardPro directly (for Link Matrix)
+app.get('/api/pricing/search', authenticateToken, async (req, res) => {
+  try {
+    const { q } = req.query;
+
+    if (!q) {
+      return res.status(400).json({ error: 'Search query required' });
+    }
+
+    const scpResponse = await axios.get('https://www.sportscardspro.com/api/product', {
+      params: {
+        t: SPORTSCARDSPRO_API_KEY,
+        q: q
+      },
+      timeout: 10000
+    });
+
+    if (scpResponse.data.status !== 'success') {
+      return res.json({ error: 'Not found', query: q });
+    }
+
+    res.json({
+      source: 'sportscardspro',
+      query: q,
+      productId: scpResponse.data.id,
+      productName: scpResponse.data['product-name'],
+      setName: scpResponse.data['console-name'],
+      url: `https://www.sportscardspro.com/game/${scpResponse.data['console-name'].toLowerCase().replace(/\s+/g, '-')}/${scpResponse.data['product-name'].toLowerCase().replace(/\s+/g, '-')}`,
+      prices: {
+        raw: scpResponse.data['loose-price'] ? scpResponse.data['loose-price'] / 100 : null,
+        psa7: scpResponse.data['cib-price'] ? scpResponse.data['cib-price'] / 100 : null,
+        psa8: scpResponse.data['new-price'] ? scpResponse.data['new-price'] / 100 : null,
+        psa9: scpResponse.data['graded-price'] ? scpResponse.data['graded-price'] / 100 : null,
+        psa10: scpResponse.data['manual-only-price'] ? scpResponse.data['manual-only-price'] / 100 : null
+      }
+    });
+
+  } catch (e) {
+    console.error('SportsCardPro search error:', e.message);
+    res.status(500).json({ error: 'Search failed' });
   }
 });
 

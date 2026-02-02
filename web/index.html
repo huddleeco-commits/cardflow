@@ -1806,6 +1806,28 @@
       color: var(--purple);
     }
     /* Status & Actions */
+    .batch-pricing {
+      padding: 12px;
+      background: rgba(0,0,0,0.15);
+      border-left: 1px solid var(--glass-border);
+    }
+    .scp-price-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+    }
+    .scp-price {
+      font-weight: 600;
+      font-size: 12px;
+    }
+    .scp-price.raw { color: #9ca3af; }
+    .scp-price.psa9 { color: #60a5fa; }
+    .scp-price.psa10 { color: #4ade80; }
+    .scp-price.has-value.raw { color: #fff; }
+    .scp-price.has-value.psa9 { color: #93c5fd; }
+    .scp-price.has-value.psa10 { color: #86efac; }
+    .scp-price.loading { animation: pulse 1s infinite; }
     .batch-status {
       display: flex;
       flex-direction: column;
@@ -2622,13 +2644,13 @@
             <span class="legend-item"><span class="legend-dot ebay-bin"></span> eBay BIN</span>
             <span class="legend-item"><span class="legend-dot comc"></span> COMC</span>
             <span class="legend-item"><span class="legend-dot psa"></span> PSA Cert</span>
-            <span class="legend-item"><span class="legend-dot p130"></span> 130point</span>
+            <span class="legend-item"><span class="legend-dot scp"></span> SportsCardPro</span>
             <span class="legend-item"><span class="legend-dot google"></span> Google</span>
           </div>
           <div class="link-matrix-actions">
             <button class="btn btn-sm" style="background: #f59e0b; color: white;" onclick="openAllLinks('ebay-sold')">Open All eBay Sold</button>
             <button class="btn btn-sm" style="background: #3b82f6; color: white;" onclick="openAllLinks('ebay-bin')">Open All BIN</button>
-            <button class="btn btn-sm" style="background: #8b5cf6; color: white;" onclick="openAllLinks('p130')">Open All 130point</button>
+            <button class="btn btn-sm" style="background: #22c55e; color: white;" onclick="fetchAllPricing()">Fetch All Prices</button>
           </div>
         </div>
         <div class="link-matrix-grid" id="link-matrix-grid">
@@ -2675,7 +2697,7 @@
     .legend-dot.ebay-bin { background: #3b82f6; }
     .legend-dot.comc { background: #10b981; }
     .legend-dot.psa { background: #ef4444; }
-    .legend-dot.p130 { background: #8b5cf6; }
+    .legend-dot.scp { background: #22c55e; }
     .legend-dot.google { background: #6b7280; }
 
     .link-matrix-grid {
@@ -2684,7 +2706,7 @@
     }
     .link-matrix-row {
       display: grid;
-      grid-template-columns: 60px 1fr auto;
+      grid-template-columns: 60px 1fr auto auto;
       gap: 16px;
       padding: 12px 20px;
       border-bottom: 1px solid var(--glass-border);
@@ -2743,12 +2765,34 @@
     .link-btn.ebay-bin { background: #3b82f6; color: white; }
     .link-btn.comc { background: #10b981; color: white; }
     .link-btn.psa { background: #ef4444; color: white; }
-    .link-btn.p130 { background: #8b5cf6; color: white; }
+    .link-btn.scp { background: #22c55e; color: white; }
     .link-btn.google { background: #6b7280; color: white; }
     .link-btn.disabled {
       opacity: 0.3;
       cursor: not-allowed;
       pointer-events: none;
+    }
+    .link-matrix-pricing {
+      margin-left: auto;
+    }
+    .price-badge {
+      padding: 4px 8px;
+      border-radius: 4px;
+      font-weight: 600;
+      min-width: 50px;
+      text-align: center;
+    }
+    .price-badge.raw { background: rgba(107, 114, 128, 0.3); color: #9ca3af; }
+    .price-badge.psa9 { background: rgba(59, 130, 246, 0.3); color: #60a5fa; }
+    .price-badge.psa10 { background: rgba(34, 197, 94, 0.3); color: #4ade80; }
+    .price-badge.loading { animation: pulse 1s infinite; }
+    .price-badge.has-price { font-weight: 700; }
+    .price-badge.raw.has-price { background: rgba(107, 114, 128, 0.5); color: #fff; }
+    .price-badge.psa9.has-price { background: rgba(59, 130, 246, 0.5); color: #fff; }
+    .price-badge.psa10.has-price { background: rgba(34, 197, 94, 0.5); color: #fff; }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
     }
   </style>
 
@@ -3389,10 +3433,17 @@
             <div class="batch-field-value" contenteditable="true" data-field="cert_number" data-card="${cardId}" onblur="saveBatchField(this)">-</div>
           </div>
         </div>
+        <div class="batch-pricing" id="batch-pricing-${cardId}" style="display: flex; flex-direction: column; gap: 4px; min-width: 90px;">
+          <div style="font-size: 10px; color: var(--text-muted); text-transform: uppercase;">Pricing</div>
+          <div class="scp-price-row"><span style="font-size: 10px; color: #9ca3af;">Raw:</span> <span class="scp-price raw" id="scp-raw-${cardId}">--</span></div>
+          <div class="scp-price-row"><span style="font-size: 10px; color: #60a5fa;">PSA 9:</span> <span class="scp-price psa9" id="scp-psa9-${cardId}">--</span></div>
+          <div class="scp-price-row"><span style="font-size: 10px; color: #4ade80;">PSA 10:</span> <span class="scp-price psa10" id="scp-psa10-${cardId}">--</span></div>
+        </div>
         <div class="batch-status">
           <span class="batch-status-badge identifying">SCANNING</span>
           <div style="display: flex; flex-direction: column; gap: 8px; margin-top: 12px;">
             <button class="btn btn-secondary btn-sm" onclick="generateSingleSocial('${cardId}')" title="Generate Social Image" style="font-size: 12px;">📸 Social</button>
+            <button class="btn btn-secondary btn-sm" onclick="fetchBatchCardPricing('${cardId}')" title="Get SportsCardPro Pricing" style="font-size: 12px;">💰 Price</button>
             <button class="batch-delete" onclick="deleteBatchCard('${cardId}')" title="Remove">🗑️</button>
           </div>
         </div>
@@ -3453,6 +3504,78 @@
       // Show grade fields if graded
       if (cardData.is_graded) {
         toggleBatchGradeRow(cardId, 'true');
+      }
+
+      // Auto-fetch pricing after identification
+      fetchBatchCardPricing(cardId);
+    }
+
+    // Fetch SportsCardPro pricing for a batch card
+    async function fetchBatchCardPricing(cardId) {
+      const rawEl = document.getElementById(`scp-raw-${cardId}`);
+      const psa9El = document.getElementById(`scp-psa9-${cardId}`);
+      const psa10El = document.getElementById(`scp-psa10-${cardId}`);
+
+      if (!rawEl || !psa9El || !psa10El) return;
+
+      // Set loading state
+      rawEl.textContent = '...';
+      psa9El.textContent = '...';
+      psa10El.textContent = '...';
+      rawEl.classList.add('loading');
+      psa9El.classList.add('loading');
+      psa10El.classList.add('loading');
+
+      try {
+        const response = await fetch(`${API_URL}/pricing/${cardId}`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+
+        if (!response.ok) throw new Error('Failed to fetch pricing');
+
+        const data = await response.json();
+
+        rawEl.classList.remove('loading');
+        psa9El.classList.remove('loading');
+        psa10El.classList.remove('loading');
+
+        if (data.error) {
+          rawEl.textContent = '--';
+          psa9El.textContent = '--';
+          psa10El.textContent = '--';
+          return;
+        }
+
+        // Update with prices
+        if (data.prices.raw) {
+          rawEl.textContent = '$' + data.prices.raw.toFixed(0);
+          rawEl.classList.add('has-value');
+        } else {
+          rawEl.textContent = '--';
+        }
+
+        if (data.prices.psa9) {
+          psa9El.textContent = '$' + data.prices.psa9.toFixed(0);
+          psa9El.classList.add('has-value');
+        } else {
+          psa9El.textContent = '--';
+        }
+
+        if (data.prices.psa10) {
+          psa10El.textContent = '$' + data.prices.psa10.toFixed(0);
+          psa10El.classList.add('has-value');
+        } else {
+          psa10El.textContent = '--';
+        }
+
+      } catch (e) {
+        console.error('Pricing fetch error:', e);
+        rawEl.classList.remove('loading');
+        psa9El.classList.remove('loading');
+        psa10El.classList.remove('loading');
+        rawEl.textContent = '--';
+        psa9El.textContent = '--';
+        psa10El.textContent = '--';
       }
     }
 
@@ -5690,8 +5813,9 @@
         // COMC uses + for spaces and comma-separated params
         const comcQuery = buildComcQuery(card);
 
-        // 130point uses optimized query with exclusions
-        const p130Query = build130pointQuery(card);
+        // SportsCardPro search query
+        const scpQuery = buildScpQuery(card);
+        const scpSearchUrl = `https://www.sportscardspro.com/search?q=${encodeURIComponent(scpQuery)}`;
 
         // Generate links
         const links = {
@@ -5699,7 +5823,7 @@
           ebayBin: `https://www.ebay.com/sch/i.html?_nkw=${encodedEbayQuery}&LH_BIN=1&_sop=15`,
           comc: `https://www.comc.com/Cards,sr,=${comcQuery},fb,i100`,
           psa: certNumber ? `https://www.psacard.com/cert/${certNumber}` : null,
-          p130: `https://130point.com/sales/?search=${encodeURIComponent(p130Query)}`,
+          scp: scpSearchUrl,
           google: `https://www.google.com/search?q=${encodedEbayQuery}+card+price`
         };
 
@@ -5721,8 +5845,13 @@
               <a href="${links.ebayBin}" target="_blank" class="link-btn ebay-bin" title="eBay BIN">B</a>
               <a href="${links.comc}" target="_blank" class="link-btn comc" title="COMC">C</a>
               <a href="${links.psa || '#'}" target="_blank" class="link-btn psa ${!links.psa ? 'disabled' : ''}" title="PSA Cert">P</a>
-              <a href="${links.p130}" target="_blank" class="link-btn p130" title="130point">1</a>
+              <a href="${links.scp}" target="_blank" class="link-btn scp" title="SportsCardPro">S</a>
               <a href="${links.google}" target="_blank" class="link-btn google" title="Google">G</a>
+            </div>
+            <div class="link-matrix-pricing" id="pricing-${card.id}" style="display: flex; gap: 8px; font-size: 11px;">
+              <span class="price-badge raw" title="Raw/Ungraded">--</span>
+              <span class="price-badge psa9" title="PSA 9">--</span>
+              <span class="price-badge psa10" title="PSA 10">--</span>
             </div>
           </div>
         `;
@@ -5779,8 +5908,8 @@
       return parts.filter(Boolean).join(' ').replace(/\s+/g, '+');
     }
 
-    // 130point query builder - optimized for eBay sold data search
-    function build130pointQuery(card) {
+    // SportsCardPro query builder
+    function buildScpQuery(card) {
       const parts = [];
 
       // Player name first
@@ -5788,31 +5917,19 @@
         parts.push(card.player || card.subject);
       }
 
-      // Year with variations for season formats (e.g., 2023 also matches 22-23)
+      // Year
       if (card.year) {
-        const year = String(card.year);
-        if (year.length === 4) {
-          const shortYear = year.slice(2);
-          const prevShortYear = String(parseInt(shortYear) - 1).padStart(2, '0');
-          // Add variation for season format
-          parts.push(`(${year}, ${prevShortYear}-${shortYear})`);
-        } else {
-          parts.push(year);
-        }
+        parts.push(card.year);
       }
 
-      // Set name - remove common manufacturer noise
+      // Set name
       if (card.set_name || card.set) {
-        const cleanSet = (card.set_name || card.set)
-          .replace(/panini/gi, '')
-          .replace(/topps/gi, '')
-          .replace(/upper\s*deck/gi, '')
-          .replace(/bowman/gi, '')
-          .replace(/\s+/g, ' ')
-          .trim();
-        if (cleanSet) {
-          parts.push(cleanSet);
-        }
+        parts.push(card.set_name || card.set);
+      }
+
+      // Card number
+      if (card.card_number) {
+        parts.push(card.card_number);
       }
 
       // Parallel (skip if base)
@@ -5820,20 +5937,102 @@
         parts.push(card.parallel);
       }
 
-      // Grade with exact match syntax: PSA&10
-      if (card.is_graded && card.grading_company && card.grade) {
-        const company = card.grading_company.toUpperCase();
-        const grade = card.grade;
-        parts.push(`${company}&${grade}`);
+      return parts.filter(Boolean).join(' ').trim();
+    }
+
+    // Fetch pricing for all cards in Link Matrix
+    async function fetchAllPricing() {
+      const cardIds = selectedCards.size > 0 ? Array.from(selectedCards) : cards.map(c => c.id);
+
+      if (cardIds.length === 0) {
+        showToast('No cards to fetch pricing for', 'error');
+        return;
       }
 
-      // Build query and add exclusions for noise
-      let query = parts.filter(Boolean).join(' ').trim();
+      showToast(`Fetching pricing for ${cardIds.length} cards...`, 'info');
 
-      // Add exclusions for common eBay listing noise
-      const exclusions = '-box -case -break -lot -repack -mystery';
+      // Set all price badges to loading
+      cardIds.forEach(id => {
+        const pricingDiv = document.getElementById(`pricing-${id}`);
+        if (pricingDiv) {
+          pricingDiv.querySelectorAll('.price-badge').forEach(badge => {
+            badge.classList.add('loading');
+            badge.textContent = '...';
+          });
+        }
+      });
 
-      return `${query} ${exclusions}`.trim();
+      try {
+        const response = await fetch(`${API_URL}/pricing/bulk`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({ cardIds })
+        });
+
+        if (!response.ok) throw new Error('Failed to fetch pricing');
+
+        const data = await response.json();
+
+        // Update price badges with results
+        data.results.forEach(result => {
+          const pricingDiv = document.getElementById(`pricing-${result.cardId}`);
+          if (!pricingDiv) return;
+
+          const rawBadge = pricingDiv.querySelector('.price-badge.raw');
+          const psa9Badge = pricingDiv.querySelector('.price-badge.psa9');
+          const psa10Badge = pricingDiv.querySelector('.price-badge.psa10');
+
+          rawBadge.classList.remove('loading');
+          psa9Badge.classList.remove('loading');
+          psa10Badge.classList.remove('loading');
+
+          if (result.error) {
+            rawBadge.textContent = '--';
+            psa9Badge.textContent = '--';
+            psa10Badge.textContent = '--';
+          } else {
+            if (result.prices.raw) {
+              rawBadge.textContent = '$' + result.prices.raw.toFixed(0);
+              rawBadge.classList.add('has-price');
+            } else {
+              rawBadge.textContent = '--';
+            }
+            if (result.prices.psa9) {
+              psa9Badge.textContent = '$' + result.prices.psa9.toFixed(0);
+              psa9Badge.classList.add('has-price');
+            } else {
+              psa9Badge.textContent = '--';
+            }
+            if (result.prices.psa10) {
+              psa10Badge.textContent = '$' + result.prices.psa10.toFixed(0);
+              psa10Badge.classList.add('has-price');
+            } else {
+              psa10Badge.textContent = '--';
+            }
+          }
+        });
+
+        const foundCount = data.results.filter(r => !r.error).length;
+        showToast(`Found pricing for ${foundCount}/${cardIds.length} cards`, 'success');
+
+      } catch (e) {
+        console.error('Fetch pricing error:', e);
+        showToast('Failed to fetch pricing: ' + e.message, 'error');
+
+        // Clear loading state
+        cardIds.forEach(id => {
+          const pricingDiv = document.getElementById(`pricing-${id}`);
+          if (pricingDiv) {
+            pricingDiv.querySelectorAll('.price-badge').forEach(badge => {
+              badge.classList.remove('loading');
+              badge.textContent = '--';
+            });
+          }
+        });
+      }
     }
 
     function openAllLinks(marketplace) {
@@ -5850,25 +6049,24 @@
 
       cardsToOpen.forEach((card, index) => {
         let url;
+        const searchQuery = encodeURIComponent(buildSearchQuery(card));
         switch(marketplace) {
           case 'ebay-sold':
-            const ebayQuery = encodeURIComponent(buildSearchQuery(card));
-            url = `https://www.ebay.com/sch/i.html?_nkw=${ebayQuery}&LH_Complete=1&LH_Sold=1&_sop=13`;
+            url = `https://www.ebay.com/sch/i.html?_nkw=${searchQuery}&LH_Complete=1&LH_Sold=1&_sop=13`;
             break;
           case 'ebay-bin':
-            const ebayBinQuery = encodeURIComponent(buildSearchQuery(card));
-            url = `https://www.ebay.com/sch/i.html?_nkw=${ebayBinQuery}&LH_BIN=1&_sop=15`;
+            url = `https://www.ebay.com/sch/i.html?_nkw=${searchQuery}&LH_BIN=1&_sop=15`;
             break;
           case 'comc':
             const comcQuery = buildComcQuery(card);
             url = `https://www.comc.com/Cards,sr,=${comcQuery},fb,i100`;
             break;
-          case 'p130':
-            const p130Query = build130pointQuery(card);
-            url = `https://130point.com/sales/?search=${encodeURIComponent(p130Query)}`;
+          case 'scp':
+            const scpQuery = buildScpQuery(card);
+            url = `https://www.sportscardspro.com/search?q=${encodeURIComponent(scpQuery)}`;
             break;
           case 'google':
-            url = `https://www.google.com/search?q=${encodedQuery}+card+price`;
+            url = `https://www.google.com/search?q=${searchQuery}+card+price`;
             break;
           default:
             return;
