@@ -2696,18 +2696,18 @@
     <div class="modal-content" style="max-width: 700px; max-height: 90vh;">
       <div class="modal-header" style="background: linear-gradient(135deg, rgba(16, 185, 129, 0.2), rgba(6, 182, 212, 0.2));">
         <h2 style="display: flex; align-items: center; gap: 10px;">
-          <span style="animation: ai-pulse 2s infinite;">🤖</span>
-          AI Card Analysis
+          <span style="animation: ai-pulse 2s infinite;">💰</span>
+          Price Check
           <span style="font-size: 11px; background: var(--success); color: #000; padding: 2px 8px; border-radius: 4px; font-weight: 600;">BETA</span>
         </h2>
         <button class="modal-close" onclick="closeAiAnalysisModal()">&times;</button>
       </div>
       <div class="modal-body" id="ai-analysis-content" style="max-height: calc(90vh - 140px); overflow-y: auto;">
-        <!-- Analysis results will be rendered here -->
+        <!-- Price check results will be rendered here -->
         <div id="ai-analysis-loading" style="text-align: center; padding: 60px 20px; display: none;">
-          <div style="font-size: 48px; animation: ai-pulse 1s infinite;">🤖</div>
-          <h3 style="margin: 16px 0 8px;">Analyzing your card...</h3>
-          <p style="color: var(--text-muted);">AI is examining condition, searching market data, and generating recommendations</p>
+          <div style="font-size: 48px; animation: ai-pulse 1s infinite;">💰</div>
+          <h3 style="margin: 16px 0 8px;">Checking prices...</h3>
+          <p style="color: var(--text-muted);">Searching eBay, COMC, PSA, and other sources for current prices</p>
           <div style="margin-top: 20px; height: 4px; background: var(--glass); border-radius: 2px; overflow: hidden;">
             <div style="height: 100%; width: 30%; background: linear-gradient(90deg, var(--cyan), var(--success)); animation: loading-bar 2s ease-in-out infinite;"></div>
           </div>
@@ -4027,7 +4027,7 @@
               </div>
             </div>
             <div class="card-actions">
-              <button class="btn btn-ai btn-sm" onclick="analyzeCard('${card.id}')" title="AI Analysis (Beta)">🤖</button>
+              <button class="btn btn-ai btn-sm" onclick="analyzeCard('${card.id}')" title="Price Check">💰</button>
               <button class="btn btn-secondary btn-sm" onclick="priceCheckCard('${card.id}')" title="Quick Price Check">🔍</button>
               <button class="btn btn-secondary btn-sm" onclick="setCardPrice('${card.id}')" title="Set Price">💲</button>
               <button class="btn btn-secondary" onclick="editCard('${card.id}')">Edit</button>
@@ -6464,7 +6464,7 @@
         }
 
         // Show results
-        renderAiAnalysisResult(data.analysis, data.meta);
+        renderPriceCheckResult(data.prices, data.meta);
 
       } catch (error) {
         console.error('AI Analysis error:', error);
@@ -6485,156 +6485,120 @@
       }
     }
 
-    // Render AI analysis results
-    function renderAiAnalysisResult(analysis, meta) {
+    // Render price check results
+    function renderPriceCheckResult(priceData, meta) {
       document.getElementById('ai-analysis-loading').style.display = 'none';
       document.getElementById('ai-analysis-result').style.display = 'block';
 
-      const actionClass = (analysis.advice?.action || 'HOLD').toLowerCase();
-      const valueRange = analysis.marketData?.valueRange;
-      const valueStr = valueRange ? `$${valueRange.low || 0} - $${valueRange.high || 0}` : 'N/A';
+      const prices = priceData.prices || {};
+      const rec = priceData.gradeRecommendation || {};
+      const sources = priceData.sources || [];
 
-      let salesHtml = '';
-      if (analysis.marketData?.recentSales?.length > 0) {
-        salesHtml = `
-          <table class="ai-sales-table">
-            <thead>
-              <tr><th>Price</th><th>Condition</th><th>Source</th></tr>
-            </thead>
-            <tbody>
-              ${analysis.marketData.recentSales.map(sale => `
-                <tr>
-                  <td style="color: var(--success); font-weight: 600;">$${sale.price?.toFixed(2) || 'N/A'}</td>
-                  <td>${sale.condition || 'N/A'}</td>
-                  <td>${sale.source || 'eBay'}</td>
-                </tr>
-              `).join('')}
-            </tbody>
-          </table>
-        `;
-      }
-
-      let gradedSalesHtml = '';
-      if (analysis.marketData?.gradedSales?.length > 0) {
-        gradedSalesHtml = analysis.marketData.gradedSales.map(sale => `
-          <div class="ai-result-item">
-            <div class="ai-result-label">${sale.grade}</div>
-            <div class="ai-result-value" style="color: var(--success);">
-              ${sale.price ? '$' + sale.price : sale.note || 'N/A'}
-            </div>
-          </div>
-        `).join('');
-      }
+      // Format price helper
+      const formatPrice = (p) => p != null ? `$${p.toFixed(2)}` : 'N/A';
+      const formatRange = (data) => {
+        if (!data || data.avg == null) return 'No data';
+        if (data.low === data.high) return formatPrice(data.avg);
+        return `${formatPrice(data.low)} - ${formatPrice(data.high)}`;
+      };
 
       document.getElementById('ai-analysis-result').innerHTML = `
         <!-- Card Info Header -->
         <div style="display: flex; gap: 16px; margin-bottom: 20px; padding-bottom: 16px; border-bottom: 1px solid var(--glass-border);">
           <img src="${aiAnalysisCard?.front || ''}" style="width: 80px; height: 110px; object-fit: cover; border-radius: 8px;">
           <div>
-            <h3 style="margin: 0 0 4px;">${analysis.identification?.player || aiAnalysisCard?.player || 'Unknown'}</h3>
+            <h3 style="margin: 0 0 4px;">${aiAnalysisCard?.player || 'Unknown'}</h3>
             <div style="color: var(--text-muted); font-size: 13px;">
-              ${analysis.identification?.year || aiAnalysisCard?.year || ''} ${analysis.identification?.set || aiAnalysisCard?.set_name || ''}
+              ${aiAnalysisCard?.year || ''} ${aiAnalysisCard?.set_name || ''}
             </div>
             <div style="color: var(--text-muted); font-size: 12px;">
-              #${analysis.identification?.number || aiAnalysisCard?.card_number || ''} ${analysis.identification?.parallel || ''}
+              #${aiAnalysisCard?.card_number || ''} ${aiAnalysisCard?.parallel && aiAnalysisCard.parallel !== 'Base' ? aiAnalysisCard.parallel : ''}
             </div>
           </div>
         </div>
 
-        <!-- Recommendation -->
-        <div class="ai-result-section" style="text-align: center; background: linear-gradient(135deg, rgba(16, 185, 129, 0.1), rgba(6, 182, 212, 0.1));">
-          <h4>Recommendation</h4>
-          <div class="ai-action-badge ${actionClass}">${analysis.advice?.action || 'HOLD'}</div>
-          <p style="margin-top: 12px; color: var(--text-muted); font-size: 13px;">${analysis.advice?.reasoning || ''}</p>
+        <!-- Price Comparison Grid -->
+        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 20px;">
+          <div style="background: var(--glass); padding: 16px; border-radius: 12px; text-align: center;">
+            <div style="font-size: 11px; color: var(--text-muted); text-transform: uppercase; margin-bottom: 8px;">Raw Card</div>
+            <div style="font-size: 20px; font-weight: 700; color: var(--text);">${formatPrice(prices.raw?.avg)}</div>
+            <div style="font-size: 11px; color: var(--text-muted);">${prices.raw?.salesCount || 0} sales</div>
+          </div>
+          <div style="background: var(--glass); padding: 16px; border-radius: 12px; text-align: center;">
+            <div style="font-size: 11px; color: var(--text-muted); text-transform: uppercase; margin-bottom: 8px;">PSA 9</div>
+            <div style="font-size: 20px; font-weight: 700; color: var(--cyan);">${formatPrice(prices.psa9?.avg)}</div>
+            <div style="font-size: 11px; color: var(--text-muted);">${prices.psa9?.salesCount || 0} sales</div>
+          </div>
+          <div style="background: linear-gradient(135deg, rgba(16, 185, 129, 0.15), rgba(6, 182, 212, 0.15)); padding: 16px; border-radius: 12px; text-align: center; border: 1px solid var(--success);">
+            <div style="font-size: 11px; color: var(--success); text-transform: uppercase; margin-bottom: 8px;">PSA 10</div>
+            <div style="font-size: 20px; font-weight: 700; color: var(--success);">${formatPrice(prices.psa10?.avg)}</div>
+            <div style="font-size: 11px; color: var(--text-muted);">${prices.psa10?.salesCount || 0} sales</div>
+          </div>
         </div>
 
-        <!-- Condition Assessment -->
+        <!-- Grade Recommendation -->
+        <div class="ai-result-section" style="text-align: center; background: ${rec.shouldGrade ? 'linear-gradient(135deg, rgba(16, 185, 129, 0.15), rgba(6, 182, 212, 0.15))' : 'var(--glass)'}; border: 1px solid ${rec.shouldGrade ? 'var(--success)' : 'var(--glass-border)'};">
+          <h4 style="margin-bottom: 12px;">Should You Grade?</h4>
+          <div style="font-size: 32px; font-weight: 700; color: ${rec.shouldGrade ? 'var(--success)' : 'var(--text-muted)'};">
+            ${rec.shouldGrade ? '✓ YES' : '✗ NO'}
+          </div>
+          <p style="margin-top: 12px; color: var(--text-muted); font-size: 13px;">${rec.reason || ''}</p>
+          ${rec.potentialProfit ? `
+            <div style="margin-top: 12px; padding: 12px; background: rgba(16, 185, 129, 0.1); border-radius: 8px;">
+              <div style="font-size: 11px; color: var(--text-muted); text-transform: uppercase;">Potential Profit</div>
+              <div style="font-size: 18px; font-weight: 700; color: var(--success);">+$${rec.potentialProfit.toFixed(2)}</div>
+            </div>
+          ` : ''}
+          ${rec.breakEvenGrade ? `
+            <div style="margin-top: 8px; font-size: 12px; color: var(--text-muted);">
+              Break-even grade: <strong>${rec.breakEvenGrade}</strong>
+            </div>
+          ` : ''}
+        </div>
+
+        <!-- Price Ranges -->
         <div class="ai-result-section">
-          <h4>📋 Condition Assessment</h4>
-          <div style="font-size: 20px; font-weight: 700; color: var(--cyan); margin-bottom: 12px;">
-            ${analysis.condition?.grade || 'N/A'}
-          </div>
-          <div class="ai-result-grid">
-            <div class="ai-result-item">
-              <div class="ai-result-label">Corners</div>
-              <div class="ai-result-value">${analysis.condition?.corners || 'N/A'}</div>
-            </div>
-            <div class="ai-result-item">
-              <div class="ai-result-label">Centering</div>
-              <div class="ai-result-value">${analysis.condition?.centering || 'N/A'}</div>
-            </div>
-            <div class="ai-result-item">
-              <div class="ai-result-label">Surface</div>
-              <div class="ai-result-value">${analysis.condition?.surface || 'N/A'}</div>
-            </div>
-            <div class="ai-result-item">
-              <div class="ai-result-label">Edges</div>
-              <div class="ai-result-value">${analysis.condition?.edges || 'N/A'}</div>
-            </div>
-          </div>
-          ${analysis.condition?.flaws?.length > 0 ? `
-            <div style="margin-top: 12px; padding: 12px; background: rgba(239, 68, 68, 0.1); border-radius: 8px;">
-              <div class="ai-result-label" style="color: var(--error);">Flaws Noted</div>
-              <div style="font-size: 13px;">${analysis.condition.flaws.join(', ')}</div>
-            </div>
-          ` : ''}
-          <div style="margin-top: 12px; padding: 12px; background: rgba(16, 185, 129, 0.1); border-radius: 8px;">
-            <div class="ai-result-label" style="color: var(--success);">Grading Potential</div>
-            <div style="font-size: 14px; font-weight: 600;">${analysis.condition?.gradingPotential || 'N/A'}</div>
-          </div>
+          <h4>📊 Price Ranges</h4>
+          <table style="width: 100%; border-collapse: collapse;">
+            <tr style="border-bottom: 1px solid var(--glass-border);">
+              <td style="padding: 8px 0; color: var(--text-muted);">Raw</td>
+              <td style="padding: 8px 0; text-align: right; font-weight: 600;">${formatRange(prices.raw)}</td>
+            </tr>
+            <tr style="border-bottom: 1px solid var(--glass-border);">
+              <td style="padding: 8px 0; color: var(--text-muted);">PSA 9</td>
+              <td style="padding: 8px 0; text-align: right; font-weight: 600; color: var(--cyan);">${formatRange(prices.psa9)}</td>
+            </tr>
+            <tr>
+              <td style="padding: 8px 0; color: var(--text-muted);">PSA 10</td>
+              <td style="padding: 8px 0; text-align: right; font-weight: 600; color: var(--success);">${formatRange(prices.psa10)}</td>
+            </tr>
+          </table>
         </div>
 
-        <!-- Market Value -->
-        <div class="ai-result-section">
-          <h4>💰 Market Value</h4>
-          <div style="font-size: 24px; font-weight: 700; color: var(--success); margin-bottom: 8px;">
-            ${valueStr}
+        <!-- Sources -->
+        ${sources.length > 0 ? `
+          <div style="margin-bottom: 16px;">
+            <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 8px;">Sources checked:</div>
+            <div style="display: flex; flex-wrap: wrap; gap: 6px;">
+              ${sources.map(s => `
+                <span style="font-size: 11px; padding: 4px 8px; background: var(--glass); border-radius: 4px;">
+                  ${s.name} (${s.salesFound || 0})
+                </span>
+              `).join('')}
+            </div>
           </div>
-          <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 16px;">${analysis.marketData?.context || ''}</p>
+        ` : ''}
 
-          ${salesHtml ? `
-            <div style="margin-bottom: 16px;">
-              <div class="ai-result-label" style="margin-bottom: 8px;">Recent Raw Sales</div>
-              ${salesHtml}
-            </div>
-          ` : ''}
-
-          ${gradedSalesHtml ? `
-            <div>
-              <div class="ai-result-label" style="margin-bottom: 8px;">Graded Card Prices</div>
-              <div class="ai-result-grid">
-                ${gradedSalesHtml}
-              </div>
-            </div>
-          ` : ''}
-        </div>
-
-        <!-- Advice -->
-        <div class="ai-result-section">
-          <h4>💡 Expert Advice</h4>
-          ${analysis.advice?.gradingAdvice ? `
-            <div style="margin-bottom: 12px;">
-              <div class="ai-result-label">On Grading</div>
-              <div style="font-size: 13px;">${analysis.advice.gradingAdvice}</div>
-            </div>
-          ` : ''}
-          ${analysis.advice?.sellAdvice ? `
-            <div style="margin-bottom: 12px;">
-              <div class="ai-result-label">On Selling</div>
-              <div style="font-size: 13px;">${analysis.advice.sellAdvice}</div>
-            </div>
-          ` : ''}
-          ${analysis.advice?.holdReason ? `
-            <div>
-              <div class="ai-result-label">On Holding</div>
-              <div style="font-size: 13px;">${analysis.advice.holdReason}</div>
-            </div>
-          ` : ''}
-        </div>
+        <!-- Notes -->
+        ${priceData.notes ? `
+          <div style="padding: 12px; background: rgba(0, 246, 255, 0.1); border-radius: 8px; font-size: 13px; color: var(--text-muted);">
+            💡 ${priceData.notes}
+          </div>
+        ` : ''}
 
         <!-- Meta Info -->
-        <div style="text-align: center; padding: 12px; font-size: 11px; color: var(--text-muted);">
-          Analysis by ${meta?.provider || 'AI'} (${meta?.model || 'unknown'}) in ${meta?.responseTime?.toFixed(1) || '?'}s
+        <div style="text-align: center; padding: 12px; font-size: 11px; color: var(--text-muted); margin-top: 16px;">
+          Price check by ${meta?.provider || 'AI'} (${meta?.model || 'unknown'}) in ${meta?.responseTime?.toFixed(1) || '?'}s
           • Cost: $${meta?.cost?.toFixed(4) || '0.00'}
         </div>
       `;

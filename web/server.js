@@ -4941,80 +4941,50 @@ async function trackAgentAnalysis(data) {
 }
 
 // Helper: Generate analysis prompt
-function generateAnalysisPrompt(card) {
-  const cardInfo = card ? `
-CARD DETAILS (for context):
-- Year: ${card.year || 'Unknown'}
-- Set: ${card.set_name || 'Unknown'}
-- Player: ${card.player || 'Unknown'}
-- Number: ${card.card_number || 'Unknown'}
-- Parallel: ${card.parallel || 'Base'}
-` : '';
+function generatePriceCheckPrompt(card) {
+  const cardName = [
+    card.year,
+    card.set_name,
+    card.player,
+    card.card_number ? `#${card.card_number}` : '',
+    card.parallel && card.parallel !== 'Base' ? card.parallel : ''
+  ].filter(Boolean).join(' ');
 
-  return `You are an expert sports card appraiser with decades of experience. Analyze this card photo.
-${cardInfo}
-PROVIDE DETAILED ANALYSIS:
+  return `Search for current market prices for this sports card:
 
-1. IDENTIFICATION (if not provided or to verify):
-   - Year, Set, Player, Card Number
-   - Any parallel or variation
+CARD: ${cardName}
 
-2. CONDITION ASSESSMENT:
-   - Overall grade estimate (e.g., "EX to NM", "VG", "MINT")
-   - Corners condition (Sharp, Slightly rounded, Dinged, etc.)
-   - Centering quality (Perfect, Slight tilt, Off-center, etc.)
-   - Surface condition (Clean, Scratches, Print defects, etc.)
-   - Edge condition
-   - Any notable flaws
-   - PSA/BGS grade potential estimate
+SEARCH MULTIPLE SOURCES for recent sold prices:
+1. eBay sold listings (last 90 days)
+2. COMC (Check Out My Cards)
+3. PSA auction prices / cert verification
+4. 130point.com
+5. Any other card pricing sites
 
-3. MARKET VALUE:
-   - Search for recent eBay sold listings for this exact card
-   - Recent raw card sales (last 90 days)
-   - Graded card sales (PSA 9, PSA 10 if available)
-   - Current market value range for raw card
-   - Context about set/player (HOF status, rookie, popularity)
+FIND PRICES FOR:
+- Raw/ungraded card sales
+- PSA 9 graded sales
+- PSA 10 graded sales
 
-4. RECOMMENDATION:
-   - Should they: HOLD, SELL, or GRADE?
-   - Clear reasoning for your recommendation
-   - Is grading worth it? (consider grading costs ~$20-50)
-   - Best time/platform to sell if applicable
+GRADING COST REFERENCE: PSA grading costs $20-25 (value tier) to $50+ (faster tiers)
 
-USE WEB SEARCH to find current eBay sold listings and pricing data. Be specific with prices found.
-
-FORMAT YOUR RESPONSE AS VALID JSON with this exact structure:
+Respond with ONLY valid JSON in this exact format:
 {
-  "identification": {
-    "year": "string",
-    "set": "string",
-    "player": "string",
-    "number": "string",
-    "parallel": "string or null",
-    "confidence": 0.0-1.0
+  "card": "${cardName}",
+  "prices": {
+    "raw": {"low": number, "high": number, "avg": number, "salesCount": number},
+    "psa9": {"low": number or null, "high": number or null, "avg": number or null, "salesCount": number},
+    "psa10": {"low": number or null, "high": number or null, "avg": number or null, "salesCount": number}
   },
-  "condition": {
-    "grade": "string (e.g., 'EX-NM', 'MINT')",
-    "corners": "string",
-    "centering": "string",
-    "surface": "string",
-    "edges": "string",
-    "flaws": ["string array of any flaws"],
-    "gradingPotential": "string (e.g., 'PSA 8 candidate', 'PSA 9-10 potential')"
+  "sources": [{"name": "eBay", "salesFound": number}, {"name": "COMC", "salesFound": number}],
+  "gradeRecommendation": {
+    "shouldGrade": true or false,
+    "reason": "brief explanation",
+    "potentialProfit": number or null,
+    "breakEvenGrade": "PSA 9" or "PSA 10" or null
   },
-  "marketData": {
-    "recentSales": [{"price": number, "condition": "string", "date": "string", "source": "eBay"}],
-    "gradedSales": [{"grade": "string", "price": number or null, "note": "string"}],
-    "valueRange": {"low": number, "high": number, "currency": "USD"},
-    "context": "string explaining market factors"
-  },
-  "advice": {
-    "action": "HOLD" or "SELL" or "GRADE",
-    "reasoning": "string",
-    "gradingAdvice": "string",
-    "sellAdvice": "string or null",
-    "holdReason": "string or null"
-  }
+  "lastUpdated": "current date",
+  "notes": "any important context about this card's market"
 }`;
 }
 
@@ -5112,13 +5082,13 @@ app.post('/api/agent/save-settings', authenticateToken, async (req, res) => {
   }
 });
 
-// POST /api/agent/analyze-card - Main analysis endpoint
+// POST /api/agent/analyze-card - Price check endpoint (simplified - no image analysis)
 app.post('/api/agent/analyze-card', authenticateToken, async (req, res) => {
   const startTime = Date.now();
   const userId = req.user.id;
 
   try {
-    const { cardId, photoUrl, provider = 'anthropic', apiKey } = req.body;
+    const { cardId, provider = 'anthropic', apiKey } = req.body;
 
     // 1. CHECK QUOTA
     const quotaCheck = await canUserAnalyze(userId);
@@ -5150,34 +5120,31 @@ app.post('/api/agent/analyze-card', authenticateToken, async (req, res) => {
       });
     }
 
-    // 3. GET CARD DATA (if cardId provided)
-    let card = null;
-    if (cardId) {
-      const cardResult = await pool.query(
-        'SELECT * FROM cards WHERE id = $1 AND user_id = $2',
-        [cardId, userId]
-      );
-      if (cardResult.rows.length > 0) {
-        const row = cardResult.rows[0];
-        const cardData = typeof row.card_data === 'string' ? JSON.parse(row.card_data) : row.card_data;
-        card = { ...cardData, front: row.front_image_path, back: row.back_image_path };
-      }
+    // 3. GET CARD DATA (required - we use card info for price search, not images)
+    if (!cardId) {
+      return res.status(400).json({ success: false, error: 'Card ID is required' });
     }
 
-    // Use card's front image if no photoUrl provided
-    const imageUrl = photoUrl || card?.front;
-    if (!imageUrl) {
-      return res.status(400).json({
-        success: false,
-        error: 'No image URL provided'
-      });
+    const cardResult = await pool.query(
+      'SELECT * FROM cards WHERE id = $1 AND user_id = $2',
+      [cardId, userId]
+    );
+
+    if (cardResult.rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'Card not found' });
     }
 
-    // 4. CALL AI API
-    let analysisResult, tokensUsed, modelUsed;
+    const row = cardResult.rows[0];
+    const card = typeof row.card_data === 'string' ? JSON.parse(row.card_data) : row.card_data;
+
+    // 4. CALL AI API (text-only, no images - much cheaper!)
+    let priceResult, tokensUsed, modelUsed;
+    const pricePrompt = generatePriceCheckPrompt(card);
 
     if (provider === 'anthropic') {
-      // Anthropic Claude API
+      // Use Haiku for price checks - much cheaper than Sonnet
+      const priceCheckModel = 'claude-3-5-haiku-20241022';
+
       const claudeResponse = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
         headers: {
@@ -5186,20 +5153,11 @@ app.post('/api/agent/analyze-card', authenticateToken, async (req, res) => {
           'content-type': 'application/json'
         },
         body: JSON.stringify({
-          model: AI_PROVIDERS.anthropic.defaultModel,
-          max_tokens: 3000,
+          model: priceCheckModel,
+          max_tokens: 1500,
           messages: [{
             role: 'user',
-            content: [
-              {
-                type: 'image',
-                source: { type: 'url', url: imageUrl }
-              },
-              {
-                type: 'text',
-                text: generateAnalysisPrompt(card)
-              }
-            ]
+            content: pricePrompt
           }],
           tools: [{ type: 'web_search_20250305', name: 'web_search' }]
         })
@@ -5211,7 +5169,7 @@ app.post('/api/agent/analyze-card', authenticateToken, async (req, res) => {
       }
 
       const claudeData = await claudeResponse.json();
-      modelUsed = claudeData.model || AI_PROVIDERS.anthropic.defaultModel;
+      modelUsed = claudeData.model || priceCheckModel;
       tokensUsed = {
         input: claudeData.usage?.input_tokens || 0,
         output: claudeData.usage?.output_tokens || 0,
@@ -5220,21 +5178,23 @@ app.post('/api/agent/analyze-card', authenticateToken, async (req, res) => {
       };
 
       // Extract text response
-      const analysisText = claudeData.content
+      const responseText = claudeData.content
         .filter(block => block.type === 'text')
         .map(block => block.text)
         .join('\n');
 
       // Parse JSON from response
-      const jsonMatch = analysisText.match(/\{[\s\S]*\}/);
+      const jsonMatch = responseText.match(/\{[\s\S]*\}/);
       if (jsonMatch) {
-        analysisResult = JSON.parse(jsonMatch[0]);
+        priceResult = JSON.parse(jsonMatch[0]);
       } else {
-        throw new Error('Failed to parse analysis response');
+        throw new Error('Failed to parse price response');
       }
 
     } else if (provider === 'openai') {
-      // OpenAI GPT-4 Vision API
+      // Use GPT-4o-mini for price checks - cheaper than GPT-4o
+      const priceCheckModel = 'gpt-4o-mini';
+
       const openaiResponse = await fetch('https://api.openai.com/v1/chat/completions', {
         method: 'POST',
         headers: {
@@ -5242,14 +5202,11 @@ app.post('/api/agent/analyze-card', authenticateToken, async (req, res) => {
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          model: AI_PROVIDERS.openai.defaultModel,
-          max_tokens: 3000,
+          model: priceCheckModel,
+          max_tokens: 1500,
           messages: [{
             role: 'user',
-            content: [
-              { type: 'image_url', image_url: { url: imageUrl } },
-              { type: 'text', text: generateAnalysisPrompt(card) }
-            ]
+            content: pricePrompt
           }],
           response_format: { type: 'json_object' }
         })
@@ -5261,28 +5218,27 @@ app.post('/api/agent/analyze-card', authenticateToken, async (req, res) => {
       }
 
       const openaiData = await openaiResponse.json();
-      modelUsed = openaiData.model || AI_PROVIDERS.openai.defaultModel;
+      modelUsed = openaiData.model || priceCheckModel;
       tokensUsed = {
         input: openaiData.usage?.prompt_tokens || 0,
         output: openaiData.usage?.completion_tokens || 0
       };
-      analysisResult = JSON.parse(openaiData.choices[0].message.content);
+      priceResult = JSON.parse(openaiData.choices[0].message.content);
 
     } else if (provider === 'google') {
-      // Google Gemini API
+      // Use Gemini Flash for price checks - cheaper
+      const priceCheckModel = 'gemini-1.5-flash';
+
       const geminiResponse = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/${AI_PROVIDERS.google.defaultModel}:generateContent?key=${userApiKey}`,
+        `https://generativelanguage.googleapis.com/v1beta/models/${priceCheckModel}:generateContent?key=${userApiKey}`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             contents: [{
-              parts: [
-                { inline_data: { mime_type: 'image/jpeg', data: await fetchImageAsBase64(imageUrl) } },
-                { text: generateAnalysisPrompt(card) }
-              ]
+              parts: [{ text: pricePrompt }]
             }],
-            generationConfig: { maxOutputTokens: 3000 }
+            generationConfig: { maxOutputTokens: 1500 }
           })
         }
       );
@@ -5293,7 +5249,7 @@ app.post('/api/agent/analyze-card', authenticateToken, async (req, res) => {
       }
 
       const geminiData = await geminiResponse.json();
-      modelUsed = AI_PROVIDERS.google.defaultModel;
+      modelUsed = priceCheckModel;
       tokensUsed = {
         input: geminiData.usageMetadata?.promptTokenCount || 0,
         output: geminiData.usageMetadata?.candidatesTokenCount || 0
@@ -5302,7 +5258,7 @@ app.post('/api/agent/analyze-card', authenticateToken, async (req, res) => {
       const responseText = geminiData.candidates[0].content.parts[0].text;
       const jsonMatch = responseText.match(/\{[\s\S]*\}/);
       if (jsonMatch) {
-        analysisResult = JSON.parse(jsonMatch[0]);
+        priceResult = JSON.parse(jsonMatch[0]);
       } else {
         throw new Error('Failed to parse Gemini response');
       }
@@ -5324,26 +5280,27 @@ app.post('/api/agent/analyze-card', authenticateToken, async (req, res) => {
     await trackAgentAnalysis({
       userId,
       cardId,
-      analysisType: 'single-card',
+      analysisType: 'price-check',
       provider,
       model: modelUsed,
       cost,
       tokens: tokensUsed,
       responseTime,
       success: true,
-      cardData: card ? { year: card.year, set_name: card.set_name, player: card.player, card_number: card.card_number } : null,
+      cardData: { year: card.year, set_name: card.set_name, player: card.player, card_number: card.card_number },
       resultSummary: {
-        condition: analysisResult.condition?.grade,
-        value: analysisResult.marketData?.valueRange ? `$${analysisResult.marketData.valueRange.low}-${analysisResult.marketData.valueRange.high}` : null,
-        action: analysisResult.advice?.action
+        rawPrice: priceResult.prices?.raw?.avg,
+        psa9Price: priceResult.prices?.psa9?.avg,
+        psa10Price: priceResult.prices?.psa10?.avg,
+        shouldGrade: priceResult.gradeRecommendation?.shouldGrade
       },
-      analysisResult
+      analysisResult: priceResult
     });
 
     // 7. RETURN RESPONSE
     res.json({
       success: true,
-      analysis: analysisResult,
+      prices: priceResult,
       usage: {
         analysesRemaining: quotaCheck.remaining - 1,
         limit: quotaCheck.limit,
