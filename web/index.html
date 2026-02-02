@@ -1584,17 +1584,125 @@
     </div>
   </section>
 
-  <!-- Live Scan Indicator (shows when scanning) -->
-  <section class="live-scan-banner" id="live-scan-banner" style="display: none;">
-    <div style="display: flex; align-items: center; justify-content: center; gap: 16px; padding: 16px 24px; background: linear-gradient(135deg, rgba(0, 246, 255, 0.1), rgba(123, 47, 247, 0.1)); border-bottom: 1px solid var(--glass-border);">
-      <div class="scan-pulse"></div>
-      <span style="font-weight: 600; color: var(--cyan);">LIVE SCANNING</span>
-      <span id="live-scan-count" style="color: var(--text-muted);">0 cards this session</span>
-      <button class="btn btn-secondary btn-sm" onclick="hideLiveScanBanner()">Hide</button>
+  <!-- Batch Scan View (shows when in batch mode) -->
+  <section class="batch-view" id="batch-view" style="display: none;">
+    <div class="batch-header">
+      <div class="batch-header-left">
+        <div class="scan-pulse"></div>
+        <span class="batch-title">BATCH SCANNING</span>
+        <span class="batch-count" id="batch-count">0 cards scanned</span>
+      </div>
+      <div class="batch-header-right">
+        <button class="btn btn-secondary" onclick="finishBatch()">Finish &amp; Add to Collection</button>
+        <button class="btn btn-secondary btn-sm" onclick="closeBatchView()">Exit</button>
+      </div>
+    </div>
+    <div class="batch-grid" id="batch-grid">
+      <div class="batch-empty">
+        <div style="font-size: 48px; margin-bottom: 16px;">📱</div>
+        <h3>Waiting for scans...</h3>
+        <p style="color: var(--text-muted);">Scan cards from your phone - they'll appear here as they're identified</p>
+      </div>
     </div>
   </section>
 
   <style>
+    .batch-view {
+      position: relative;
+      z-index: 1;
+    }
+    .batch-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 16px 24px;
+      background: linear-gradient(135deg, rgba(0, 246, 255, 0.15), rgba(123, 47, 247, 0.15));
+      border-bottom: 1px solid var(--glass-border);
+    }
+    .batch-header-left {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+    .batch-header-right {
+      display: flex;
+      gap: 12px;
+    }
+    .batch-title {
+      font-weight: 700;
+      font-size: 18px;
+      color: var(--cyan);
+      letter-spacing: 2px;
+    }
+    .batch-count {
+      color: var(--text-muted);
+    }
+    .batch-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+      gap: 16px;
+      padding: 24px;
+      min-height: 400px;
+    }
+    .batch-empty {
+      grid-column: 1 / -1;
+      text-align: center;
+      padding: 60px 20px;
+      color: var(--text-muted);
+    }
+    .batch-card {
+      background: var(--glass);
+      border: 1px solid var(--glass-border);
+      border-radius: 12px;
+      overflow: hidden;
+      transition: all 0.3s;
+    }
+    .batch-card.identifying {
+      border-color: var(--warning);
+      animation: batchPulse 1s infinite;
+    }
+    .batch-card.identified {
+      border-color: var(--success);
+    }
+    @keyframes batchPulse {
+      0%, 100% { box-shadow: 0 0 10px rgba(255, 170, 0, 0.3); }
+      50% { box-shadow: 0 0 20px rgba(255, 170, 0, 0.5); }
+    }
+    .batch-card-image {
+      height: 200px;
+      background: rgba(0,0,0,0.3);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .batch-card-image img {
+      max-width: 100%;
+      max-height: 100%;
+      object-fit: contain;
+    }
+    .batch-card-info {
+      padding: 16px;
+    }
+    .batch-card-status {
+      font-size: 12px;
+      margin-bottom: 8px;
+    }
+    .batch-card-status.identifying {
+      color: var(--warning);
+    }
+    .batch-card-status.identified {
+      color: var(--success);
+    }
+    .batch-card-player {
+      font-size: 16px;
+      font-weight: 600;
+      color: var(--text);
+    }
+    .batch-card-details {
+      font-size: 13px;
+      color: var(--text-muted);
+      margin-top: 4px;
+    }
     .scan-pulse {
       width: 12px;
       height: 12px;
@@ -2257,7 +2365,7 @@
       </div>
       <div class="modal-footer">
         <button class="btn btn-secondary" onclick="closeScanModal()">Close</button>
-        <button class="btn btn-primary" onclick="window.open('/scan', '_blank')">Open Scanner</button>
+        <button class="btn btn-accent" onclick="startBatchMode()">Start Batch Mode</button>
       </div>
     </div>
   </div>
@@ -2714,20 +2822,86 @@
     let token = localStorage.getItem('token');
     let user = JSON.parse(localStorage.getItem('user') || '{}');
     let ws = null;
-    let liveScanCount = 0;
+    let batchMode = false;
+    let batchCards = []; // Cards in current batch session
 
-    // Helper functions for live scan (defined early for WebSocket handler)
-    function showLiveScanBanner() {
-      const banner = document.getElementById('live-scan-banner');
-      if (banner) banner.style.display = 'block';
+    // Batch mode functions
+    function startBatchMode() {
+      batchMode = true;
+      batchCards = [];
+      closeScanModal();
+      document.getElementById('batch-view').style.display = 'block';
+      document.getElementById('cards-grid').style.display = 'none';
+      document.getElementById('batch-count').textContent = '0 cards scanned';
+      document.getElementById('batch-grid').innerHTML = `
+        <div class="batch-empty">
+          <div style="font-size: 48px; margin-bottom: 16px;">📱</div>
+          <h3>Waiting for scans...</h3>
+          <p style="color: var(--text-muted);">Scan cards from your phone - they'll appear here as they're identified</p>
+        </div>
+      `;
+      showToast('Batch mode started - scan cards from your phone', 'success');
     }
-    function hideLiveScanBanner() {
-      const banner = document.getElementById('live-scan-banner');
-      if (banner) banner.style.display = 'none';
+
+    function closeBatchView() {
+      batchMode = false;
+      document.getElementById('batch-view').style.display = 'none';
+      document.getElementById('cards-grid').style.display = 'grid';
+      loadCards();
+      loadStatus();
     }
-    function updateLiveScanCount() {
-      const el = document.getElementById('live-scan-count');
-      if (el) el.textContent = `${liveScanCount} cards this session`;
+
+    function finishBatch() {
+      const count = batchCards.length;
+      closeBatchView();
+      if (count > 0) {
+        showToast(`${count} cards added to collection`, 'success');
+      }
+    }
+
+    function addCardToBatchView(cardId, frontUrl) {
+      const grid = document.getElementById('batch-grid');
+      // Remove empty state if present
+      const empty = grid.querySelector('.batch-empty');
+      if (empty) empty.remove();
+
+      const cardEl = document.createElement('div');
+      cardEl.className = 'batch-card identifying';
+      cardEl.id = `batch-card-${cardId}`;
+      cardEl.innerHTML = `
+        <div class="batch-card-image">
+          <img src="${frontUrl}" alt="Card">
+        </div>
+        <div class="batch-card-info">
+          <div class="batch-card-status identifying">Identifying...</div>
+          <div class="batch-card-player">Processing</div>
+          <div class="batch-card-details"></div>
+        </div>
+      `;
+      grid.insertBefore(cardEl, grid.firstChild);
+      batchCards.push(cardId);
+      document.getElementById('batch-count').textContent = `${batchCards.length} cards scanned`;
+    }
+
+    function updateBatchCard(cardId, cardData) {
+      const cardEl = document.getElementById(`batch-card-${cardId}`);
+      if (!cardEl) return;
+
+      cardEl.classList.remove('identifying');
+      cardEl.classList.add('identified');
+
+      const statusEl = cardEl.querySelector('.batch-card-status');
+      const playerEl = cardEl.querySelector('.batch-card-player');
+      const detailsEl = cardEl.querySelector('.batch-card-details');
+
+      statusEl.className = 'batch-card-status identified';
+      statusEl.textContent = 'Identified';
+      playerEl.textContent = cardData.player || 'Unknown';
+      detailsEl.textContent = [
+        cardData.year,
+        cardData.set_name,
+        cardData.is_graded ? `${cardData.grading_company} ${cardData.grade}` : null
+      ].filter(Boolean).join(' | ');
     }
 
     // Check authentication
@@ -2818,13 +2992,35 @@
           showToast('Price error: ' + data.error, 'error');
         }
 
-        // Pair uploaded (from phone scanner or drag-drop)
-        if (data.type === 'pair_uploaded' || data.type === 'scan_complete') {
-          liveScanCount++;
-          updateLiveScanCount();
-          showLiveScanBanner();
+        // Pair uploaded (regular upload, not batch)
+        if (data.type === 'pair_uploaded') {
           loadCards();
           loadStatus();
+        }
+
+        // Batch mode events
+        if (data.type === 'batch_card_uploaded') {
+          if (batchMode) {
+            addCardToBatchView(data.cardId, data.front);
+          }
+        }
+        if (data.type === 'batch_card_identified') {
+          if (batchMode) {
+            updateBatchCard(data.cardId, data.cardData);
+          }
+          loadStatus();
+        }
+        if (data.type === 'batch_identify_error') {
+          if (batchMode) {
+            const cardEl = document.getElementById(`batch-card-${data.cardId}`);
+            if (cardEl) {
+              cardEl.classList.remove('identifying');
+              const statusEl = cardEl.querySelector('.batch-card-status');
+              statusEl.className = 'batch-card-status';
+              statusEl.style.color = 'var(--error)';
+              statusEl.textContent = 'Error';
+            }
+          }
         }
 
         // eBay listing events

@@ -1054,28 +1054,40 @@ app.post('/api/upload-pair', authenticateToken, (req, res) => {
         }
       }
 
-      // Store in database
-      await pool.query(`
+      // Store in database and get the card ID
+      const isBatchMode = req.body && req.body.batch === 'true';
+      const insertResult = await pool.query(`
         INSERT INTO cards (user_id, card_data, front_image_path, back_image_path, status)
         VALUES ($1, $2, $3, $4, 'pending')
+        RETURNING id
       `, [
         req.user.id,
-        JSON.stringify({ uploaded_at: new Date().toISOString(), cloudinary: useCloudinary }),
+        JSON.stringify({ uploaded_at: new Date().toISOString(), cloudinary: useCloudinary, batch: isBatchMode }),
         frontUrl,
         backUrl || null
       ]);
 
-      console.log(`[Upload] Pair saved: ${frontUrl}${backUrl ? ' + ' + backUrl : ' (single)'}`);
+      const cardId = insertResult.rows[0].id;
+      console.log(`[Upload] Pair saved: ${cardId} - ${frontUrl}${backUrl ? ' + ' + backUrl : ' (single)'}${isBatchMode ? ' [BATCH]' : ''}`);
 
       broadcast({
-        type: 'pair_uploaded',
+        type: isBatchMode ? 'batch_card_uploaded' : 'pair_uploaded',
+        cardId,
         front: frontUrl,
         back: backUrl || null,
         userId: req.user.id
       });
 
+      // Auto-identify in batch mode
+      if (isBatchMode) {
+        identifySingleCard(req.user.id, cardId).catch(e => {
+          console.error(`[Batch] Auto-identify error for ${cardId}:`, e.message);
+        });
+      }
+
       res.json({
         success: true,
+        cardId,
         front: frontUrl,
         back: backUrl || null,
         cloudinary: useCloudinary
@@ -1201,6 +1213,141 @@ async function getImageBase64(imagePathOrUrl, folder = null) {
 
   console.log('[Identify] Reading local file:', localPath);
   return imageToBase64(localPath);
+}
+
+// Identify a single card (for batch mode auto-identification)
+async function identifySingleCard(userId, cardId) {
+  console.log(`[Batch] Auto-identifying card ${cardId} for user ${userId}`);
+
+  // Get API key
+  const apiKey = await getUserApiKey(userId);
+  if (!apiKey) {
+    console.error('[Batch] No API key for user', userId);
+    return;
+  }
+
+  // Get the card
+  const cardResult = await pool.query('SELECT * FROM cards WHERE id = $1 AND user_id = $2', [cardId, userId]);
+  if (cardResult.rows.length === 0) {
+    console.error('[Batch] Card not found:', cardId);
+    return;
+  }
+
+  const card = cardResult.rows[0];
+
+  // Notify that identification started
+  broadcast({
+    type: 'batch_identify_start',
+    cardId,
+    userId
+  });
+
+  try {
+    const Anthropic = require('@anthropic-ai/sdk');
+    const anthropic = new Anthropic({ apiKey });
+
+    // Build content with images
+    const content = [];
+    let hasBack = false;
+
+    // Add front image
+    const frontBase64 = await getImageBase64(card.front_image_path, FOLDERS.new);
+    if (frontBase64) {
+      content.push({ type: 'image', source: frontBase64 });
+    }
+
+    // Add back image if exists
+    if (card.back_image_path) {
+      const backBase64 = await getImageBase64(card.back_image_path, FOLDERS.new);
+      if (backBase64) {
+        content.push({ type: 'image', source: backBase64 });
+        hasBack = true;
+      }
+    }
+
+    content.push({
+      type: 'text',
+      text: `CAREFULLY analyze this sports card image and identify it accurately.
+
+IMPORTANT INSTRUCTIONS:
+1. LOOK AT THE ACTUAL CARD IMAGE - identify the player shown on the card
+2. READ THE PLAYER NAME printed on the card itself
+3. If this is a GRADED/SLABBED card, READ THE GRADING LABEL carefully:
+   - The PSA/BGS/SGC label contains the player name, year, set, and card number
+   - Read the certification number from the label
+   - Read the grade from the label
+4. Do NOT guess or assume - only report what you can actually see in the image
+5. If you cannot clearly identify something, set confidence to "low"
+
+${hasBack ? 'I have provided both the FRONT and BACK of the card. Use both images.' : 'This is a single image (likely a graded/slabbed card). Read the label text carefully.'}
+
+Return ONLY a JSON object with these fields (no other text):
+{
+  "player": "Full player name AS SHOWN ON CARD/LABEL",
+  "year": 2024,
+  "set_name": "Full set name (e.g., Topps Chrome, Panini Prizm)",
+  "card_number": "Card number from label or card",
+  "parallel": "Parallel type if any (Base, Refractor, Silver, Gold, etc.)",
+  "is_graded": true,
+  "grading_company": "PSA, BGS, SGC, or null",
+  "grade": "10, 9.5, 9, etc. or null",
+  "cert_number": "Certification number from label or null",
+  "sport": "baseball, basketball, football, hockey, soccer",
+  "confidence": "high, medium, or low"
+}`
+    });
+
+    const response = await anthropic.messages.create({
+      model: 'claude-sonnet-4-20250514',
+      max_tokens: 1024,
+      messages: [{ role: 'user', content }]
+    });
+
+    const responseText = response.content[0].text;
+    const jsonMatch = responseText.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) {
+      throw new Error('No JSON in response');
+    }
+
+    const cardData = JSON.parse(jsonMatch[0]);
+    cardData.identified_at = new Date().toISOString();
+
+    // Calculate cost
+    const inputTokens = response.usage?.input_tokens || 0;
+    const outputTokens = response.usage?.output_tokens || 0;
+    const cost = (inputTokens * 0.003 + outputTokens * 0.015) / 1000;
+
+    // Update the card
+    await pool.query(`
+      UPDATE cards SET card_data = $1, status = 'identified', updated_at = NOW()
+      WHERE id = $2
+    `, [JSON.stringify(cardData), cardId]);
+
+    // Log usage
+    await pool.query(`
+      INSERT INTO api_usage (user_id, operation, model_used, tokens_input, tokens_output, cost, card_id)
+      VALUES ($1, 'identify', 'sonnet4', $2, $3, $4, $5)
+    `, [userId, inputTokens, outputTokens, cost, cardId]);
+
+    console.log(`[Batch] Card ${cardId} identified: ${cardData.player}`);
+
+    // Broadcast completion with card data
+    broadcast({
+      type: 'batch_card_identified',
+      cardId,
+      cardData,
+      userId
+    });
+
+  } catch (e) {
+    console.error(`[Batch] Error identifying card ${cardId}:`, e.message);
+    broadcast({
+      type: 'batch_identify_error',
+      cardId,
+      error: e.message,
+      userId
+    });
+  }
 }
 
 // Identify cards endpoint
