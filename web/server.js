@@ -4339,6 +4339,299 @@ app.post('/api/cards/check-duplicates', authenticateToken, async (req, res) => {
 });
 
 // ============================================
+// EXPORT ENDPOINTS
+// ============================================
+
+// Export to Whatnot CSV format
+app.post('/api/export/whatnot', authenticateToken, async (req, res) => {
+  try {
+    const { cardIds } = req.body;
+    const userId = req.user.id;
+
+    if (!cardIds || cardIds.length === 0) {
+      return res.status(400).json({ error: 'No cards selected' });
+    }
+
+    console.log(`[Export] Whatnot CSV: ${cardIds.length} cards for user ${userId}`);
+
+    // Get cards
+    const placeholders = cardIds.map((_, i) => `$${i + 1}`).join(',');
+    const result = await pool.query(`
+      SELECT * FROM cards
+      WHERE id IN (${placeholders}) AND user_id = $${cardIds.length + 1}
+    `, [...cardIds, userId]);
+
+    const cards = result.rows;
+
+    // Sport to subcategory mapping
+    const getSubCategory = (sport) => {
+      const sportMap = {
+        'baseball': 'Baseball Singles',
+        'basketball': 'Basketball Singles',
+        'football': 'Football Singles',
+        'hockey': 'Hockey Singles',
+        'soccer': 'Soccer Singles'
+      };
+      return sportMap[sport?.toLowerCase()] || 'Other Sports Cards';
+    };
+
+    // Whatnot CSV headers
+    const headers = [
+      'Category', 'Sub Category', 'Title', 'Description', 'Quantity', 'Type',
+      'Price', 'Shipping Profile', 'Offerable', 'Hazmat', 'Condition',
+      'Cost Per Item', 'SKU', 'Image URL 1', 'Image URL 2', 'Image URL 3',
+      'Image URL 4', 'Image URL 5', 'Image URL 6', 'Image URL 7', 'Image URL 8'
+    ];
+
+    const csvRows = [
+      headers.join(','),
+      ...cards.map(card => {
+        const data = typeof card.card_data === 'string' ? JSON.parse(card.card_data) : card.card_data;
+
+        const category = 'Sports Cards';
+        const subCategory = getSubCategory(data.sport);
+
+        // Build title (max 80 chars)
+        let title = `${data.year || ''} ${data.set_name || ''} ${data.player || ''}`.trim();
+        if (data.is_graded && data.grading_company && data.grade) {
+          title += ` ${data.grading_company} ${data.grade}`;
+        }
+        if (data.card_number) title += ` #${data.card_number}`;
+        if (data.parallel && data.parallel !== 'Base') title += ` ${data.parallel}`;
+        if (title.length > 80) title = title.substring(0, 77) + '...';
+
+        // Build description
+        let description = `${data.year || ''} ${data.set_name || ''} ${data.player || ''}`;
+        if (data.card_number) description += ` #${data.card_number}`;
+        if (data.parallel && data.parallel !== 'Base') description += ` - ${data.parallel}`;
+        if (data.is_graded) {
+          description += `\\nGraded: ${data.grading_company} ${data.grade}`;
+          if (data.cert_number) description += `\\nCert #: ${data.cert_number}`;
+        }
+        if (data.is_autograph) description += `\\nAutographed`;
+        if (data.serial_number) description += `\\nNumbered: ${data.serial_number}`;
+
+        const type = 'Auction';
+        const price = '';
+        const shippingProfile = '0-1 oz';
+        const offerable = 'TRUE';
+        const hazmat = 'Not Hazmat';
+        const condition = data.is_graded ? 'Graded' : 'Used';
+        const costPerItem = '';
+        const sku = `CARDFLOW-${card.id}`;
+
+        return [
+          `"${category}"`,
+          `"${subCategory}"`,
+          `"${title.replace(/"/g, '""')}"`,
+          `"${description.replace(/"/g, '""')}"`,
+          '1',
+          `"${type}"`,
+          price,
+          `"${shippingProfile}"`,
+          offerable,
+          `"${hazmat}"`,
+          `"${condition}"`,
+          costPerItem,
+          `"${sku}"`,
+          card.front_image_path || '',
+          card.back_image_path || '',
+          '', '', '', '', '', ''
+        ].join(',');
+      })
+    ];
+
+    const csv = csvRows.join('\n');
+
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', `attachment; filename="CardFlow-Whatnot-${Date.now()}.csv"`);
+    res.send(csv);
+
+    console.log(`[Export] Whatnot CSV complete: ${cards.length} cards`);
+
+  } catch (e) {
+    console.error('Whatnot export error:', e);
+    res.status(500).json({ error: 'Export failed' });
+  }
+});
+
+// Export to SlabTrack-compatible CSV format
+app.post('/api/export/slabtrack', authenticateToken, async (req, res) => {
+  try {
+    const { cardIds } = req.body;
+    const userId = req.user.id;
+
+    if (!cardIds || cardIds.length === 0) {
+      return res.status(400).json({ error: 'No cards selected' });
+    }
+
+    console.log(`[Export] SlabTrack CSV: ${cardIds.length} cards for user ${userId}`);
+
+    const placeholders = cardIds.map((_, i) => `$${i + 1}`).join(',');
+    const result = await pool.query(`
+      SELECT * FROM cards
+      WHERE id IN (${placeholders}) AND user_id = $${cardIds.length + 1}
+    `, [...cardIds, userId]);
+
+    const cards = result.rows;
+
+    // SlabTrack-compatible headers
+    const headers = [
+      'ID', 'Player', 'Year', 'Set', 'Card #', 'Parallel', 'Sport', 'Team',
+      'Graded', 'Grading Co', 'Grade', 'Cert #', 'Auto', 'Numbered', 'Serial #',
+      'Print Run', 'Current Price', 'Added Date', 'Front Image URL', 'Back Image URL'
+    ];
+
+    const csvRows = [
+      headers.join(','),
+      ...cards.map(card => {
+        const data = typeof card.card_data === 'string' ? JSON.parse(card.card_data) : card.card_data;
+
+        return [
+          card.id,
+          `"${data.player || ''}"`,
+          data.year || '',
+          `"${data.set_name || ''}"`,
+          data.card_number || '',
+          `"${data.parallel || 'Base'}"`,
+          data.sport || '',
+          `"${data.team || ''}"`,
+          data.is_graded ? 'Yes' : 'No',
+          data.grading_company || '',
+          data.grade || '',
+          data.cert_number || '',
+          data.is_autograph ? 'Yes' : 'No',
+          data.serial_number ? 'Yes' : 'No',
+          data.serial_number || '',
+          '',
+          '',
+          new Date(card.created_at).toISOString(),
+          card.front_image_path || '',
+          card.back_image_path || ''
+        ].join(',');
+      })
+    ];
+
+    const csv = csvRows.join('\n');
+
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', `attachment; filename="CardFlow-SlabTrack-${Date.now()}.csv"`);
+    res.send(csv);
+
+    console.log(`[Export] SlabTrack CSV complete: ${cards.length} cards`);
+
+  } catch (e) {
+    console.error('SlabTrack export error:', e);
+    res.status(500).json({ error: 'Export failed' });
+  }
+});
+
+// Export to generic CSV
+app.post('/api/export/csv', authenticateToken, async (req, res) => {
+  try {
+    const { cardIds } = req.body;
+    const userId = req.user.id;
+
+    if (!cardIds || cardIds.length === 0) {
+      return res.status(400).json({ error: 'No cards selected' });
+    }
+
+    console.log(`[Export] Generic CSV: ${cardIds.length} cards for user ${userId}`);
+
+    const placeholders = cardIds.map((_, i) => `$${i + 1}`).join(',');
+    const result = await pool.query(`
+      SELECT * FROM cards
+      WHERE id IN (${placeholders}) AND user_id = $${cardIds.length + 1}
+    `, [...cardIds, userId]);
+
+    const cards = result.rows;
+
+    const headers = [
+      'Player', 'Year', 'Set', 'Card Number', 'Parallel', 'Sport',
+      'Graded', 'Grading Company', 'Grade', 'Cert Number',
+      'Autograph', 'Serial Number', 'Front Image', 'Back Image'
+    ];
+
+    const csvRows = [
+      headers.join(','),
+      ...cards.map(card => {
+        const data = typeof card.card_data === 'string' ? JSON.parse(card.card_data) : card.card_data;
+
+        return [
+          `"${data.player || ''}"`,
+          data.year || '',
+          `"${data.set_name || ''}"`,
+          data.card_number || '',
+          `"${data.parallel || 'Base'}"`,
+          data.sport || '',
+          data.is_graded ? 'Yes' : 'No',
+          data.grading_company || '',
+          data.grade || '',
+          data.cert_number || '',
+          data.is_autograph ? 'Yes' : 'No',
+          data.serial_number || '',
+          card.front_image_path || '',
+          card.back_image_path || ''
+        ].join(',');
+      })
+    ];
+
+    const csv = csvRows.join('\n');
+
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', `attachment; filename="CardFlow-Export-${Date.now()}.csv"`);
+    res.send(csv);
+
+    console.log(`[Export] Generic CSV complete: ${cards.length} cards`);
+
+  } catch (e) {
+    console.error('CSV export error:', e);
+    res.status(500).json({ error: 'Export failed' });
+  }
+});
+
+// Export as JSON (for API integrations)
+app.post('/api/export/json', authenticateToken, async (req, res) => {
+  try {
+    const { cardIds } = req.body;
+    const userId = req.user.id;
+
+    if (!cardIds || cardIds.length === 0) {
+      return res.status(400).json({ error: 'No cards selected' });
+    }
+
+    const placeholders = cardIds.map((_, i) => `$${i + 1}`).join(',');
+    const result = await pool.query(`
+      SELECT * FROM cards
+      WHERE id IN (${placeholders}) AND user_id = $${cardIds.length + 1}
+    `, [...cardIds, userId]);
+
+    const cards = result.rows.map(card => {
+      const data = typeof card.card_data === 'string' ? JSON.parse(card.card_data) : card.card_data;
+      return {
+        id: card.id,
+        ...data,
+        front_image_url: card.front_image_path,
+        back_image_url: card.back_image_path,
+        created_at: card.created_at
+      };
+    });
+
+    res.json({
+      success: true,
+      count: cards.length,
+      cards,
+      exported_at: new Date().toISOString(),
+      source: 'CardFlow'
+    });
+
+  } catch (e) {
+    console.error('JSON export error:', e);
+    res.status(500).json({ error: 'Export failed' });
+  }
+});
+
+// ============================================
 // WEBSOCKET
 // ============================================
 

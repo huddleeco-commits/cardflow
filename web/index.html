@@ -1594,6 +1594,7 @@
       </div>
       <div class="batch-header-right">
         <button class="btn btn-secondary" onclick="showSocialStylePicker()" title="Generate Social Images">📸 Social</button>
+        <button class="btn btn-secondary" onclick="showExportModal('batch')" title="Export Cards">📤 Export</button>
         <button class="btn btn-accent" onclick="saveToCollection()">Save to Collection</button>
         <button class="btn btn-secondary btn-sm" onclick="closeBatchView()">Cancel</button>
       </div>
@@ -2391,41 +2392,68 @@
 
   <!-- Export Modal -->
   <div class="modal" id="export-modal">
-    <div class="modal-content" style="max-width: 500px;">
+    <div class="modal-content" style="max-width: 550px;">
       <div class="modal-header">
-        <h2>Export Cards</h2>
+        <h2>📤 Export Cards</h2>
         <button class="modal-close" onclick="closeExportModal()">&times;</button>
       </div>
       <div class="modal-body">
-        <p style="color: var(--text-muted); margin-bottom: 20px;">Export your card inventory to CSV or Excel format.</p>
+        <p style="color: var(--text-muted); margin-bottom: 16px;">
+          <span id="export-card-count">0</span> cards selected for export
+        </p>
 
         <div style="display: grid; gap: 12px;">
-          <button class="btn btn-primary" onclick="exportAll('csv')" style="width: 100%; padding: 16px; font-size: 15px;">
-            📄 Export All to CSV
+          <!-- Whatnot Export -->
+          <button class="btn" onclick="exportTo('whatnot')" style="width: 100%; padding: 16px; font-size: 15px; background: linear-gradient(135deg, #7c3aed, #a855f7); border: none; text-align: left; display: flex; align-items: center; gap: 12px;">
+            <span style="font-size: 24px;">🎬</span>
+            <div>
+              <div style="font-weight: 600;">Export to Whatnot</div>
+              <div style="font-size: 11px; opacity: 0.8;">CSV with images ready for Whatnot upload</div>
+            </div>
           </button>
-          <button class="btn btn-accent" onclick="exportAll('excel')" style="width: 100%; padding: 16px; font-size: 15px;">
-            📊 Export All to Excel
+
+          <!-- SlabTrack Export -->
+          <button class="btn" onclick="exportTo('slabtrack')" style="width: 100%; padding: 16px; font-size: 15px; background: linear-gradient(135deg, #00f6ff, #7b2ff7); border: none; text-align: left; display: flex; align-items: center; gap: 12px;">
+            <span style="font-size: 24px;">🎯</span>
+            <div>
+              <div style="font-weight: 600;">Export to SlabTrack</div>
+              <div style="font-size: 11px; opacity: 0.8;">Full card data with image URLs</div>
+            </div>
+          </button>
+
+          <!-- Generic CSV -->
+          <button class="btn btn-secondary" onclick="exportTo('csv')" style="width: 100%; padding: 16px; font-size: 15px; text-align: left; display: flex; align-items: center; gap: 12px;">
+            <span style="font-size: 24px;">📄</span>
+            <div>
+              <div style="font-weight: 600;">Generic CSV</div>
+              <div style="font-size: 11px; opacity: 0.7;">Standard spreadsheet format</div>
+            </div>
+          </button>
+
+          <!-- JSON Export -->
+          <button class="btn btn-secondary" onclick="exportTo('json')" style="width: 100%; padding: 16px; font-size: 15px; text-align: left; display: flex; align-items: center; gap: 12px;">
+            <span style="font-size: 24px;">{ }</span>
+            <div>
+              <div style="font-weight: 600;">JSON (API Format)</div>
+              <div style="font-size: 11px; opacity: 0.7;">For developers & integrations</div>
+            </div>
           </button>
         </div>
 
         <div style="margin-top: 20px; padding: 16px; background: var(--glass); border-radius: 8px;">
-          <h4 style="margin-bottom: 12px; color: var(--cyan);">What's Included</h4>
-          <ul style="color: var(--text-muted); font-size: 13px; padding-left: 20px;">
-            <li>Player name, year, set, card number</li>
-            <li>Parallel/variant information</li>
-            <li>Grading company and grade</li>
-            <li>Pricing data (recommended, eBay low/avg/high)</li>
-            <li>Image URLs (Cloudinary links)</li>
-            <li>Card status and notes</li>
-          </ul>
-        </div>
-
-        <div style="margin-top: 16px; padding: 12px; background: rgba(255,170,0,0.1); border: 1px solid rgba(255,170,0,0.2); border-radius: 8px; font-size: 12px; color: var(--warning);">
-          <strong>Tip:</strong> Use Select Mode to export only specific cards.
+          <h4 style="margin-bottom: 12px; color: var(--cyan); font-size: 13px;">All exports include:</h4>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 12px; color: var(--text-muted);">
+            <div>✓ Player, Year, Set</div>
+            <div>✓ Card Number, Parallel</div>
+            <div>✓ Grading Info</div>
+            <div>✓ Serial Numbers</div>
+            <div>✓ Front Image URL</div>
+            <div>✓ Back Image URL</div>
+          </div>
         </div>
       </div>
       <div class="modal-footer">
-        <button class="btn btn-secondary" onclick="closeExportModal()">Close</button>
+        <button class="btn btn-secondary" onclick="closeExportModal()">Cancel</button>
       </div>
     </div>
   </div>
@@ -5359,7 +5387,22 @@
     // EXPORT FUNCTIONS
     // ==========================================
 
-    function showExportModal() {
+    let exportSource = 'collection'; // 'collection' or 'batch'
+    let exportCardIds = [];
+
+    function showExportModal(source = 'collection') {
+      exportSource = source;
+
+      // Get card IDs based on source
+      if (source === 'batch') {
+        exportCardIds = batchCards.map(c => c.id);
+      } else if (selectedCards.size > 0) {
+        exportCardIds = Array.from(selectedCards);
+      } else {
+        exportCardIds = cards.map(c => c.id);
+      }
+
+      document.getElementById('export-card-count').textContent = exportCardIds.length;
       document.getElementById('export-modal').classList.add('open');
     }
 
@@ -5367,23 +5410,73 @@
       document.getElementById('export-modal').classList.remove('open');
     }
 
+    async function exportTo(format) {
+      if (exportCardIds.length === 0) {
+        showToast('No cards to export', 'error');
+        return;
+      }
+
+      const formatNames = {
+        whatnot: 'Whatnot CSV',
+        slabtrack: 'SlabTrack CSV',
+        csv: 'CSV',
+        json: 'JSON'
+      };
+
+      showToast(`Exporting ${exportCardIds.length} cards to ${formatNames[format]}...`, 'info');
+
+      try {
+        const response = await fetch(`${API_URL}/export/${format}`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({ cardIds: exportCardIds })
+        });
+
+        if (!response.ok) {
+          throw new Error('Export failed');
+        }
+
+        if (format === 'json') {
+          // JSON - show in new tab or download
+          const data = await response.json();
+          const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = `CardFlow-Export-${Date.now()}.json`;
+          a.click();
+          URL.revokeObjectURL(url);
+        } else {
+          // CSV - download directly
+          const blob = await response.blob();
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = response.headers.get('Content-Disposition')?.split('filename=')[1]?.replace(/"/g, '') || `CardFlow-Export-${Date.now()}.csv`;
+          a.click();
+          URL.revokeObjectURL(url);
+        }
+
+        showToast(`Exported ${exportCardIds.length} cards to ${formatNames[format]}!`, 'success');
+        closeExportModal();
+
+      } catch (e) {
+        console.error('Export error:', e);
+        showToast('Export failed: ' + e.message, 'error');
+      }
+    }
+
     async function exportSelected(format) {
-      const ids = selectedCards.size > 0 ? Array.from(selectedCards).join(',') : '';
-      const status = document.getElementById('status-filter').value;
-
-      let url = `/api/export/${format}?`;
-      if (ids) url += `cardIds=${ids}`;
-      else if (status) url += `status=${status}`;
-
-      // Download file
-      window.location.href = url;
-      showToast(`Exporting to ${format.toUpperCase()}...`, 'success');
+      exportCardIds = selectedCards.size > 0 ? Array.from(selectedCards) : cards.map(c => c.id);
+      await exportTo(format);
     }
 
     async function exportAll(format) {
-      window.location.href = `/api/export/${format}`;
-      showToast(`Exporting all cards to ${format.toUpperCase()}...`, 'success');
-      closeExportModal();
+      exportCardIds = cards.map(c => c.id);
+      await exportTo(format);
     }
 
     // ==========================================
