@@ -1990,7 +1990,6 @@
       <div class="modal-body">
         <div class="settings-tabs">
           <button class="settings-tab active" data-tab="api" onclick="switchSettingsTab('api')">API Key</button>
-          <button class="settings-tab" data-tab="ai" onclick="switchSettingsTab('ai')">AI Analysis</button>
           <button class="settings-tab" data-tab="ebay" onclick="switchSettingsTab('ebay')">eBay</button>
           <button class="settings-tab" data-tab="models" onclick="switchSettingsTab('models')">Models</button>
           <button class="settings-tab" data-tab="costs" onclick="switchSettingsTab('costs')">Costs</button>
@@ -2017,80 +2016,6 @@
             <div id="api-key-result" style="margin-top: 8px; font-size: 13px;"></div>
           </div>
           <p style="font-size: 12px; color: var(--text-muted);">Get your API key at <a href="https://console.anthropic.com" target="_blank" style="color: var(--cyan);">console.anthropic.com</a></p>
-        </div>
-
-        <!-- AI Analysis Panel -->
-        <div class="settings-panel" id="panel-ai">
-          <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 16px;">
-            <h4>AI Card Analysis</h4>
-            <span style="font-size: 10px; background: var(--success); color: #000; padding: 2px 6px; border-radius: 4px; font-weight: 600;">BETA</span>
-          </div>
-
-          <p style="color: var(--text-muted); margin-bottom: 20px; font-size: 13px;">
-            Get AI-powered condition assessment, market values, and investment advice for your cards. Bring Your Own Key (BYOK) - you pay for your own API usage.
-          </p>
-
-          <!-- Provider Selection -->
-          <div style="margin-bottom: 20px;">
-            <label style="display: block; margin-bottom: 8px; font-size: 12px; font-weight: 600;">Preferred AI Provider</label>
-            <select id="settings-ai-provider" style="width: 100%; padding: 12px; background: rgba(0,0,0,0.3); border: 1px solid var(--glass-border); border-radius: 8px; color: var(--text);">
-              <option value="anthropic">Anthropic Claude (Recommended - has web search)</option>
-              <option value="openai">OpenAI GPT-4</option>
-              <option value="google">Google Gemini</option>
-            </select>
-          </div>
-
-          <!-- API Keys -->
-          <div style="background: var(--glass); padding: 20px; border-radius: 12px; margin-bottom: 20px;">
-            <div style="margin-bottom: 16px;">
-              <label style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px; font-size: 12px; font-weight: 600;">
-                Anthropic API Key
-                <a href="https://console.anthropic.com/settings/keys" target="_blank" style="font-size: 11px; color: var(--cyan);">Get key</a>
-                <span id="ai-key-status-anthropic" style="font-size: 10px; padding: 2px 6px; border-radius: 4px;"></span>
-              </label>
-              <input type="password" id="settings-ai-anthropic-key" placeholder="sk-ant-..." style="width: 100%; padding: 12px; background: rgba(0,0,0,0.3); border: 1px solid var(--glass-border); border-radius: 8px; color: var(--text); font-family: monospace;">
-            </div>
-
-            <div style="margin-bottom: 16px;">
-              <label style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px; font-size: 12px; font-weight: 600;">
-                OpenAI API Key
-                <a href="https://platform.openai.com/api-keys" target="_blank" style="font-size: 11px; color: var(--cyan);">Get key</a>
-                <span id="ai-key-status-openai" style="font-size: 10px; padding: 2px 6px; border-radius: 4px;"></span>
-              </label>
-              <input type="password" id="settings-ai-openai-key" placeholder="sk-..." style="width: 100%; padding: 12px; background: rgba(0,0,0,0.3); border: 1px solid var(--glass-border); border-radius: 8px; color: var(--text); font-family: monospace;">
-            </div>
-
-            <div>
-              <label style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px; font-size: 12px; font-weight: 600;">
-                Google Gemini API Key
-                <a href="https://aistudio.google.com/app/apikey" target="_blank" style="font-size: 11px; color: var(--cyan);">Get key</a>
-                <span id="ai-key-status-google" style="font-size: 10px; padding: 2px 6px; border-radius: 4px;"></span>
-              </label>
-              <input type="password" id="settings-ai-google-key" placeholder="AI..." style="width: 100%; padding: 12px; background: rgba(0,0,0,0.3); border: 1px solid var(--glass-border); border-radius: 8px; color: var(--text); font-family: monospace;">
-            </div>
-          </div>
-
-          <button class="btn btn-success" onclick="saveAiApiKeys()" style="width: 100%; margin-bottom: 16px;">Save AI Settings</button>
-          <div id="ai-save-result" style="text-align: center; font-size: 13px;"></div>
-
-          <!-- Usage Stats -->
-          <div style="background: var(--glass); padding: 16px; border-radius: 12px; margin-top: 20px;">
-            <h5 style="margin-bottom: 12px; font-size: 12px; color: var(--text-muted); text-transform: uppercase;">Your AI Analysis Usage</h5>
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
-              <div style="text-align: center;">
-                <div id="ai-usage-count" style="font-size: 24px; font-weight: 700; color: var(--cyan);">0</div>
-                <div style="font-size: 11px; color: var(--text-muted);">Total Analyses</div>
-              </div>
-              <div style="text-align: center;">
-                <div id="ai-usage-status" style="font-size: 14px; font-weight: 600; color: var(--success);">Ready</div>
-                <div style="font-size: 11px; color: var(--text-muted);">Status</div>
-              </div>
-            </div>
-          </div>
-
-          <div style="margin-top: 16px; text-align: center; font-size: 12px; color: var(--text-muted);">
-            Questions? Contact <a href="mailto:huddleeco@gmail.com" style="color: var(--cyan);">huddleeco@gmail.com</a>
-          </div>
         </div>
 
         <div class="settings-panel" id="panel-ebay">
@@ -2691,167 +2616,72 @@
     </div>
   </div>
 
-  <!-- AI Analysis Modal -->
-  <div class="modal" id="ai-analysis-modal">
-    <div class="modal-content" style="max-width: 700px; max-height: 90vh;">
-      <div class="modal-header" style="background: linear-gradient(135deg, rgba(16, 185, 129, 0.2), rgba(6, 182, 212, 0.2));">
-        <h2 style="display: flex; align-items: center; gap: 10px;">
-          <span style="animation: ai-pulse 2s infinite;">💰</span>
-          Price Check
-          <span style="font-size: 11px; background: var(--success); color: #000; padding: 2px 8px; border-radius: 4px; font-weight: 600;">BETA</span>
-        </h2>
-        <button class="modal-close" onclick="closeAiAnalysisModal()">&times;</button>
-      </div>
-      <div class="modal-body" id="ai-analysis-content" style="max-height: calc(90vh - 140px); overflow-y: auto;">
-        <!-- Price check results will be rendered here -->
-        <div id="ai-analysis-loading" style="text-align: center; padding: 60px 20px; display: none;">
-          <div style="font-size: 48px; animation: ai-pulse 1s infinite;">💰</div>
-          <h3 style="margin: 16px 0 8px;">Checking prices...</h3>
-          <p style="color: var(--text-muted);">Searching eBay, COMC, PSA, and other sources for current prices</p>
-          <div style="margin-top: 20px; height: 4px; background: var(--glass); border-radius: 2px; overflow: hidden;">
-            <div style="height: 100%; width: 30%; background: linear-gradient(90deg, var(--cyan), var(--success)); animation: loading-bar 2s ease-in-out infinite;"></div>
-          </div>
-        </div>
-        <div id="ai-analysis-result" style="display: none;"></div>
-        <div id="ai-analysis-error" style="display: none; text-align: center; padding: 40px;">
-          <div style="font-size: 48px;">⚠️</div>
-          <h3 style="color: var(--error); margin: 16px 0 8px;">Analysis Failed</h3>
-          <p id="ai-analysis-error-message" style="color: var(--text-muted);"></p>
-        </div>
-      </div>
-      <div class="modal-footer" style="justify-content: space-between;">
-        <div id="ai-analysis-usage" style="font-size: 12px; color: var(--text-muted);">
-          <!-- Usage info will be shown here -->
-        </div>
-        <div style="display: flex; gap: 10px;">
-          <button class="btn btn-secondary" onclick="openAiSettings()">Settings</button>
-          <button class="btn btn-secondary" onclick="closeAiAnalysisModal()">Close</button>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- AI Upgrade Modal (shown when quota exceeded) -->
-  <div class="modal" id="ai-upgrade-modal">
-    <div class="modal-content" style="max-width: 450px; text-align: center;">
+  <!-- Price Links Modal -->
+  <div class="modal" id="price-links-modal">
+    <div class="modal-content" style="max-width: 500px;">
       <div class="modal-header">
-        <h2>🚀 Upgrade for More Analyses</h2>
-        <button class="modal-close" onclick="closeAiUpgradeModal()">&times;</button>
+        <h2>💰 Price Research</h2>
+        <button class="modal-close" onclick="closePriceLinksModal()">&times;</button>
       </div>
-      <div class="modal-body" style="padding: 30px;">
-        <div style="font-size: 64px; margin-bottom: 20px;">🤖</div>
-        <h3 style="margin-bottom: 12px;">You've used all your free analyses!</h3>
-        <p style="color: var(--text-muted); margin-bottom: 24px;">
-          Upgrade to get more AI-powered card analysis with condition assessment, market values, and investment advice.
-        </p>
-
-        <div style="display: grid; gap: 12px; margin-bottom: 24px;">
-          <div style="background: var(--glass); padding: 16px; border-radius: 12px; text-align: left;">
-            <div style="display: flex; justify-content: space-between; align-items: center;">
-              <div>
-                <div style="font-weight: 600;">Free Tier</div>
-                <div style="font-size: 12px; color: var(--text-muted);">3 analyses / month</div>
-              </div>
-              <div style="font-size: 18px; font-weight: 700;">$0</div>
-            </div>
-          </div>
-          <div style="background: linear-gradient(135deg, rgba(123, 47, 247, 0.2), rgba(0, 246, 255, 0.2)); padding: 16px; border-radius: 12px; text-align: left; border: 2px solid var(--cyan);">
-            <div style="display: flex; justify-content: space-between; align-items: center;">
-              <div>
-                <div style="font-weight: 600; color: var(--cyan);">CardFlow Premium</div>
-                <div style="font-size: 12px; color: var(--text-muted);">50 analyses / month</div>
-              </div>
-              <div style="font-size: 18px; font-weight: 700;">$3/mo</div>
-            </div>
-          </div>
-          <div style="background: linear-gradient(135deg, rgba(16, 185, 129, 0.2), rgba(6, 182, 212, 0.2)); padding: 16px; border-radius: 12px; text-align: left; border: 2px solid var(--success);">
-            <div style="display: flex; justify-content: space-between; align-items: center;">
-              <div>
-                <div style="font-weight: 600; color: var(--success);">SlabTrack Pro</div>
-                <div style="font-size: 12px; color: var(--text-muted);">Unlimited analyses + full suite</div>
-              </div>
-              <div style="font-size: 18px; font-weight: 700;">$10/mo</div>
-            </div>
-          </div>
-        </div>
-
-        <a href="https://slabtrack.com" target="_blank" class="btn btn-accent" style="width: 100%; padding: 16px; font-size: 16px;">
-          Get SlabTrack Pro
-        </a>
+      <div class="modal-body" id="price-links-content">
+        <!-- Card info and links rendered here -->
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-success" onclick="openAllPriceLinks()">Open All Selected</button>
+        <button class="btn btn-secondary" onclick="closePriceLinksModal()">Close</button>
       </div>
     </div>
   </div>
 
   <style>
-    @keyframes loading-bar {
-      0% { transform: translateX(-100%); }
-      50% { transform: translateX(100%); }
-      100% { transform: translateX(300%); }
-    }
-
-    .ai-result-section {
-      background: var(--glass);
-      padding: 20px;
-      border-radius: 12px;
-      margin-bottom: 16px;
-    }
-    .ai-result-section h4 {
+    .price-link-btn {
       display: flex;
       align-items: center;
-      gap: 8px;
-      margin-bottom: 12px;
-      font-size: 14px;
-      text-transform: uppercase;
-      color: var(--cyan);
-    }
-    .ai-result-grid {
-      display: grid;
-      grid-template-columns: repeat(2, 1fr);
       gap: 12px;
-    }
-    .ai-result-item {
-      padding: 12px;
-      background: rgba(0,0,0,0.2);
-      border-radius: 8px;
-    }
-    .ai-result-label {
-      font-size: 10px;
-      text-transform: uppercase;
-      color: var(--text-muted);
-      margin-bottom: 4px;
-    }
-    .ai-result-value {
-      font-size: 14px;
-      font-weight: 600;
-    }
-    .ai-action-badge {
-      display: inline-block;
-      padding: 8px 20px;
-      border-radius: 8px;
-      font-size: 18px;
-      font-weight: 700;
-      text-transform: uppercase;
-    }
-    .ai-action-badge.hold { background: linear-gradient(135deg, #3b82f6, #1d4ed8); }
-    .ai-action-badge.sell { background: linear-gradient(135deg, #f59e0b, #d97706); }
-    .ai-action-badge.grade { background: linear-gradient(135deg, #10b981, #059669); }
-
-    .ai-sales-table {
       width: 100%;
-      border-collapse: collapse;
-      font-size: 13px;
-    }
-    .ai-sales-table th {
+      padding: 12px 16px;
+      background: var(--glass);
+      border: 1px solid var(--glass-border);
+      border-radius: 8px;
+      color: var(--text);
+      cursor: pointer;
+      transition: all 0.2s;
       text-align: left;
-      padding: 8px;
-      background: rgba(0,0,0,0.3);
-      font-size: 10px;
-      text-transform: uppercase;
+    }
+    .price-link-btn:hover {
+      background: rgba(0, 246, 255, 0.1);
+      border-color: var(--cyan);
+    }
+    .price-link-btn.selected {
+      background: rgba(16, 185, 129, 0.15);
+      border-color: var(--success);
+    }
+    .price-link-icon {
+      font-size: 20px;
+      width: 32px;
+      text-align: center;
+    }
+    .price-link-name {
+      font-weight: 600;
+      font-size: 14px;
+    }
+    .price-link-desc {
+      font-size: 11px;
       color: var(--text-muted);
     }
-    .ai-sales-table td {
-      padding: 8px;
-      border-bottom: 1px solid var(--glass-border);
+    .price-link-check {
+      margin-left: auto;
+      width: 20px;
+      height: 20px;
+      border: 2px solid var(--glass-border);
+      border-radius: 4px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .price-link-btn.selected .price-link-check {
+      background: var(--success);
+      border-color: var(--success);
     }
   </style>
 
@@ -4027,8 +3857,7 @@
               </div>
             </div>
             <div class="card-actions">
-              <button class="btn btn-ai btn-sm" onclick="analyzeCard('${card.id}')" title="Price Check">💰</button>
-              <button class="btn btn-secondary btn-sm" onclick="priceCheckCard('${card.id}')" title="Quick Price Check">🔍</button>
+              <button class="btn btn-success btn-sm" onclick="showPriceLinks('${card.id}')" title="Price Research">💰</button>
               <button class="btn btn-secondary btn-sm" onclick="setCardPrice('${card.id}')" title="Set Price">💲</button>
               <button class="btn btn-secondary" onclick="editCard('${card.id}')">Edit</button>
               ${card.status === 'listed' ? `
@@ -4123,9 +3952,6 @@
       if (tab === 'ebay') {
         loadEbayStatus();
       }
-      if (tab === 'ai') {
-        loadAiSettings();
-      }
     }
 
     function closeSettingsModal() {
@@ -4139,81 +3965,6 @@
       document.getElementById(`panel-${tab}`).classList.add('active');
       if (tab === 'ebay') {
         loadEbayStatus();
-      }
-      if (tab === 'ai') {
-        loadAiSettings();
-      }
-    }
-
-    // AI Settings functions
-    async function loadAiSettings() {
-      try {
-        const usage = await api('/agent/usage');
-        if (usage) {
-          // Set provider
-          document.getElementById('settings-ai-provider').value = usage.preferredProvider || 'anthropic';
-
-          // Show key status
-          ['anthropic', 'openai', 'google'].forEach(provider => {
-            const statusEl = document.getElementById(`ai-key-status-${provider}`);
-            if (usage.apiKeys[provider]) {
-              statusEl.textContent = 'Configured';
-              statusEl.style.background = 'var(--success)';
-              statusEl.style.color = '#000';
-            } else {
-              statusEl.textContent = '';
-            }
-          });
-
-          // Show usage stats
-          document.getElementById('ai-usage-count').textContent = usage.quota.used || 0;
-          if (usage.quota.canAnalyze) {
-            document.getElementById('ai-usage-status').textContent = 'Ready';
-            document.getElementById('ai-usage-status').style.color = 'var(--success)';
-          } else {
-            document.getElementById('ai-usage-status').textContent = 'Add API Key';
-            document.getElementById('ai-usage-status').style.color = 'var(--warning)';
-          }
-        }
-      } catch (e) {
-        console.error('Failed to load AI settings:', e);
-      }
-    }
-
-    async function saveAiApiKeys() {
-      const anthropicKey = document.getElementById('settings-ai-anthropic-key').value.trim();
-      const openaiKey = document.getElementById('settings-ai-openai-key').value.trim();
-      const googleKey = document.getElementById('settings-ai-google-key').value.trim();
-      const preferredProvider = document.getElementById('settings-ai-provider').value;
-      const resultEl = document.getElementById('ai-save-result');
-
-      resultEl.innerHTML = '<span style="color: var(--text-muted);">Saving...</span>';
-
-      try {
-        const response = await fetch(`${API_URL}/agent/save-settings`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`
-          },
-          body: JSON.stringify({
-            anthropicKey: anthropicKey || undefined,
-            openaiKey: openaiKey || undefined,
-            googleKey: googleKey || undefined,
-            preferredProvider
-          })
-        });
-
-        const data = await response.json();
-        if (data.success) {
-          resultEl.innerHTML = '<span style="color: var(--success);">Settings saved!</span>';
-          loadAiSettings(); // Refresh the display
-          showToast('AI settings saved!', 'success');
-        } else {
-          throw new Error(data.error);
-        }
-      } catch (e) {
-        resultEl.innerHTML = `<span style="color: var(--error);">Failed: ${e.message}</span>`;
       }
     }
 
@@ -6384,277 +6135,158 @@
     // ============================================
     // AI ANALYSIS FUNCTIONS (Beta)
     // ============================================
+    // PRICE LINKS (Direct search links to pricing sites)
+    // ============================================
 
-    let aiAnalysisCard = null;
-    let aiUsage = { used: 0, limit: 3, remaining: 3 };
+    let priceLinksCard = null;
+    let selectedPriceSources = JSON.parse(localStorage.getItem('cardflow_price_sources') || '{"ebaySold":true,"ebayBIN":true,"comc":true,"130point":true}');
 
-    // Open AI Analysis Modal and run analysis
-    async function analyzeCard(cardId) {
+    const PRICE_SOURCES = [
+      { id: 'ebaySold', name: 'eBay Sold', icon: '🏷️', desc: 'Recently sold listings', category: 'primary' },
+      { id: 'ebayBIN', name: 'eBay Buy It Now', icon: '🛒', desc: 'Current fixed price listings', category: 'primary' },
+      { id: 'ebayAuctions', name: 'eBay Auctions', icon: '🔨', desc: 'Active auctions', category: 'primary' },
+      { id: 'comc', name: 'COMC', icon: '📦', desc: 'Check Out My Cards', category: 'primary' },
+      { id: '130point', name: '130point', icon: '📊', desc: 'Price history & trends', category: 'research' },
+      { id: 'sportscardspro', name: 'SportsCardsPro', icon: '💹', desc: 'Market values', category: 'research' },
+      { id: 'cardladder', name: 'Card Ladder', icon: '📈', desc: 'Graded card values', category: 'research' },
+      { id: 'psacard', name: 'PSA Auction Prices', icon: '🎯', desc: 'PSA certified sales', category: 'research' }
+    ];
+
+    function buildPriceSearchQuery(card) {
+      const parts = [];
+      if (card.year) parts.push(card.year);
+      if (card.set_name) parts.push(card.set_name);
+      if (card.player) parts.push(card.player);
+      if (card.card_number) parts.push(String(card.card_number).replace(/^#/, ''));
+      if (card.parallel && card.parallel.toLowerCase() !== 'base') parts.push(card.parallel);
+      if (card.is_graded && card.grading_company && card.grade) {
+        parts.push(card.grading_company + ' ' + card.grade);
+      }
+      return parts.filter(Boolean).join(' ');
+    }
+
+    function getPriceUrl(sourceId, card) {
+      const query = buildPriceSearchQuery(card);
+      const q = encodeURIComponent(query);
+      const qPlus = query.replace(/\s+/g, '+');
+
+      const urls = {
+        ebaySold: `https://www.ebay.com/sch/i.html?_nkw=${q}&LH_Complete=1&LH_Sold=1&_sop=13`,
+        ebayBIN: `https://www.ebay.com/sch/i.html?_nkw=${q}&LH_BIN=1&_sop=15`,
+        ebayAuctions: `https://www.ebay.com/sch/i.html?_nkw=${q}&LH_Auction=1&_sop=1`,
+        comc: `https://www.comc.com/Cards,sr,=${qPlus},fb,i100`,
+        '130point': `https://130point.com/sales/?search=${q}`,
+        sportscardspro: `https://www.google.com/search?q=site:sportscardspro.com+${qPlus}`,
+        cardladder: `https://www.google.com/search?q=site:cardladder.com+${qPlus}`,
+        psacard: `https://www.google.com/search?q=site:psacard.com/auctionprices+${qPlus}`
+      };
+      return urls[sourceId];
+    }
+
+    function showPriceLinks(cardId) {
       const card = cards.find(c => c.id === cardId);
       if (!card) {
         showToast('Card not found', 'error');
         return;
       }
 
-      aiAnalysisCard = card;
-
-      // Open modal
-      document.getElementById('ai-analysis-modal').classList.add('open');
-      document.getElementById('ai-analysis-loading').style.display = 'block';
-      document.getElementById('ai-analysis-result').style.display = 'none';
-      document.getElementById('ai-analysis-error').style.display = 'none';
-
-      try {
-        // First check usage
-        const usageResponse = await api('/agent/usage');
-        if (usageResponse) {
-          aiUsage = usageResponse.quota;
-          updateAiUsageDisplay();
-
-          // Check if user has beta access
-          if (!usageResponse.betaEnabled) {
-            showAiBetaRequired();
-            return;
-          }
-
-          // Check if quota exceeded
-          if (!usageResponse.quota.canAnalyze) {
-            showAiUpgradeModal();
-            closeAiAnalysisModal();
-            return;
-          }
-
-          // Check if user has API key
-          const provider = usageResponse.preferredProvider || 'anthropic';
-          if (!usageResponse.apiKeys[provider]) {
-            document.getElementById('ai-analysis-loading').style.display = 'none';
-            document.getElementById('ai-analysis-error').style.display = 'block';
-            document.getElementById('ai-analysis-error-message').innerHTML = `
-              No ${provider} API key configured.<br>
-              <button class="btn btn-accent" style="margin-top: 12px;" onclick="openAiSettings()">Add API Key</button>
-            `;
-            return;
-          }
-        }
-
-        // Run analysis
-        const response = await fetch(`${API_URL}/agent/analyze-card`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`
-          },
-          body: JSON.stringify({
-            cardId: cardId,
-            photoUrl: card.front
-          })
-        });
-
-        const data = await response.json();
-
-        if (!response.ok || !data.success) {
-          throw new Error(data.error || 'Analysis failed');
-        }
-
-        // Update usage
-        if (data.usage) {
-          aiUsage.remaining = data.usage.analysesRemaining;
-          aiUsage.used = data.usage.limit - data.usage.analysesRemaining;
-          updateAiUsageDisplay();
-        }
-
-        // Show results
-        renderPriceCheckResult(data.prices, data.meta);
-
-      } catch (error) {
-        console.error('AI Analysis error:', error);
-        document.getElementById('ai-analysis-loading').style.display = 'none';
-        document.getElementById('ai-analysis-error').style.display = 'block';
-
-        let errorMessage = error.message;
-        if (error.message.includes('API key') || error.message.includes('401')) {
-          errorMessage = 'Invalid API key. Please check your settings.';
-        } else if (error.message.includes('rate')) {
-          errorMessage = 'Rate limit exceeded. Please try again later.';
-        }
-
-        document.getElementById('ai-analysis-error-message').innerHTML = `
-          ${errorMessage}<br>
-          <button class="btn btn-secondary" style="margin-top: 12px;" onclick="openAiSettings()">Check Settings</button>
-        `;
-      }
+      priceLinksCard = card;
+      document.getElementById('price-links-modal').classList.add('open');
+      renderPriceLinksContent();
     }
 
-    // Render price check results
-    function renderPriceCheckResult(priceData, meta) {
-      document.getElementById('ai-analysis-loading').style.display = 'none';
-      document.getElementById('ai-analysis-result').style.display = 'block';
+    function renderPriceLinksContent() {
+      const card = priceLinksCard;
+      const query = buildPriceSearchQuery(card);
 
-      const prices = priceData.prices || {};
-      const rec = priceData.gradeRecommendation || {};
-      const sources = priceData.sources || [];
+      const primarySources = PRICE_SOURCES.filter(s => s.category === 'primary');
+      const researchSources = PRICE_SOURCES.filter(s => s.category === 'research');
 
-      // Format price helper
-      const formatPrice = (p) => p != null ? `$${p.toFixed(2)}` : 'N/A';
-      const formatRange = (data) => {
-        if (!data || data.avg == null) return 'No data';
-        if (data.low === data.high) return formatPrice(data.avg);
-        return `${formatPrice(data.low)} - ${formatPrice(data.high)}`;
-      };
-
-      document.getElementById('ai-analysis-result').innerHTML = `
-        <!-- Card Info Header -->
-        <div style="display: flex; gap: 16px; margin-bottom: 20px; padding-bottom: 16px; border-bottom: 1px solid var(--glass-border);">
-          <img src="${aiAnalysisCard?.front || ''}" style="width: 80px; height: 110px; object-fit: cover; border-radius: 8px;">
+      document.getElementById('price-links-content').innerHTML = `
+        <!-- Card Info -->
+        <div style="display: flex; gap: 12px; margin-bottom: 20px; padding-bottom: 16px; border-bottom: 1px solid var(--glass-border);">
+          <img src="${card.front || ''}" style="width: 60px; height: 84px; object-fit: cover; border-radius: 6px;">
           <div>
-            <h3 style="margin: 0 0 4px;">${aiAnalysisCard?.player || 'Unknown'}</h3>
-            <div style="color: var(--text-muted); font-size: 13px;">
-              ${aiAnalysisCard?.year || ''} ${aiAnalysisCard?.set_name || ''}
-            </div>
-            <div style="color: var(--text-muted); font-size: 12px;">
-              #${aiAnalysisCard?.card_number || ''} ${aiAnalysisCard?.parallel && aiAnalysisCard.parallel !== 'Base' ? aiAnalysisCard.parallel : ''}
+            <h3 style="margin: 0 0 4px; font-size: 16px;">${card.player || 'Unknown'}</h3>
+            <div style="color: var(--text-muted); font-size: 12px;">${card.year || ''} ${card.set_name || ''}</div>
+            <div style="color: var(--text-muted); font-size: 11px; margin-top: 4px;">
+              Search: <span style="color: var(--cyan);">${query}</span>
             </div>
           </div>
         </div>
 
-        <!-- Price Comparison Grid -->
-        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 20px;">
-          <div style="background: var(--glass); padding: 16px; border-radius: 12px; text-align: center;">
-            <div style="font-size: 11px; color: var(--text-muted); text-transform: uppercase; margin-bottom: 8px;">Raw Card</div>
-            <div style="font-size: 20px; font-weight: 700; color: var(--text);">${formatPrice(prices.raw?.avg)}</div>
-            <div style="font-size: 11px; color: var(--text-muted);">${prices.raw?.salesCount || 0} sales</div>
-          </div>
-          <div style="background: var(--glass); padding: 16px; border-radius: 12px; text-align: center;">
-            <div style="font-size: 11px; color: var(--text-muted); text-transform: uppercase; margin-bottom: 8px;">PSA 9</div>
-            <div style="font-size: 20px; font-weight: 700; color: var(--cyan);">${formatPrice(prices.psa9?.avg)}</div>
-            <div style="font-size: 11px; color: var(--text-muted);">${prices.psa9?.salesCount || 0} sales</div>
-          </div>
-          <div style="background: linear-gradient(135deg, rgba(16, 185, 129, 0.15), rgba(6, 182, 212, 0.15)); padding: 16px; border-radius: 12px; text-align: center; border: 1px solid var(--success);">
-            <div style="font-size: 11px; color: var(--success); text-transform: uppercase; margin-bottom: 8px;">PSA 10</div>
-            <div style="font-size: 20px; font-weight: 700; color: var(--success);">${formatPrice(prices.psa10?.avg)}</div>
-            <div style="font-size: 11px; color: var(--text-muted);">${prices.psa10?.salesCount || 0} sales</div>
+        <!-- Primary Sources -->
+        <div style="margin-bottom: 16px;">
+          <div style="font-size: 11px; color: var(--text-muted); text-transform: uppercase; margin-bottom: 8px;">Marketplaces</div>
+          <div style="display: flex; flex-direction: column; gap: 8px;">
+            ${primarySources.map(source => `
+              <button class="price-link-btn ${selectedPriceSources[source.id] ? 'selected' : ''}" onclick="togglePriceSource('${source.id}')" data-source="${source.id}">
+                <span class="price-link-icon">${source.icon}</span>
+                <div>
+                  <div class="price-link-name">${source.name}</div>
+                  <div class="price-link-desc">${source.desc}</div>
+                </div>
+                <div class="price-link-check">${selectedPriceSources[source.id] ? '✓' : ''}</div>
+              </button>
+            `).join('')}
           </div>
         </div>
 
-        <!-- Grade Recommendation -->
-        <div class="ai-result-section" style="text-align: center; background: ${rec.shouldGrade ? 'linear-gradient(135deg, rgba(16, 185, 129, 0.15), rgba(6, 182, 212, 0.15))' : 'var(--glass)'}; border: 1px solid ${rec.shouldGrade ? 'var(--success)' : 'var(--glass-border)'};">
-          <h4 style="margin-bottom: 12px;">Should You Grade?</h4>
-          <div style="font-size: 32px; font-weight: 700; color: ${rec.shouldGrade ? 'var(--success)' : 'var(--text-muted)'};">
-            ${rec.shouldGrade ? '✓ YES' : '✗ NO'}
+        <!-- Research Sources -->
+        <div style="margin-bottom: 16px;">
+          <div style="font-size: 11px; color: var(--text-muted); text-transform: uppercase; margin-bottom: 8px;">Research & Analytics</div>
+          <div style="display: flex; flex-direction: column; gap: 8px;">
+            ${researchSources.map(source => `
+              <button class="price-link-btn ${selectedPriceSources[source.id] ? 'selected' : ''}" onclick="togglePriceSource('${source.id}')" data-source="${source.id}">
+                <span class="price-link-icon">${source.icon}</span>
+                <div>
+                  <div class="price-link-name">${source.name}</div>
+                  <div class="price-link-desc">${source.desc}</div>
+                </div>
+                <div class="price-link-check">${selectedPriceSources[source.id] ? '✓' : ''}</div>
+              </button>
+            `).join('')}
           </div>
-          <p style="margin-top: 12px; color: var(--text-muted); font-size: 13px;">${rec.reason || ''}</p>
-          ${rec.potentialProfit ? `
-            <div style="margin-top: 12px; padding: 12px; background: rgba(16, 185, 129, 0.1); border-radius: 8px;">
-              <div style="font-size: 11px; color: var(--text-muted); text-transform: uppercase;">Potential Profit</div>
-              <div style="font-size: 18px; font-weight: 700; color: var(--success);">+$${rec.potentialProfit.toFixed(2)}</div>
-            </div>
-          ` : ''}
-          ${rec.breakEvenGrade ? `
-            <div style="margin-top: 8px; font-size: 12px; color: var(--text-muted);">
-              Break-even grade: <strong>${rec.breakEvenGrade}</strong>
-            </div>
-          ` : ''}
         </div>
 
-        <!-- Price Ranges -->
-        <div class="ai-result-section">
-          <h4>📊 Price Ranges</h4>
-          <table style="width: 100%; border-collapse: collapse;">
-            <tr style="border-bottom: 1px solid var(--glass-border);">
-              <td style="padding: 8px 0; color: var(--text-muted);">Raw</td>
-              <td style="padding: 8px 0; text-align: right; font-weight: 600;">${formatRange(prices.raw)}</td>
-            </tr>
-            <tr style="border-bottom: 1px solid var(--glass-border);">
-              <td style="padding: 8px 0; color: var(--text-muted);">PSA 9</td>
-              <td style="padding: 8px 0; text-align: right; font-weight: 600; color: var(--cyan);">${formatRange(prices.psa9)}</td>
-            </tr>
-            <tr>
-              <td style="padding: 8px 0; color: var(--text-muted);">PSA 10</td>
-              <td style="padding: 8px 0; text-align: right; font-weight: 600; color: var(--success);">${formatRange(prices.psa10)}</td>
-            </tr>
-          </table>
-        </div>
-
-        <!-- Sources -->
-        ${sources.length > 0 ? `
-          <div style="margin-bottom: 16px;">
-            <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 8px;">Sources checked:</div>
-            <div style="display: flex; flex-wrap: wrap; gap: 6px;">
-              ${sources.map(s => `
-                <span style="font-size: 11px; padding: 4px 8px; background: var(--glass); border-radius: 4px;">
-                  ${s.name} (${s.salesFound || 0})
-                </span>
-              `).join('')}
-            </div>
-          </div>
-        ` : ''}
-
-        <!-- Notes -->
-        ${priceData.notes ? `
-          <div style="padding: 12px; background: rgba(0, 246, 255, 0.1); border-radius: 8px; font-size: 13px; color: var(--text-muted);">
-            💡 ${priceData.notes}
-          </div>
-        ` : ''}
-
-        <!-- Meta Info -->
-        <div style="text-align: center; padding: 12px; font-size: 11px; color: var(--text-muted); margin-top: 16px;">
-          Price check by ${meta?.provider || 'AI'} (${meta?.model || 'unknown'}) in ${meta?.responseTime?.toFixed(1) || '?'}s
-          • Cost: $${meta?.cost?.toFixed(4) || '0.00'}
-        </div>
+        <p style="font-size: 11px; color: var(--text-muted); text-align: center;">
+          Click sources to select, then "Open All Selected" to open them in new tabs
+        </p>
       `;
     }
 
-    function showAiBetaRequired() {
-      document.getElementById('ai-analysis-loading').style.display = 'none';
-      document.getElementById('ai-analysis-error').style.display = 'block';
-      document.getElementById('ai-analysis-error-message').innerHTML = `
-        AI Analysis is currently in beta.<br>
-        Contact <a href="mailto:huddleeco@gmail.com" style="color: var(--cyan);">huddleeco@gmail.com</a> to request access.
-      `;
+    function togglePriceSource(sourceId) {
+      selectedPriceSources[sourceId] = !selectedPriceSources[sourceId];
+      localStorage.setItem('cardflow_price_sources', JSON.stringify(selectedPriceSources));
+      renderPriceLinksContent();
     }
 
-    function updateAiUsageDisplay() {
-      const usageText = aiUsage.isAdmin || aiUsage.hasOwnKey
-        ? 'Unlimited analyses (BYOK/Admin)'
-        : `${aiUsage.remaining} of ${aiUsage.limit} analyses remaining this month`;
-      document.getElementById('ai-analysis-usage').innerHTML = usageText;
+    function openAllPriceLinks() {
+      if (!priceLinksCard) return;
 
-      // Update settings modal elements if they exist
-      const countEl = document.getElementById('ai-usage-count');
-      const statusEl = document.getElementById('ai-usage-status');
-      if (countEl) countEl.textContent = aiUsage.used || 0;
-      if (statusEl) {
-        if (aiUsage.isAdmin || aiUsage.hasOwnKey) {
-          statusEl.textContent = 'Unlimited';
-          statusEl.style.color = 'var(--success)';
-        } else {
-          statusEl.textContent = aiUsage.remaining > 0 ? 'Ready' : 'Quota Used';
-          statusEl.style.color = aiUsage.remaining > 0 ? 'var(--success)' : 'var(--error)';
-        }
+      const selectedSources = Object.entries(selectedPriceSources)
+        .filter(([id, selected]) => selected)
+        .map(([id]) => id);
+
+      if (selectedSources.length === 0) {
+        showToast('Select at least one source', 'error');
+        return;
       }
+
+      selectedSources.forEach((sourceId, index) => {
+        const url = getPriceUrl(sourceId, priceLinksCard);
+        if (url) {
+          setTimeout(() => window.open(url, '_blank'), index * 150);
+        }
+      });
+
+      showToast(`Opened ${selectedSources.length} price sources`, 'success');
+      closePriceLinksModal();
     }
 
-    function closeAiAnalysisModal() {
-      document.getElementById('ai-analysis-modal').classList.remove('open');
-      aiAnalysisCard = null;
-    }
-
-    // AI Settings - redirect to main settings modal
-    function openAiSettings() {
-      showSettingsModal('ai');
-    }
-
-    function closeAiSettings() {
-      closeSettingsModal();
-    }
-
-    // AI Upgrade Modal
-    function showAiUpgradeModal() {
-      document.getElementById('ai-upgrade-modal').classList.add('open');
-    }
-
-    function closeAiUpgradeModal() {
-      document.getElementById('ai-upgrade-modal').classList.remove('open');
+    function closePriceLinksModal() {
+      document.getElementById('price-links-modal').classList.remove('open');
+      priceLinksCard = null;
     }
 
     // Initialize
