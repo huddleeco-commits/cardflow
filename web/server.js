@@ -4268,8 +4268,6 @@ app.get('/', (req, res) => {
 // SOCIAL MEDIA IMAGE GENERATION
 // ============================================
 
-const sharp = require('sharp');
-
 // Generate a social media image for a card
 async function generateSocialImage(card, style = 'default') {
   const width = 1080;
