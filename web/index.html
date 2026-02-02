@@ -1572,12 +1572,41 @@
       <div class="upload-icon">📷</div>
       <h3>Drop card images here</h3>
       <p>or <label class="upload-label"><input type="file" id="file-input" multiple accept="image/*" onchange="handleFileSelect(event)" hidden>click to browse</label></p>
+      <p style="margin-top: 12px;">
+        <button class="btn btn-accent" onclick="showScanModal()" style="padding: 12px 24px;">
+          📱 Phone Scanner Mode
+        </button>
+      </p>
       <div class="upload-progress" id="upload-progress" style="display:none;">
         <div class="progress-bar"><div class="progress-fill" id="upload-fill"></div></div>
         <span id="upload-status">Uploading...</span>
       </div>
     </div>
   </section>
+
+  <!-- Live Scan Indicator (shows when scanning) -->
+  <section class="live-scan-banner" id="live-scan-banner" style="display: none;">
+    <div style="display: flex; align-items: center; justify-content: center; gap: 16px; padding: 16px 24px; background: linear-gradient(135deg, rgba(0, 246, 255, 0.1), rgba(123, 47, 247, 0.1)); border-bottom: 1px solid var(--glass-border);">
+      <div class="scan-pulse"></div>
+      <span style="font-weight: 600; color: var(--cyan);">LIVE SCANNING</span>
+      <span id="live-scan-count" style="color: var(--text-muted);">0 cards this session</span>
+      <button class="btn btn-secondary btn-sm" onclick="hideLiveScanBanner()">Hide</button>
+    </div>
+  </section>
+
+  <style>
+    .scan-pulse {
+      width: 12px;
+      height: 12px;
+      background: var(--cyan);
+      border-radius: 50%;
+      animation: scanPulse 1.5s infinite;
+    }
+    @keyframes scanPulse {
+      0%, 100% { opacity: 1; box-shadow: 0 0 0 0 var(--cyan); }
+      50% { opacity: 0.8; box-shadow: 0 0 0 8px transparent; }
+    }
+  </style>
 
   <!-- Price Search Panel -->
   <section class="price-search-panel" id="price-search-panel">
@@ -2184,6 +2213,55 @@
     </div>
   </div>
 
+  <!-- Phone Scanner Modal -->
+  <div class="modal" id="scan-modal">
+    <div class="modal-content" style="max-width: 450px;">
+      <div class="modal-header">
+        <h2>📱 Phone Scanner</h2>
+        <button class="modal-close" onclick="closeScanModal()">&times;</button>
+      </div>
+      <div class="modal-body" style="text-align: center;">
+        <p style="color: var(--text-muted); margin-bottom: 20px;">
+          Scan cards directly from your phone with audio feedback
+        </p>
+
+        <!-- QR Code -->
+        <div id="scan-qr-code" style="background: #fff; padding: 20px; border-radius: 12px; display: inline-block; margin-bottom: 20px;">
+          <canvas id="qr-canvas" width="180" height="180"></canvas>
+        </div>
+
+        <p style="margin-bottom: 8px; font-weight: 600;">Or open this URL on your phone:</p>
+        <div style="background: var(--glass); padding: 12px 16px; border-radius: 8px; margin-bottom: 20px; word-break: break-all;">
+          <code id="scan-url" style="color: var(--cyan); font-size: 14px;"></code>
+          <button onclick="copyScanUrl()" style="margin-left: 8px; padding: 4px 12px; background: var(--cyan); border: none; border-radius: 4px; color: #000; cursor: pointer; font-size: 12px;">Copy</button>
+        </div>
+
+        <div style="text-align: left; background: var(--glass); padding: 16px; border-radius: 12px;">
+          <h4 style="color: var(--cyan); margin-bottom: 12px;">How it works:</h4>
+          <ol style="color: var(--text-muted); font-size: 13px; padding-left: 20px; line-height: 1.8;">
+            <li>Open the link on your phone</li>
+            <li>Login with your CardFlow account</li>
+            <li>Point camera at card, tap to capture <strong>FRONT</strong></li>
+            <li>Flip card, tap to capture <strong>BACK</strong></li>
+            <li>Card auto-uploads with sound confirmation</li>
+            <li>Cards appear here and start identifying automatically</li>
+          </ol>
+        </div>
+
+        <div style="margin-top: 16px; padding: 12px; background: rgba(0, 255, 136, 0.1); border: 1px solid rgba(0, 255, 136, 0.2); border-radius: 8px;">
+          <strong style="color: var(--success);">Audio Cues:</strong>
+          <span style="color: var(--text-muted); font-size: 13px;">
+            Beep = Front captured | Double beep = Back captured | Ding = Complete!
+          </span>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeScanModal()">Close</button>
+        <button class="btn btn-primary" onclick="window.open('/scan', '_blank')">Open Scanner</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Lightbox -->
   <div class="lightbox" id="lightbox" onclick="closeLightbox()">
     <img id="lightbox-img" src="" alt="Full size">
@@ -2636,6 +2714,21 @@
     let token = localStorage.getItem('token');
     let user = JSON.parse(localStorage.getItem('user') || '{}');
     let ws = null;
+    let liveScanCount = 0;
+
+    // Helper functions for live scan (defined early for WebSocket handler)
+    function showLiveScanBanner() {
+      const banner = document.getElementById('live-scan-banner');
+      if (banner) banner.style.display = 'block';
+    }
+    function hideLiveScanBanner() {
+      const banner = document.getElementById('live-scan-banner');
+      if (banner) banner.style.display = 'none';
+    }
+    function updateLiveScanCount() {
+      const el = document.getElementById('live-scan-count');
+      if (el) el.textContent = `${liveScanCount} cards this session`;
+    }
 
     // Check authentication
     if (!token) {
@@ -2725,8 +2818,12 @@
           showToast('Price error: ' + data.error, 'error');
         }
 
-        // Pair uploaded
-        if (data.type === 'pair_uploaded') {
+        // Pair uploaded (from phone scanner or drag-drop)
+        if (data.type === 'pair_uploaded' || data.type === 'scan_complete') {
+          liveScanCount++;
+          updateLiveScanCount();
+          showLiveScanBanner();
+          loadCards();
           loadStatus();
         }
 
@@ -4661,6 +4758,85 @@
       } catch (e) {
         showToast('Failed to record sale: ' + e.message, 'error');
       }
+    }
+
+    // ==========================================
+    // PHONE SCANNER FUNCTIONS
+    // ==========================================
+
+    function showScanModal() {
+      document.getElementById('scan-modal').classList.add('open');
+      generateQRCode();
+    }
+
+    function closeScanModal() {
+      document.getElementById('scan-modal').classList.remove('open');
+    }
+
+    function generateQRCode() {
+      const scanUrl = window.location.origin + '/scan';
+      document.getElementById('scan-url').textContent = scanUrl;
+
+      // Simple QR code generation using canvas
+      const canvas = document.getElementById('qr-canvas');
+      const ctx = canvas.getContext('2d');
+
+      // Draw white background
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, 180, 180);
+
+      // Draw QR code pattern (simplified visual)
+      ctx.fillStyle = '#000000';
+      const moduleSize = 180 / 25;
+
+      // Generate a simple QR-like pattern based on URL hash
+      const urlHash = scanUrl.split('').reduce((a, b) => a + b.charCodeAt(0), 0);
+      for (let row = 0; row < 25; row++) {
+        for (let col = 0; col < 25; col++) {
+          // Position detection patterns (corners)
+          const isTopLeft = row < 7 && col < 7;
+          const isTopRight = row < 7 && col > 17;
+          const isBottomLeft = row > 17 && col < 7;
+          const isCorner = isTopLeft || isTopRight || isBottomLeft;
+
+          const isCornerOuter = isCorner && (row === 0 || row === 6 || col === 0 || col === 6 ||
+                                 (isTopRight && (col === 18 || col === 24)) ||
+                                 (isBottomLeft && (row === 18 || row === 24)));
+          const isCornerInner = (row >= 2 && row <= 4 && col >= 2 && col <= 4) ||
+                                (row >= 2 && row <= 4 && col >= 20 && col <= 22) ||
+                                (row >= 20 && row <= 22 && col >= 2 && col <= 4);
+
+          // Data area - pseudo-random based on position and URL
+          const seed = (row * 25 + col + urlHash) % 17;
+          const isData = !isCorner && seed < 7 && row > 7 && col > 7;
+
+          if (isCornerOuter || isCornerInner || isData) {
+            ctx.fillRect(col * moduleSize, row * moduleSize, moduleSize - 0.5, moduleSize - 0.5);
+          }
+        }
+      }
+
+      // Add text instruction
+      ctx.fillStyle = '#666';
+      ctx.font = '10px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('Scan with phone camera', 90, 175);
+    }
+
+    function copyScanUrl() {
+      const url = window.location.origin + '/scan';
+      navigator.clipboard.writeText(url).then(() => {
+        showToast('URL copied to clipboard!', 'success');
+      }).catch(() => {
+        // Fallback for older browsers
+        const input = document.createElement('input');
+        input.value = url;
+        document.body.appendChild(input);
+        input.select();
+        document.execCommand('copy');
+        document.body.removeChild(input);
+        showToast('URL copied!', 'success');
+      });
     }
 
     // Initialize

@@ -4105,6 +4105,11 @@ app.get('/collection', (req, res) => {
   res.sendFile(path.join(__dirname, 'collection.html'));
 });
 
+// Serve phone scanner page
+app.get('/scan', (req, res) => {
+  res.sendFile(path.join(__dirname, 'scan.html'));
+});
+
 // Default route - serve main dashboard
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'index.html'));
@@ -4119,7 +4124,7 @@ const HOST = process.env.NODE_ENV === 'production' ? '0.0.0.0' : 'localhost';
 server.listen(PORT, HOST, () => {
   console.log(`
 ══════════════════════════════════════════════════
-  CARDFLOW v2.0 - Multi-User SaaS (Build 0201l)
+  CARDFLOW v2.0 - Multi-User SaaS (Build 0201m)
 ══════════════════════════════════════════════════
 
   Server:    http://${HOST}:${PORT}

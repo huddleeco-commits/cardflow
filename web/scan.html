@@ -1,0 +1,822 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>CardFlow Scanner</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    :root {
+      --bg: #0a0e1a;
+      --cyan: #00f6ff;
+      --purple: #7b2ff7;
+      --success: #00ff88;
+      --warning: #ffaa00;
+      --error: #ff4466;
+      --text: #e6edf3;
+      --text-muted: rgba(255,255,255,0.5);
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      overflow: hidden;
+      touch-action: manipulation;
+    }
+
+    .scanner-container {
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      height: 100dvh;
+    }
+
+    /* Header */
+    .scan-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 12px 16px;
+      background: rgba(0,0,0,0.5);
+      z-index: 10;
+    }
+
+    .scan-logo {
+      font-size: 18px;
+      font-weight: 700;
+      background: linear-gradient(135deg, var(--cyan), var(--purple));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .scan-status {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 12px;
+    }
+
+    .status-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: var(--error);
+    }
+
+    .status-dot.connected {
+      background: var(--success);
+      box-shadow: 0 0 10px var(--success);
+    }
+
+    /* Camera View */
+    .camera-container {
+      flex: 1;
+      position: relative;
+      background: #000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    #camera-video {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    .camera-overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      pointer-events: none;
+    }
+
+    /* Card frame guide */
+    .card-guide {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 70%;
+      max-width: 280px;
+      aspect-ratio: 2.5/3.5;
+      border: 3px solid rgba(0, 246, 255, 0.5);
+      border-radius: 12px;
+      box-shadow: 0 0 0 9999px rgba(0,0,0,0.4);
+    }
+
+    .card-guide::before {
+      content: '';
+      position: absolute;
+      top: -8px;
+      left: -8px;
+      right: -8px;
+      bottom: -8px;
+      border: 2px dashed rgba(0, 246, 255, 0.3);
+      border-radius: 16px;
+    }
+
+    /* Current state indicator */
+    .state-indicator {
+      position: absolute;
+      top: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      padding: 12px 24px;
+      background: rgba(0,0,0,0.8);
+      border-radius: 30px;
+      font-size: 18px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 2px;
+      border: 2px solid var(--cyan);
+    }
+
+    .state-indicator.front {
+      border-color: var(--cyan);
+      color: var(--cyan);
+    }
+
+    .state-indicator.back {
+      border-color: var(--purple);
+      color: var(--purple);
+    }
+
+    .state-indicator.processing {
+      border-color: var(--warning);
+      color: var(--warning);
+      animation: pulse 1s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+
+    /* Preview thumbnails */
+    .preview-strip {
+      position: absolute;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      gap: 12px;
+    }
+
+    .preview-thumb {
+      width: 60px;
+      height: 84px;
+      background: rgba(0,0,0,0.6);
+      border: 2px solid var(--text-muted);
+      border-radius: 6px;
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 10px;
+      color: var(--text-muted);
+    }
+
+    .preview-thumb.captured {
+      border-color: var(--success);
+    }
+
+    .preview-thumb img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    /* Capture button */
+    .capture-area {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      cursor: pointer;
+    }
+
+    .capture-btn {
+      position: absolute;
+      bottom: 130px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 80px;
+      height: 80px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, var(--cyan), var(--purple));
+      border: 4px solid #fff;
+      cursor: pointer;
+      transition: all 0.15s;
+      box-shadow: 0 0 30px rgba(0, 246, 255, 0.3);
+    }
+
+    .capture-btn:active {
+      transform: translateX(-50%) scale(0.9);
+    }
+
+    .capture-btn::after {
+      content: '';
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 60px;
+      height: 60px;
+      border-radius: 50%;
+      background: #fff;
+      transition: all 0.1s;
+    }
+
+    .capture-btn:active::after {
+      width: 50px;
+      height: 50px;
+    }
+
+    /* Flash effect */
+    .flash {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: #fff;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.1s;
+    }
+
+    .flash.active {
+      opacity: 0.8;
+    }
+
+    /* Footer stats */
+    .scan-footer {
+      display: flex;
+      justify-content: space-around;
+      padding: 16px;
+      background: rgba(0,0,0,0.8);
+    }
+
+    .scan-stat {
+      text-align: center;
+    }
+
+    .scan-stat-value {
+      font-size: 28px;
+      font-weight: 700;
+      color: var(--cyan);
+    }
+
+    .scan-stat-label {
+      font-size: 10px;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
+    /* Toast messages */
+    .toast {
+      position: fixed;
+      top: 80px;
+      left: 50%;
+      transform: translateX(-50%);
+      padding: 12px 24px;
+      background: var(--success);
+      color: #000;
+      border-radius: 8px;
+      font-weight: 600;
+      z-index: 1000;
+      animation: toastIn 0.3s ease;
+    }
+
+    .toast.error {
+      background: var(--error);
+      color: #fff;
+    }
+
+    @keyframes toastIn {
+      from { opacity: 0; transform: translateX(-50%) translateY(-20px); }
+      to { opacity: 1; transform: translateX(-50%) translateY(0); }
+    }
+
+    /* Settings panel */
+    .settings-toggle {
+      background: none;
+      border: none;
+      color: var(--text);
+      font-size: 24px;
+      cursor: pointer;
+      padding: 8px;
+    }
+
+    /* Login prompt */
+    .login-prompt {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: var(--bg);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      z-index: 100;
+    }
+
+    .login-prompt h1 {
+      font-size: 28px;
+      margin-bottom: 8px;
+      background: linear-gradient(135deg, var(--cyan), var(--purple));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .login-prompt p {
+      color: var(--text-muted);
+      margin-bottom: 32px;
+    }
+
+    .login-prompt input {
+      width: 100%;
+      max-width: 300px;
+      padding: 16px;
+      margin-bottom: 12px;
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 8px;
+      color: var(--text);
+      font-size: 16px;
+    }
+
+    .login-prompt button {
+      width: 100%;
+      max-width: 300px;
+      padding: 16px;
+      background: linear-gradient(135deg, var(--cyan), var(--purple));
+      border: none;
+      border-radius: 8px;
+      color: #fff;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    /* Undo button */
+    .undo-btn {
+      position: absolute;
+      top: 20px;
+      right: 20px;
+      padding: 10px 16px;
+      background: rgba(0,0,0,0.7);
+      border: 1px solid var(--text-muted);
+      border-radius: 8px;
+      color: var(--text);
+      font-size: 14px;
+      cursor: pointer;
+      z-index: 20;
+    }
+
+    .undo-btn:disabled {
+      opacity: 0.3;
+      cursor: not-allowed;
+    }
+  </style>
+</head>
+<body>
+  <!-- Login Prompt (shown if not authenticated) -->
+  <div class="login-prompt" id="login-prompt">
+    <h1>CardFlow Scanner</h1>
+    <p>Login to start scanning cards</p>
+    <input type="email" id="login-email" placeholder="Email">
+    <input type="password" id="login-password" placeholder="Password">
+    <button onclick="doLogin()">Login</button>
+  </div>
+
+  <!-- Main Scanner -->
+  <div class="scanner-container" id="scanner" style="display: none;">
+    <header class="scan-header">
+      <div class="scan-logo">CARDFLOW</div>
+      <div class="scan-status">
+        <div class="status-dot" id="status-dot"></div>
+        <span id="status-text">Connecting...</span>
+      </div>
+    </header>
+
+    <div class="camera-container">
+      <video id="camera-video" autoplay playsinline></video>
+
+      <div class="camera-overlay">
+        <div class="card-guide"></div>
+        <div class="state-indicator front" id="state-indicator">FRONT</div>
+
+        <div class="preview-strip">
+          <div class="preview-thumb" id="preview-front">
+            <span>Front</span>
+          </div>
+          <div class="preview-thumb" id="preview-back">
+            <span>Back</span>
+          </div>
+        </div>
+
+        <button class="undo-btn" id="undo-btn" onclick="undoCapture()" disabled>Undo</button>
+      </div>
+
+      <div class="capture-area" onclick="capture()"></div>
+      <button class="capture-btn" onclick="capture()"></button>
+      <div class="flash" id="flash"></div>
+    </div>
+
+    <footer class="scan-footer">
+      <div class="scan-stat">
+        <div class="scan-stat-value" id="session-count">0</div>
+        <div class="scan-stat-label">This Session</div>
+      </div>
+      <div class="scan-stat">
+        <div class="scan-stat-value" id="total-count">0</div>
+        <div class="scan-stat-label">Total Cards</div>
+      </div>
+      <div class="scan-stat">
+        <div class="scan-stat-value" id="queue-count">0</div>
+        <div class="scan-stat-label">Processing</div>
+      </div>
+    </footer>
+  </div>
+
+  <!-- Hidden canvas for capture -->
+  <canvas id="capture-canvas" style="display: none;"></canvas>
+
+  <!-- Audio elements -->
+  <audio id="sound-front" preload="auto"></audio>
+  <audio id="sound-back" preload="auto"></audio>
+  <audio id="sound-complete" preload="auto"></audio>
+
+  <script>
+    const API_URL = window.location.origin + '/api';
+    let token = localStorage.getItem('token');
+    let ws = null;
+    let stream = null;
+
+    // Scan state
+    let scanState = 'front'; // 'front', 'back', 'processing'
+    let frontImage = null;
+    let backImage = null;
+    let sessionCount = 0;
+    let processingQueue = 0;
+
+    // Audio context for sounds
+    let audioContext = null;
+
+    // Check auth
+    if (token) {
+      showScanner();
+    }
+
+    async function doLogin() {
+      const email = document.getElementById('login-email').value;
+      const password = document.getElementById('login-password').value;
+
+      try {
+        const response = await fetch(`${API_URL}/auth/login`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, password })
+        });
+
+        const data = await response.json();
+
+        if (data.token) {
+          token = data.token;
+          localStorage.setItem('token', token);
+          localStorage.setItem('user', JSON.stringify(data.user));
+          showScanner();
+        } else {
+          alert(data.error || 'Login failed');
+        }
+      } catch (e) {
+        alert('Login failed: ' + e.message);
+      }
+    }
+
+    async function showScanner() {
+      document.getElementById('login-prompt').style.display = 'none';
+      document.getElementById('scanner').style.display = 'flex';
+
+      // Initialize audio
+      initAudio();
+
+      // Start camera
+      await startCamera();
+
+      // Connect WebSocket
+      connectWebSocket();
+
+      // Load stats
+      loadStats();
+    }
+
+    function initAudio() {
+      // Create audio context on user interaction
+      audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    }
+
+    function playSound(type) {
+      if (!audioContext) return;
+
+      const oscillator = audioContext.createOscillator();
+      const gainNode = audioContext.createGain();
+
+      oscillator.connect(gainNode);
+      gainNode.connect(audioContext.destination);
+
+      if (type === 'front') {
+        // Single beep - 880Hz
+        oscillator.frequency.value = 880;
+        oscillator.type = 'sine';
+        gainNode.gain.value = 0.3;
+        oscillator.start();
+        oscillator.stop(audioContext.currentTime + 0.1);
+      } else if (type === 'back') {
+        // Double beep - 988Hz
+        oscillator.frequency.value = 988;
+        oscillator.type = 'sine';
+        gainNode.gain.value = 0.3;
+        oscillator.start();
+        oscillator.stop(audioContext.currentTime + 0.08);
+
+        setTimeout(() => {
+          const osc2 = audioContext.createOscillator();
+          const gain2 = audioContext.createGain();
+          osc2.connect(gain2);
+          gain2.connect(audioContext.destination);
+          osc2.frequency.value = 988;
+          osc2.type = 'sine';
+          gain2.gain.value = 0.3;
+          osc2.start();
+          osc2.stop(audioContext.currentTime + 0.08);
+        }, 120);
+      } else if (type === 'complete') {
+        // Rising ding - success sound
+        oscillator.frequency.value = 523;
+        oscillator.type = 'sine';
+        gainNode.gain.value = 0.3;
+        oscillator.start();
+
+        oscillator.frequency.setValueAtTime(523, audioContext.currentTime);
+        oscillator.frequency.linearRampToValueAtTime(784, audioContext.currentTime + 0.1);
+        oscillator.frequency.linearRampToValueAtTime(1047, audioContext.currentTime + 0.2);
+
+        oscillator.stop(audioContext.currentTime + 0.3);
+      } else if (type === 'error') {
+        // Low buzz
+        oscillator.frequency.value = 200;
+        oscillator.type = 'sawtooth';
+        gainNode.gain.value = 0.2;
+        oscillator.start();
+        oscillator.stop(audioContext.currentTime + 0.3);
+      }
+    }
+
+    async function startCamera() {
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: {
+            facingMode: 'environment',
+            width: { ideal: 1920 },
+            height: { ideal: 1080 }
+          },
+          audio: false
+        });
+
+        document.getElementById('camera-video').srcObject = stream;
+      } catch (e) {
+        console.error('Camera error:', e);
+        showToast('Camera access denied', 'error');
+      }
+    }
+
+    function connectWebSocket() {
+      const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      ws = new WebSocket(`${wsProtocol}//${window.location.host}`);
+
+      ws.onopen = () => {
+        document.getElementById('status-dot').classList.add('connected');
+        document.getElementById('status-text').textContent = 'Connected';
+        ws.send(JSON.stringify({ type: 'auth', token }));
+      };
+
+      ws.onmessage = (event) => {
+        const data = JSON.parse(event.data);
+
+        if (data.type === 'scan_uploaded') {
+          processingQueue++;
+          updateQueueCount();
+        }
+
+        if (data.type === 'identify_complete' || data.type === 'card_identified') {
+          processingQueue = Math.max(0, processingQueue - 1);
+          updateQueueCount();
+        }
+      };
+
+      ws.onclose = () => {
+        document.getElementById('status-dot').classList.remove('connected');
+        document.getElementById('status-text').textContent = 'Reconnecting...';
+        setTimeout(connectWebSocket, 3000);
+      };
+    }
+
+    async function capture() {
+      if (scanState === 'processing') return;
+
+      const video = document.getElementById('camera-video');
+      const canvas = document.getElementById('capture-canvas');
+      const ctx = canvas.getContext('2d');
+
+      // Set canvas size to video size
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+
+      // Draw video frame to canvas
+      ctx.drawImage(video, 0, 0);
+
+      // Get image as blob
+      const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.92));
+
+      // Flash effect
+      const flash = document.getElementById('flash');
+      flash.classList.add('active');
+      setTimeout(() => flash.classList.remove('active'), 100);
+
+      if (scanState === 'front') {
+        // Captured front
+        frontImage = blob;
+        playSound('front');
+
+        // Update preview
+        document.getElementById('preview-front').innerHTML = `<img src="${URL.createObjectURL(blob)}">`;
+        document.getElementById('preview-front').classList.add('captured');
+
+        // Switch to back
+        scanState = 'back';
+        updateStateIndicator();
+        document.getElementById('undo-btn').disabled = false;
+
+      } else if (scanState === 'back') {
+        // Captured back
+        backImage = blob;
+        playSound('back');
+
+        // Update preview
+        document.getElementById('preview-back').innerHTML = `<img src="${URL.createObjectURL(blob)}">`;
+        document.getElementById('preview-back').classList.add('captured');
+
+        // Upload pair
+        scanState = 'processing';
+        updateStateIndicator();
+
+        await uploadPair();
+      }
+    }
+
+    function undoCapture() {
+      if (scanState === 'back' && frontImage) {
+        // Go back to front state
+        frontImage = null;
+        scanState = 'front';
+        document.getElementById('preview-front').innerHTML = '<span>Front</span>';
+        document.getElementById('preview-front').classList.remove('captured');
+        updateStateIndicator();
+        document.getElementById('undo-btn').disabled = true;
+        playSound('error');
+      }
+    }
+
+    async function uploadPair() {
+      try {
+        const formData = new FormData();
+        formData.append('front', frontImage, 'front.jpg');
+        if (backImage) {
+          formData.append('back', backImage, 'back.jpg');
+        }
+
+        const response = await fetch(`${API_URL}/upload-pair`, {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${token}` },
+          body: formData
+        });
+
+        const result = await response.json();
+
+        if (result.success || result.cardId) {
+          playSound('complete');
+          sessionCount++;
+          processingQueue++;
+          updateStats();
+          showToast('Card uploaded!');
+
+          // Notify dashboard
+          if (ws && ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({ type: 'scan_complete', cardId: result.cardId }));
+          }
+        } else {
+          playSound('error');
+          showToast(result.error || 'Upload failed', 'error');
+        }
+      } catch (e) {
+        playSound('error');
+        showToast('Upload failed: ' + e.message, 'error');
+      }
+
+      // Reset for next card
+      resetForNextCard();
+    }
+
+    function resetForNextCard() {
+      frontImage = null;
+      backImage = null;
+      scanState = 'front';
+
+      document.getElementById('preview-front').innerHTML = '<span>Front</span>';
+      document.getElementById('preview-front').classList.remove('captured');
+      document.getElementById('preview-back').innerHTML = '<span>Back</span>';
+      document.getElementById('preview-back').classList.remove('captured');
+      document.getElementById('undo-btn').disabled = true;
+
+      updateStateIndicator();
+    }
+
+    function updateStateIndicator() {
+      const indicator = document.getElementById('state-indicator');
+      indicator.className = 'state-indicator ' + scanState;
+
+      if (scanState === 'front') {
+        indicator.textContent = 'FRONT';
+      } else if (scanState === 'back') {
+        indicator.textContent = 'BACK';
+      } else {
+        indicator.textContent = 'UPLOADING...';
+      }
+    }
+
+    function updateStats() {
+      document.getElementById('session-count').textContent = sessionCount;
+    }
+
+    function updateQueueCount() {
+      document.getElementById('queue-count').textContent = processingQueue;
+    }
+
+    async function loadStats() {
+      try {
+        const response = await fetch(`${API_URL}/status`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const data = await response.json();
+
+        if (data.cards) {
+          document.getElementById('total-count').textContent = data.cards.total || 0;
+        }
+      } catch (e) {
+        console.error('Failed to load stats:', e);
+      }
+    }
+
+    function showToast(message, type = 'success') {
+      const existing = document.querySelector('.toast');
+      if (existing) existing.remove();
+
+      const toast = document.createElement('div');
+      toast.className = `toast ${type}`;
+      toast.textContent = message;
+      document.body.appendChild(toast);
+
+      setTimeout(() => toast.remove(), 2000);
+    }
+
+    // Prevent zoom on double tap
+    document.addEventListener('touchstart', (e) => {
+      if (e.touches.length > 1) {
+        e.preventDefault();
+      }
+    }, { passive: false });
+
+    let lastTouchEnd = 0;
+    document.addEventListener('touchend', (e) => {
+      const now = Date.now();
+      if (now - lastTouchEnd <= 300) {
+        e.preventDefault();
+      }
+      lastTouchEnd = now;
+    }, false);
+  </script>
+</body>
+</html>
