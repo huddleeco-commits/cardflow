@@ -6146,11 +6146,16 @@
       { id: 'ebayBIN', name: 'eBay Buy It Now', icon: '🛒', desc: 'Current fixed price listings', category: 'primary' },
       { id: 'ebayAuctions', name: 'eBay Auctions', icon: '🔨', desc: 'Active auctions', category: 'primary' },
       { id: 'comc', name: 'COMC', icon: '📦', desc: 'Check Out My Cards', category: 'primary' },
+      { id: 'googleShopping', name: 'Google Shopping', icon: '🛍️', desc: 'Google product listings', category: 'primary' },
+      { id: 'googleResearch', name: 'Google Research', icon: '🔍', desc: 'Card Ladder, Market Movers, Goldin, PWCC, Beckett', category: 'research' },
       { id: '130point', name: '130point', icon: '📊', desc: 'Price history & trends', category: 'research' },
       { id: 'sportscardspro', name: 'SportsCardsPro', icon: '💹', desc: 'Market values', category: 'research' },
       { id: 'cardladder', name: 'Card Ladder', icon: '📈', desc: 'Graded card values', category: 'research' },
       { id: 'psacard', name: 'PSA Auction Prices', icon: '🎯', desc: 'PSA certified sales', category: 'research' }
     ];
+
+    // Top card pricing sites for Google Research filter
+    const RESEARCH_SITES = ['cardladder.com', 'marketmovers.io', 'beckett.com', '130point.com', 'psacard.com/auctionprices', 'pwccmarketplace.com', 'goldin.co'];
 
     function buildPriceSearchQuery(card) {
       const parts = [];
@@ -6170,11 +6175,17 @@
       const q = encodeURIComponent(query);
       const qPlus = query.replace(/\s+/g, '+');
 
+      // Build Google Research filter (searches across top pricing sites)
+      const siteFilter = RESEARCH_SITES.map(s => `site:${s}`).join(' OR ');
+      const researchFilter = encodeURIComponent(siteFilter);
+
       const urls = {
         ebaySold: `https://www.ebay.com/sch/i.html?_nkw=${q}&LH_Complete=1&LH_Sold=1&_sop=13`,
         ebayBIN: `https://www.ebay.com/sch/i.html?_nkw=${q}&LH_BIN=1&_sop=15`,
         ebayAuctions: `https://www.ebay.com/sch/i.html?_nkw=${q}&LH_Auction=1&_sop=1`,
         comc: `https://www.comc.com/Cards,sr,=${qPlus},fb,i100`,
+        googleShopping: `https://www.google.com/search?q=${q}&tbm=shop`,
+        googleResearch: `https://www.google.com/search?q=${qPlus}+(${researchFilter})`,
         '130point': `https://130point.com/sales/?search=${q}`,
         sportscardspro: `https://www.google.com/search?q=site:sportscardspro.com+${qPlus}`,
         cardladder: `https://www.google.com/search?q=site:cardladder.com+${qPlus}`,
