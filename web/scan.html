@@ -773,9 +773,9 @@
       const indicator = document.getElementById('voice-indicator');
 
       // Capture commands
-      const captureWords = ['capture', 'next', 'snap', 'go', 'take', 'shoot', 'got it', 'got'];
+      const captureWords = ['capture', 'next', 'snap', 'go', 'take', 'shoot', 'got it', 'got', 'front', 'back', 'yes', 'yep', 'okay'];
       // Done commands (for bulk mode)
-      const doneWords = ['done', 'finished', 'flip', 'backs', 'switch'];
+      const doneWords = ['done', 'finished', 'flip', 'switch', 'backs now', 'do backs'];
 
       const isCapture = captureWords.some(w => command.includes(w));
       const isDone = doneWords.some(w => command.includes(w));
