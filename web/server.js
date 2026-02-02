@@ -4968,24 +4968,9 @@ FIND PRICES FOR:
 
 GRADING COST REFERENCE: PSA grading costs $20-25 (value tier) to $50+ (faster tiers)
 
-Respond with ONLY valid JSON in this exact format:
-{
-  "card": "${cardName}",
-  "prices": {
-    "raw": {"low": number, "high": number, "avg": number, "salesCount": number},
-    "psa9": {"low": number or null, "high": number or null, "avg": number or null, "salesCount": number},
-    "psa10": {"low": number or null, "high": number or null, "avg": number or null, "salesCount": number}
-  },
-  "sources": [{"name": "eBay", "salesFound": number}, {"name": "COMC", "salesFound": number}],
-  "gradeRecommendation": {
-    "shouldGrade": true or false,
-    "reason": "brief explanation",
-    "potentialProfit": number or null,
-    "breakEvenGrade": "PSA 9" or "PSA 10" or null
-  },
-  "lastUpdated": "current date",
-  "notes": "any important context about this card's market"
-}`;
+RESPOND WITH ONLY VALID JSON. NO NEWLINES INSIDE STRING VALUES. Keep all text on single lines.
+
+{"card":"${cardName}","prices":{"raw":{"low":0,"high":0,"avg":0,"salesCount":0},"psa9":{"low":null,"high":null,"avg":null,"salesCount":0},"psa10":{"low":null,"high":null,"avg":null,"salesCount":0}},"sources":[{"name":"eBay","salesFound":0}],"gradeRecommendation":{"shouldGrade":false,"reason":"brief reason here","potentialProfit":null,"breakEvenGrade":null},"lastUpdated":"2024-01-01","notes":"market notes here"}`;
 }
 
 // Helper: Parse JSON from AI response (handles common formatting issues)
@@ -4996,16 +4981,31 @@ function parseAiJsonResponse(text) {
   let jsonStr = jsonMatch[0];
 
   // Fix common JSON issues from AI responses:
-  // 1. Replace actual newlines inside string values with spaces
+  // 1. Fix pattern where colon is followed by newline then unquoted text: "key": \nvalue" -> "key": "value"
+  jsonStr = jsonStr.replace(/:\s*\n\s*([^"\[\]{},]+)"/g, ': "$1"');
+  // 2. Fix newlines inside already-quoted strings
   jsonStr = jsonStr.replace(/"([^"]*?)"/g, (match, content) => {
-    return '"' + content.replace(/\n/g, ' ').replace(/\r/g, '') + '"';
+    return '"' + content.replace(/[\n\r]+/g, ' ').trim() + '"';
   });
-  // 2. Remove trailing commas
+  // 3. Remove trailing commas
   jsonStr = jsonStr.replace(/,\s*([}\]])/g, '$1');
-  // 3. Fix unquoted null values that might appear as text
-  jsonStr = jsonStr.replace(/:\s*null\s*([,}])/gi, ': null$1');
 
-  return JSON.parse(jsonStr);
+  try {
+    return JSON.parse(jsonStr);
+  } catch (e) {
+    // Last resort: try to extract key values manually
+    console.error('[Agent] JSON parse failed, attempting manual extraction:', e.message);
+    console.error('[Agent] Raw response:', jsonStr.substring(0, 500));
+
+    // Try a more aggressive cleanup - remove all newlines except in specific places
+    jsonStr = jsonMatch[0]
+      .replace(/\n/g, ' ')
+      .replace(/\r/g, '')
+      .replace(/\s+/g, ' ')
+      .replace(/,\s*([}\]])/g, '$1');
+
+    return JSON.parse(jsonStr);
+  }
 }
 
 // GET /api/agent/providers - List available AI providers
