@@ -4265,6 +4265,281 @@ app.get('/', (req, res) => {
 });
 
 // ============================================
+// SOCIAL MEDIA IMAGE GENERATION
+// ============================================
+
+const sharp = require('sharp');
+
+// Generate a social media image for a card
+async function generateSocialImage(card, style = 'default') {
+  const width = 1080;
+  const height = 1080;
+
+  // Style configurations
+  const styles = {
+    default: {
+      bgGradient: ['#1a1a2e', '#0f3460'],
+      accentColor: '#00f6ff',
+      textColor: '#ffffff'
+    },
+    fire: {
+      bgGradient: ['#1a0a0a', '#4a1010'],
+      accentColor: '#ff6b35',
+      textColor: '#ffffff'
+    },
+    gold: {
+      bgGradient: ['#1a1500', '#3d3000'],
+      accentColor: '#ffd700',
+      textColor: '#ffffff'
+    },
+    minimal: {
+      bgGradient: ['#ffffff', '#f0f0f0'],
+      accentColor: '#000000',
+      textColor: '#000000'
+    }
+  };
+
+  const s = styles[style] || styles.default;
+
+  // Build card info text
+  const playerName = card.player || 'Unknown Player';
+  const yearSet = [card.year, card.set_name].filter(Boolean).join(' ');
+  const cardNum = card.card_number ? `#${card.card_number}` : '';
+  const parallel = card.parallel && card.parallel !== 'Base' ? card.parallel : '';
+  const gradeInfo = card.is_graded ? `${card.grading_company} ${card.grade}` : '';
+  const serialNum = card.serial_number || '';
+  const price = card.recommended_price ? `$${card.recommended_price.toFixed(2)}` : '';
+
+  // Create SVG overlay
+  const overlayHeight = 280;
+  const svg = `
+    <svg width="${width}" height="${height}">
+      <defs>
+        <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" style="stop-color:${s.bgGradient[0]}"/>
+          <stop offset="100%" style="stop-color:${s.bgGradient[1]}"/>
+        </linearGradient>
+        <linearGradient id="overlayGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+          <stop offset="0%" style="stop-color:rgba(0,0,0,0)"/>
+          <stop offset="100%" style="stop-color:rgba(0,0,0,0.9)"/>
+        </linearGradient>
+      </defs>
+      <!-- Background -->
+      <rect width="${width}" height="${height}" fill="url(#bgGrad)"/>
+      <!-- Bottom overlay gradient -->
+      <rect y="${height - overlayHeight}" width="${width}" height="${overlayHeight}" fill="url(#overlayGrad)"/>
+      <!-- Branding -->
+      <text x="40" y="50" font-family="Arial, sans-serif" font-size="24" font-weight="bold" fill="${s.accentColor}">CARDFLOW</text>
+      <!-- Card Info -->
+      <text x="40" y="${height - 180}" font-family="Arial, sans-serif" font-size="42" font-weight="bold" fill="${s.textColor}">${escapeXml(playerName)}</text>
+      <text x="40" y="${height - 130}" font-family="Arial, sans-serif" font-size="24" fill="${s.textColor}" opacity="0.8">${escapeXml(yearSet)} ${escapeXml(cardNum)}</text>
+      ${parallel ? `<text x="40" y="${height - 95}" font-family="Arial, sans-serif" font-size="20" fill="${s.accentColor}">${escapeXml(parallel)}</text>` : ''}
+      ${gradeInfo ? `<rect x="40" y="${height - 70}" width="${gradeInfo.length * 14 + 30}" height="36" rx="18" fill="${s.accentColor}"/><text x="55" y="${height - 44}" font-family="Arial, sans-serif" font-size="20" font-weight="bold" fill="#000">${escapeXml(gradeInfo)}</text>` : ''}
+      ${serialNum ? `<text x="${gradeInfo ? 40 + gradeInfo.length * 14 + 50 : 40}" y="${height - 44}" font-family="Arial, sans-serif" font-size="18" fill="${s.accentColor}">${escapeXml(serialNum)}</text>` : ''}
+      ${price ? `<text x="${width - 40}" y="${height - 44}" font-family="Arial, sans-serif" font-size="36" font-weight="bold" fill="#00ff88" text-anchor="end">${escapeXml(price)}</text>` : ''}
+    </svg>
+  `;
+
+  // Load card image
+  let cardImage;
+  const frontUrl = card.front_image_path || card.front;
+
+  if (frontUrl && (frontUrl.startsWith('http://') || frontUrl.startsWith('https://'))) {
+    // Fetch from URL (Cloudinary)
+    const response = await axios.get(frontUrl, { responseType: 'arraybuffer', timeout: 30000 });
+    cardImage = sharp(Buffer.from(response.data));
+  } else if (frontUrl) {
+    // Local file
+    const localPath = path.join(FOLDERS.new, frontUrl);
+    if (fs.existsSync(localPath)) {
+      cardImage = sharp(localPath);
+    } else {
+      const identifiedPath = path.join(FOLDERS.identified, frontUrl);
+      if (fs.existsSync(identifiedPath)) {
+        cardImage = sharp(identifiedPath);
+      }
+    }
+  }
+
+  // Create base image with gradient
+  let composite = sharp(Buffer.from(svg)).png();
+
+  if (cardImage) {
+    // Resize card image to fit (leaving room for text overlay)
+    const cardHeight = height - overlayHeight - 80;
+    const cardWidth = Math.floor(cardHeight * 0.714); // Card aspect ratio
+    const resizedCard = await cardImage
+      .resize(cardWidth, cardHeight, { fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 } })
+      .png()
+      .toBuffer();
+
+    // Center the card horizontally
+    const cardX = Math.floor((width - cardWidth) / 2);
+
+    // Composite card image onto background
+    composite = sharp(Buffer.from(svg))
+      .composite([
+        { input: resizedCard, left: cardX, top: 60 }
+      ])
+      .png();
+  }
+
+  return composite.toBuffer();
+}
+
+// Escape XML special characters
+function escapeXml(str) {
+  if (!str) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&apos;');
+}
+
+// Generate social image for a single card
+app.get('/api/cards/:id/social-image', authenticateToken, async (req, res) => {
+  try {
+    const result = await pool.query(
+      'SELECT * FROM cards WHERE id = $1 AND user_id = $2',
+      [req.params.id, req.user.id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Card not found' });
+    }
+
+    const row = result.rows[0];
+    const card = {
+      ...row.card_data,
+      front_image_path: row.front_image_path,
+      back_image_path: row.back_image_path
+    };
+
+    const style = req.query.style || 'default';
+    const imageBuffer = await generateSocialImage(card, style);
+
+    res.set('Content-Type', 'image/png');
+    res.set('Content-Disposition', `inline; filename="card-${req.params.id}.png"`);
+    res.send(imageBuffer);
+
+  } catch (e) {
+    console.error('Social image generation error:', e);
+    res.status(500).json({ error: 'Failed to generate image' });
+  }
+});
+
+// Generate social images for multiple cards (batch)
+app.post('/api/social/batch-images', authenticateToken, async (req, res) => {
+  try {
+    const { cardIds, style = 'default' } = req.body;
+
+    if (!cardIds || !Array.isArray(cardIds)) {
+      return res.status(400).json({ error: 'cardIds array required' });
+    }
+
+    const result = await pool.query(
+      'SELECT * FROM cards WHERE id = ANY($1) AND user_id = $2',
+      [cardIds, req.user.id]
+    );
+
+    const images = [];
+    for (const row of result.rows) {
+      const card = {
+        ...row.card_data,
+        id: row.id,
+        front_image_path: row.front_image_path,
+        back_image_path: row.back_image_path
+      };
+
+      try {
+        const imageBuffer = await generateSocialImage(card, style);
+
+        // Upload to Cloudinary if available
+        if (process.env.CLOUDINARY_CLOUD_NAME) {
+          const uploadResult = await uploadToCloudinary(imageBuffer, `social-${req.user.id}`);
+          images.push({
+            cardId: row.id,
+            player: card.player,
+            url: uploadResult.secure_url
+          });
+        } else {
+          // Return base64 for download
+          images.push({
+            cardId: row.id,
+            player: card.player,
+            base64: imageBuffer.toString('base64')
+          });
+        }
+      } catch (imgErr) {
+        console.error(`Error generating image for card ${row.id}:`, imgErr.message);
+        images.push({ cardId: row.id, error: imgErr.message });
+      }
+    }
+
+    res.json({ images });
+
+  } catch (e) {
+    console.error('Batch social image error:', e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Generate caption/text for social media
+app.get('/api/cards/:id/social-caption', authenticateToken, async (req, res) => {
+  try {
+    const result = await pool.query(
+      'SELECT * FROM cards WHERE id = $1 AND user_id = $2',
+      [req.params.id, req.user.id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Card not found' });
+    }
+
+    const card = result.rows[0].card_data;
+    const style = req.query.style || 'default';
+
+    // Build caption
+    const lines = [];
+
+    if (style === 'hype') {
+      lines.push('🔥 FOR SALE 🔥');
+      lines.push('');
+    }
+
+    lines.push(card.player || 'Card');
+    lines.push([card.year, card.set_name].filter(Boolean).join(' '));
+
+    if (card.card_number) lines.push(`Card #${card.card_number}`);
+    if (card.parallel && card.parallel !== 'Base') lines.push(`✨ ${card.parallel}`);
+    if (card.serial_number) lines.push(`📊 ${card.serial_number}`);
+    if (card.is_autograph) lines.push('✍️ Autograph');
+    if (card.is_graded) lines.push(`🏆 ${card.grading_company} ${card.grade}`);
+    if (card.recommended_price) lines.push(`💰 $${card.recommended_price.toFixed(2)}`);
+
+    lines.push('');
+
+    // Generate hashtags
+    const hashtags = ['#sportscards', '#cardcollector'];
+    if (card.sport) hashtags.push(`#${card.sport}cards`);
+    if (card.is_graded && card.grading_company) hashtags.push(`#${card.grading_company.toLowerCase()}`);
+    if (card.player) {
+      const playerTag = card.player.replace(/[^a-zA-Z]/g, '');
+      hashtags.push(`#${playerTag}`);
+    }
+    lines.push(hashtags.join(' '));
+
+    res.json({ caption: lines.join('\n') });
+
+  } catch (e) {
+    console.error('Caption generation error:', e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ============================================
 // START SERVER
 // ============================================
 

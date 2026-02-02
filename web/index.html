@@ -1593,6 +1593,7 @@
         <span class="batch-count" id="batch-count">0 cards scanned</span>
       </div>
       <div class="batch-header-right">
+        <button class="btn btn-secondary" onclick="showSocialStylePicker()" title="Generate Social Images">📸 Social</button>
         <button class="btn btn-accent" onclick="saveToCollection()">Save to Collection</button>
         <button class="btn btn-secondary btn-sm" onclick="closeBatchView()">Cancel</button>
       </div>
@@ -1812,6 +1813,20 @@
     .batch-delete:hover {
       background: rgba(255, 68, 102, 0.2);
       color: var(--error);
+    }
+    .batch-action-btn {
+      background: none;
+      border: none;
+      color: var(--text-muted);
+      cursor: pointer;
+      padding: 8px;
+      border-radius: 6px;
+      transition: all 0.2s;
+      font-size: 16px;
+    }
+    .batch-action-btn:hover {
+      background: rgba(0, 246, 255, 0.2);
+      color: var(--cyan);
     }
     /* Select dropdown styling */
     .batch-select {
@@ -2449,6 +2464,89 @@
     </div>
   </div>
 
+  <!-- Social Media Generator Modal -->
+  <div class="modal" id="social-modal">
+    <div class="modal-content" style="max-width: 500px;">
+      <div class="modal-header">
+        <h2>📸 Generate Social Content</h2>
+        <button class="modal-close" onclick="closeSocialModal()">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p style="color: var(--text-muted); margin-bottom: 20px;">
+          Create social media images for your cards with professional overlays
+        </p>
+
+        <!-- Style Selection -->
+        <h4 style="margin-bottom: 12px;">Choose Style</h4>
+        <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-bottom: 24px;">
+          <div class="social-style-option selected" data-style="default" onclick="selectSocialStyle('default')">
+            <div style="height: 60px; background: linear-gradient(135deg, #1a1a2e, #0f3460); border-radius: 8px; margin-bottom: 8px;"></div>
+            <span>Default (Blue)</span>
+          </div>
+          <div class="social-style-option" data-style="fire" onclick="selectSocialStyle('fire')">
+            <div style="height: 60px; background: linear-gradient(135deg, #1a0a0a, #4a1010); border-radius: 8px; margin-bottom: 8px;"></div>
+            <span>Fire (Red)</span>
+          </div>
+          <div class="social-style-option" data-style="gold" onclick="selectSocialStyle('gold')">
+            <div style="height: 60px; background: linear-gradient(135deg, #1a1500, #3d3000); border-radius: 8px; margin-bottom: 8px;"></div>
+            <span>Gold</span>
+          </div>
+          <div class="social-style-option" data-style="minimal" onclick="selectSocialStyle('minimal')">
+            <div style="height: 60px; background: linear-gradient(135deg, #ffffff, #f0f0f0); border-radius: 8px; margin-bottom: 8px; border: 1px solid #ddd;"></div>
+            <span>Minimal (Light)</span>
+          </div>
+        </div>
+
+        <!-- Preview -->
+        <div id="social-preview" style="text-align: center; margin-bottom: 20px; display: none;">
+          <img id="social-preview-img" style="max-width: 100%; max-height: 300px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.3);">
+          <p style="margin-top: 8px; font-size: 12px; color: var(--text-muted);">Preview</p>
+        </div>
+
+        <!-- Caption -->
+        <div id="social-caption-section" style="display: none; margin-bottom: 20px;">
+          <h4 style="margin-bottom: 8px;">Caption</h4>
+          <textarea id="social-caption" style="width: 100%; height: 120px; padding: 12px; background: var(--bg-deep); border: 1px solid var(--glass-border); border-radius: 8px; color: var(--text); font-size: 13px; resize: none;"></textarea>
+          <button class="btn btn-secondary btn-sm" onclick="copySocialCaption()" style="margin-top: 8px;">Copy Caption</button>
+        </div>
+
+        <!-- Generation status -->
+        <div id="social-status" style="text-align: center; padding: 20px; display: none;">
+          <div style="font-size: 24px; margin-bottom: 8px;">⏳</div>
+          <span id="social-status-text">Generating...</span>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeSocialModal()">Close</button>
+        <button class="btn btn-primary" id="social-generate-btn" onclick="generateSocialContent()">Generate All</button>
+        <button class="btn btn-accent" id="social-download-btn" onclick="downloadSocialImages()" style="display: none;">Download All</button>
+      </div>
+    </div>
+  </div>
+
+  <style>
+    .social-style-option {
+      padding: 12px;
+      background: var(--glass);
+      border: 2px solid var(--glass-border);
+      border-radius: 12px;
+      cursor: pointer;
+      text-align: center;
+      transition: all 0.2s;
+    }
+    .social-style-option:hover {
+      border-color: var(--cyan);
+    }
+    .social-style-option.selected {
+      border-color: var(--cyan);
+      background: rgba(0, 246, 255, 0.1);
+    }
+    .social-style-option span {
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+  </style>
+
   <!-- Phone Scanner Modal -->
   <div class="modal" id="scan-modal">
     <div class="modal-content" style="max-width: 450px;">
@@ -3078,7 +3176,10 @@
         </div>
         <div class="batch-status">
           <span class="batch-status-badge identifying">SCANNING</span>
-          <button class="batch-delete" onclick="deleteBatchCard('${cardId}')" title="Remove">🗑️</button>
+          <div style="display: flex; gap: 4px;">
+            <button class="batch-action-btn" onclick="generateSingleSocial('${cardId}')" title="Social Image" style="display: none;" id="social-btn-${cardId}">📸</button>
+            <button class="batch-delete" onclick="deleteBatchCard('${cardId}')" title="Remove">🗑️</button>
+          </div>
         </div>
       `;
       grid.insertBefore(cardEl, grid.firstChild);
@@ -3109,6 +3210,10 @@
       const badge = cardEl.querySelector('.batch-status-badge');
       badge.className = 'batch-status-badge identified';
       badge.textContent = 'READY';
+
+      // Show social button
+      const socialBtn = document.getElementById(`social-btn-${cardId}`);
+      if (socialBtn) socialBtn.style.display = 'block';
 
       // Update all editable fields
       const fields = cardEl.querySelectorAll('[data-field]');
@@ -3200,6 +3305,126 @@
       } catch (e) {
         showToast('Error removing card', 'error');
       }
+    }
+
+    // ========================
+    // SOCIAL CONTENT GENERATION
+    // ========================
+
+    let selectedSocialStyle = 'default';
+    let generatedSocialImages = [];
+
+    function showSocialStylePicker() {
+      if (batchCards.length === 0) {
+        showToast('No cards to generate social images for', 'error');
+        return;
+      }
+      document.getElementById('social-modal').classList.add('open');
+      document.getElementById('social-preview').style.display = 'none';
+      document.getElementById('social-caption-section').style.display = 'none';
+      document.getElementById('social-status').style.display = 'none';
+      document.getElementById('social-generate-btn').style.display = 'inline-block';
+      document.getElementById('social-download-btn').style.display = 'none';
+      generatedSocialImages = [];
+    }
+
+    function closeSocialModal() {
+      document.getElementById('social-modal').classList.remove('open');
+    }
+
+    function selectSocialStyle(style) {
+      selectedSocialStyle = style;
+      document.querySelectorAll('.social-style-option').forEach(el => {
+        el.classList.toggle('selected', el.dataset.style === style);
+      });
+    }
+
+    async function generateSocialContent() {
+      const identifiedCards = batchCards.filter(id => {
+        const data = batchCardData[id]?.data;
+        return data && data.player;
+      });
+
+      if (identifiedCards.length === 0) {
+        showToast('No identified cards to generate images for', 'error');
+        return;
+      }
+
+      document.getElementById('social-status').style.display = 'block';
+      document.getElementById('social-generate-btn').style.display = 'none';
+      document.getElementById('social-status-text').textContent = `Generating ${identifiedCards.length} images...`;
+
+      try {
+        const response = await api('/social/batch-images', {
+          method: 'POST',
+          body: JSON.stringify({
+            cardIds: identifiedCards,
+            style: selectedSocialStyle
+          })
+        });
+
+        if (response && response.images) {
+          generatedSocialImages = response.images;
+          document.getElementById('social-status').style.display = 'none';
+          document.getElementById('social-download-btn').style.display = 'inline-block';
+
+          // Show preview of first image
+          if (generatedSocialImages.length > 0) {
+            const first = generatedSocialImages[0];
+            if (first.url) {
+              document.getElementById('social-preview-img').src = first.url;
+            } else if (first.base64) {
+              document.getElementById('social-preview-img').src = `data:image/png;base64,${first.base64}`;
+            }
+            document.getElementById('social-preview').style.display = 'block';
+          }
+
+          showToast(`Generated ${generatedSocialImages.length} social images`, 'success');
+        }
+      } catch (e) {
+        document.getElementById('social-status').style.display = 'none';
+        document.getElementById('social-generate-btn').style.display = 'inline-block';
+        showToast('Error generating images', 'error');
+      }
+    }
+
+    async function generateSingleSocial(cardId) {
+      try {
+        // Open image in new tab
+        const url = `${API_URL}/cards/${cardId}/social-image?style=${selectedSocialStyle}`;
+        window.open(url, '_blank');
+
+        // Also fetch caption
+        const captionRes = await api(`/cards/${cardId}/social-caption?style=hype`);
+        if (captionRes && captionRes.caption) {
+          // Copy to clipboard
+          await navigator.clipboard.writeText(captionRes.caption);
+          showToast('Caption copied to clipboard', 'success');
+        }
+      } catch (e) {
+        showToast('Error generating social content', 'error');
+      }
+    }
+
+    async function downloadSocialImages() {
+      for (const img of generatedSocialImages) {
+        if (img.url) {
+          // Open in new tab for download
+          window.open(img.url, '_blank');
+        } else if (img.base64) {
+          // Create download link
+          const link = document.createElement('a');
+          link.href = `data:image/png;base64,${img.base64}`;
+          link.download = `${img.player || 'card'}-social.png`;
+          link.click();
+        }
+      }
+    }
+
+    function copySocialCaption() {
+      const caption = document.getElementById('social-caption').value;
+      navigator.clipboard.writeText(caption);
+      showToast('Caption copied', 'success');
     }
 
     // Check authentication
