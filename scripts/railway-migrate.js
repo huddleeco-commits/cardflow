@@ -190,6 +190,44 @@ CREATE TABLE IF NOT EXISTS sales (
   created_at TIMESTAMP DEFAULT NOW()
 );
 
+-- Agent Analysis tracking table (AI card analysis beta)
+CREATE TABLE IF NOT EXISTS agent_analyses (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+  card_id UUID REFERENCES cards(id) ON DELETE SET NULL,
+  analysis_type VARCHAR(50) DEFAULT 'single-card',
+  ai_provider VARCHAR(50) DEFAULT 'anthropic',
+  model VARCHAR(100),
+  cost DECIMAL(10,6) DEFAULT 0,
+  tokens_input INTEGER DEFAULT 0,
+  tokens_output INTEGER DEFAULT 0,
+  cache_read_tokens INTEGER DEFAULT 0,
+  cache_write_tokens INTEGER DEFAULT 0,
+  response_time DECIMAL(10,3),
+  success BOOLEAN DEFAULT true,
+  error_type VARCHAR(100),
+  card_data JSONB,
+  result_summary JSONB,
+  analysis_result JSONB,
+  source VARCHAR(50) DEFAULT 'cardflow-web',
+  timestamp TIMESTAMP DEFAULT NOW()
+);
+
+-- Add beta features and AI API keys to users
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'users' AND column_name = 'beta_features') THEN
+    ALTER TABLE users ADD COLUMN beta_features JSONB DEFAULT '{"agentAnalysis": false}';
+    ALTER TABLE users ADD COLUMN agent_analyses_used INTEGER DEFAULT 0;
+    ALTER TABLE users ADD COLUMN agent_analyses_limit INTEGER DEFAULT 3;
+    ALTER TABLE users ADD COLUMN agent_analyses_reset TIMESTAMP;
+    ALTER TABLE users ADD COLUMN anthropic_api_key TEXT;
+    ALTER TABLE users ADD COLUMN openai_api_key TEXT;
+    ALTER TABLE users ADD COLUMN google_api_key TEXT;
+    ALTER TABLE users ADD COLUMN preferred_ai_provider VARCHAR(50) DEFAULT 'anthropic';
+  END IF;
+END $$;
+
 -- Indexes for performance
 CREATE INDEX IF NOT EXISTS idx_cards_user_id ON cards(user_id);
 CREATE INDEX IF NOT EXISTS idx_cards_status ON cards(status);
@@ -207,6 +245,10 @@ CREATE INDEX IF NOT EXISTS idx_templates_user ON listing_templates(user_id);
 CREATE INDEX IF NOT EXISTS idx_sales_user ON sales(user_id);
 CREATE INDEX IF NOT EXISTS idx_sales_date ON sales(sale_date);
 CREATE INDEX IF NOT EXISTS idx_sales_card ON sales(card_id);
+CREATE INDEX IF NOT EXISTS idx_agent_analyses_user ON agent_analyses(user_id);
+CREATE INDEX IF NOT EXISTS idx_agent_analyses_timestamp ON agent_analyses(timestamp);
+CREATE INDEX IF NOT EXISTS idx_agent_analyses_success ON agent_analyses(success);
+CREATE INDEX IF NOT EXISTS idx_agent_analyses_provider ON agent_analyses(ai_provider);
 
 -- Function to update updated_at timestamp
 CREATE OR REPLACE FUNCTION update_updated_at_column()

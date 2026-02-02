@@ -441,6 +441,20 @@
       color: #fff;
     }
 
+    .btn-ai {
+      background: linear-gradient(135deg, #10b981, #06b6d4);
+      color: #fff;
+      animation: ai-pulse 2s infinite;
+    }
+    .btn-ai:hover {
+      box-shadow: 0 0 20px rgba(16, 185, 129, 0.5);
+      transform: translateY(-1px);
+    }
+    @keyframes ai-pulse {
+      0%, 100% { box-shadow: 0 0 5px rgba(16, 185, 129, 0.3); }
+      50% { box-shadow: 0 0 15px rgba(16, 185, 129, 0.5); }
+    }
+
     .btn-secondary {
       background: var(--glass);
       border: 1px solid var(--glass-border);
@@ -696,44 +710,6 @@
       gap: 12px;
       flex-wrap: wrap;
       align-items: center;
-    }
-
-    .card-pricing {
-      margin-top: 12px;
-      padding-top: 12px;
-      border-top: 1px solid var(--glass-border);
-    }
-    .price-grid {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 8px;
-    }
-    .price-item {
-      text-align: center;
-      padding: 8px 4px;
-      background: rgba(0, 0, 0, 0.2);
-      border-radius: 6px;
-    }
-    .price-item.psa9 { background: rgba(59, 130, 246, 0.15); }
-    .price-item.psa10 { background: rgba(34, 197, 94, 0.15); }
-    .price-label {
-      display: block;
-      font-size: 9px;
-      text-transform: uppercase;
-      color: var(--text-muted);
-      margin-bottom: 2px;
-    }
-    .price-value {
-      display: block;
-      font-size: 14px;
-      font-weight: 700;
-      color: var(--text);
-    }
-    .price-item.psa9 .price-value { color: #60a5fa; }
-    .price-item.psa10 .price-value { color: #4ade80; }
-    .price-value.loading {
-      animation: pulse 1s infinite;
-      color: var(--text-muted);
     }
 
     .card-grade {
@@ -1518,9 +1494,6 @@
       </div>
     </div>
     <div class="header-right">
-      <button class="btn btn-secondary btn-sm" onclick="refreshAllPrices()" title="Refresh all card prices" style="padding: 8px 12px;">
-        💰 Refresh Prices
-      </button>
       <div class="connection-status">
         <div class="status-dot" id="ws-status"></div>
         <span id="ws-text">Connecting...</span>
@@ -2476,7 +2449,7 @@
             <span style="font-size: 32px;">🎯</span>
             <div>
               <div style="font-weight: 700; font-size: 17px;">Export to SlabTrack</div>
-              <div style="font-size: 12px; opacity: 0.9;">Full collection import with front/back images, pricing & all card data</div>
+              <div style="font-size: 12px; opacity: 0.9;">Excel file with embedded images - ready for direct import</div>
             </div>
           </button>
         </div>
@@ -2502,14 +2475,6 @@
             </div>
           </button>
 
-          <!-- SportsCardsPro Export -->
-          <button class="btn btn-secondary" onclick="exportTo('sportscardspro')" style="width: 100%; padding: 14px; font-size: 14px; text-align: left; display: flex; align-items: center; gap: 12px;">
-            <span style="font-size: 22px;">💰</span>
-            <div>
-              <div style="font-weight: 600;">SportsCardsPro</div>
-              <div style="font-size: 11px; opacity: 0.7;">Price guide format</div>
-            </div>
-          </button>
         </div>
 
         <!-- Generic Formats -->
@@ -2650,6 +2615,260 @@
       </div>
     </div>
   </div>
+
+  <!-- AI Analysis Modal -->
+  <div class="modal" id="ai-analysis-modal">
+    <div class="modal-content" style="max-width: 700px; max-height: 90vh;">
+      <div class="modal-header" style="background: linear-gradient(135deg, rgba(16, 185, 129, 0.2), rgba(6, 182, 212, 0.2));">
+        <h2 style="display: flex; align-items: center; gap: 10px;">
+          <span style="animation: ai-pulse 2s infinite;">🤖</span>
+          AI Card Analysis
+          <span style="font-size: 11px; background: var(--success); color: #000; padding: 2px 8px; border-radius: 4px; font-weight: 600;">BETA</span>
+        </h2>
+        <button class="modal-close" onclick="closeAiAnalysisModal()">&times;</button>
+      </div>
+      <div class="modal-body" id="ai-analysis-content" style="max-height: calc(90vh - 140px); overflow-y: auto;">
+        <!-- Analysis results will be rendered here -->
+        <div id="ai-analysis-loading" style="text-align: center; padding: 60px 20px; display: none;">
+          <div style="font-size: 48px; animation: ai-pulse 1s infinite;">🤖</div>
+          <h3 style="margin: 16px 0 8px;">Analyzing your card...</h3>
+          <p style="color: var(--text-muted);">AI is examining condition, searching market data, and generating recommendations</p>
+          <div style="margin-top: 20px; height: 4px; background: var(--glass); border-radius: 2px; overflow: hidden;">
+            <div style="height: 100%; width: 30%; background: linear-gradient(90deg, var(--cyan), var(--success)); animation: loading-bar 2s ease-in-out infinite;"></div>
+          </div>
+        </div>
+        <div id="ai-analysis-result" style="display: none;"></div>
+        <div id="ai-analysis-error" style="display: none; text-align: center; padding: 40px;">
+          <div style="font-size: 48px;">⚠️</div>
+          <h3 style="color: var(--error); margin: 16px 0 8px;">Analysis Failed</h3>
+          <p id="ai-analysis-error-message" style="color: var(--text-muted);"></p>
+        </div>
+      </div>
+      <div class="modal-footer" style="justify-content: space-between;">
+        <div id="ai-analysis-usage" style="font-size: 12px; color: var(--text-muted);">
+          <!-- Usage info will be shown here -->
+        </div>
+        <div style="display: flex; gap: 10px;">
+          <button class="btn btn-secondary" onclick="openAiSettings()">Settings</button>
+          <button class="btn btn-secondary" onclick="closeAiAnalysisModal()">Close</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- AI Settings Modal -->
+  <div class="modal" id="ai-settings-modal">
+    <div class="modal-content" style="max-width: 500px;">
+      <div class="modal-header">
+        <h2>⚙️ AI Analysis Settings</h2>
+        <button class="modal-close" onclick="closeAiSettings()">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p style="color: var(--text-muted); margin-bottom: 20px; font-size: 13px;">
+          Bring Your Own Key (BYOK) - Enter your API key to use AI analysis. Your key is stored securely and only used for your analyses.
+        </p>
+
+        <!-- Provider Selection -->
+        <div style="margin-bottom: 20px;">
+          <label style="display: block; margin-bottom: 8px; font-weight: 600;">Preferred AI Provider</label>
+          <select id="ai-preferred-provider" class="batch-select" style="width: 100%; padding: 12px; font-size: 14px;">
+            <option value="anthropic">Anthropic Claude (Recommended)</option>
+            <option value="openai">OpenAI GPT-4</option>
+            <option value="google">Google Gemini</option>
+          </select>
+        </div>
+
+        <!-- Anthropic API Key -->
+        <div style="margin-bottom: 16px;">
+          <label style="display: block; margin-bottom: 8px; font-weight: 600;">
+            <span style="display: flex; align-items: center; gap: 8px;">
+              Anthropic API Key
+              <a href="https://console.anthropic.com/settings/keys" target="_blank" style="font-size: 11px; color: var(--cyan);">Get key</a>
+            </span>
+          </label>
+          <input type="password" id="ai-anthropic-key" placeholder="sk-ant-..." style="width: 100%; padding: 12px; background: var(--glass); border: 1px solid var(--glass-border); border-radius: 8px; color: var(--text); font-family: monospace;">
+          <p style="font-size: 11px; color: var(--text-muted); margin-top: 4px;">Best for card analysis - supports web search for live pricing</p>
+        </div>
+
+        <!-- OpenAI API Key -->
+        <div style="margin-bottom: 16px;">
+          <label style="display: block; margin-bottom: 8px; font-weight: 600;">
+            <span style="display: flex; align-items: center; gap: 8px;">
+              OpenAI API Key
+              <a href="https://platform.openai.com/api-keys" target="_blank" style="font-size: 11px; color: var(--cyan);">Get key</a>
+            </span>
+          </label>
+          <input type="password" id="ai-openai-key" placeholder="sk-..." style="width: 100%; padding: 12px; background: var(--glass); border: 1px solid var(--glass-border); border-radius: 8px; color: var(--text); font-family: monospace;">
+        </div>
+
+        <!-- Google API Key -->
+        <div style="margin-bottom: 20px;">
+          <label style="display: block; margin-bottom: 8px; font-weight: 600;">
+            <span style="display: flex; align-items: center; gap: 8px;">
+              Google Gemini API Key
+              <a href="https://aistudio.google.com/app/apikey" target="_blank" style="font-size: 11px; color: var(--cyan);">Get key</a>
+            </span>
+          </label>
+          <input type="password" id="ai-google-key" placeholder="AI..." style="width: 100%; padding: 12px; background: var(--glass); border: 1px solid var(--glass-border); border-radius: 8px; color: var(--text); font-family: monospace;">
+        </div>
+
+        <!-- Usage Info -->
+        <div style="background: var(--glass); padding: 16px; border-radius: 12px; margin-bottom: 16px;">
+          <h4 style="margin-bottom: 12px; font-size: 13px;">Your Usage</h4>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+            <div>
+              <div id="ai-settings-used" style="font-size: 24px; font-weight: 700; color: var(--cyan);">0</div>
+              <div style="font-size: 11px; color: var(--text-muted);">Analyses Used</div>
+            </div>
+            <div>
+              <div id="ai-settings-remaining" style="font-size: 24px; font-weight: 700; color: var(--success);">3</div>
+              <div style="font-size: 11px; color: var(--text-muted);">Remaining This Month</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Upgrade CTA -->
+        <div style="background: linear-gradient(135deg, rgba(123, 47, 247, 0.2), rgba(0, 246, 255, 0.2)); padding: 16px; border-radius: 12px; border: 1px solid var(--purple);">
+          <div style="font-weight: 600; margin-bottom: 4px;">Want unlimited analyses?</div>
+          <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 12px;">SlabTrack Pro includes unlimited AI analysis, collection management, and more.</p>
+          <a href="https://slabtrack.com" target="_blank" class="btn btn-accent" style="width: 100%; text-align: center;">Try SlabTrack Pro</a>
+        </div>
+
+        <!-- Support -->
+        <div style="margin-top: 16px; text-align: center; font-size: 12px; color: var(--text-muted);">
+          Questions? Contact <a href="mailto:huddleeco@gmail.com" style="color: var(--cyan);">huddleeco@gmail.com</a>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeAiSettings()">Cancel</button>
+        <button class="btn btn-success" onclick="saveAiSettings()">Save Settings</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- AI Upgrade Modal (shown when quota exceeded) -->
+  <div class="modal" id="ai-upgrade-modal">
+    <div class="modal-content" style="max-width: 450px; text-align: center;">
+      <div class="modal-header">
+        <h2>🚀 Upgrade for More Analyses</h2>
+        <button class="modal-close" onclick="closeAiUpgradeModal()">&times;</button>
+      </div>
+      <div class="modal-body" style="padding: 30px;">
+        <div style="font-size: 64px; margin-bottom: 20px;">🤖</div>
+        <h3 style="margin-bottom: 12px;">You've used all your free analyses!</h3>
+        <p style="color: var(--text-muted); margin-bottom: 24px;">
+          Upgrade to get more AI-powered card analysis with condition assessment, market values, and investment advice.
+        </p>
+
+        <div style="display: grid; gap: 12px; margin-bottom: 24px;">
+          <div style="background: var(--glass); padding: 16px; border-radius: 12px; text-align: left;">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <div>
+                <div style="font-weight: 600;">Free Tier</div>
+                <div style="font-size: 12px; color: var(--text-muted);">3 analyses / month</div>
+              </div>
+              <div style="font-size: 18px; font-weight: 700;">$0</div>
+            </div>
+          </div>
+          <div style="background: linear-gradient(135deg, rgba(123, 47, 247, 0.2), rgba(0, 246, 255, 0.2)); padding: 16px; border-radius: 12px; text-align: left; border: 2px solid var(--cyan);">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <div>
+                <div style="font-weight: 600; color: var(--cyan);">CardFlow Premium</div>
+                <div style="font-size: 12px; color: var(--text-muted);">50 analyses / month</div>
+              </div>
+              <div style="font-size: 18px; font-weight: 700;">$3/mo</div>
+            </div>
+          </div>
+          <div style="background: linear-gradient(135deg, rgba(16, 185, 129, 0.2), rgba(6, 182, 212, 0.2)); padding: 16px; border-radius: 12px; text-align: left; border: 2px solid var(--success);">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <div>
+                <div style="font-weight: 600; color: var(--success);">SlabTrack Pro</div>
+                <div style="font-size: 12px; color: var(--text-muted);">Unlimited analyses + full suite</div>
+              </div>
+              <div style="font-size: 18px; font-weight: 700;">$10/mo</div>
+            </div>
+          </div>
+        </div>
+
+        <a href="https://slabtrack.com" target="_blank" class="btn btn-accent" style="width: 100%; padding: 16px; font-size: 16px;">
+          Get SlabTrack Pro
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <style>
+    @keyframes loading-bar {
+      0% { transform: translateX(-100%); }
+      50% { transform: translateX(100%); }
+      100% { transform: translateX(300%); }
+    }
+
+    .ai-result-section {
+      background: var(--glass);
+      padding: 20px;
+      border-radius: 12px;
+      margin-bottom: 16px;
+    }
+    .ai-result-section h4 {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 12px;
+      font-size: 14px;
+      text-transform: uppercase;
+      color: var(--cyan);
+    }
+    .ai-result-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 12px;
+    }
+    .ai-result-item {
+      padding: 12px;
+      background: rgba(0,0,0,0.2);
+      border-radius: 8px;
+    }
+    .ai-result-label {
+      font-size: 10px;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      margin-bottom: 4px;
+    }
+    .ai-result-value {
+      font-size: 14px;
+      font-weight: 600;
+    }
+    .ai-action-badge {
+      display: inline-block;
+      padding: 8px 20px;
+      border-radius: 8px;
+      font-size: 18px;
+      font-weight: 700;
+      text-transform: uppercase;
+    }
+    .ai-action-badge.hold { background: linear-gradient(135deg, #3b82f6, #1d4ed8); }
+    .ai-action-badge.sell { background: linear-gradient(135deg, #f59e0b, #d97706); }
+    .ai-action-badge.grade { background: linear-gradient(135deg, #10b981, #059669); }
+
+    .ai-sales-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+    .ai-sales-table th {
+      text-align: left;
+      padding: 8px;
+      background: rgba(0,0,0,0.3);
+      font-size: 10px;
+      text-transform: uppercase;
+      color: var(--text-muted);
+    }
+    .ai-sales-table td {
+      padding: 8px;
+      border-bottom: 1px solid var(--glass-border);
+    }
+  </style>
 
   <style>
     .link-matrix-header {
@@ -3286,7 +3505,6 @@
     let ws = null;
     let batchMode = false;
     let batchCards = []; // Cards in current batch session
-    let cardPriceCache = {}; // Cache for card prices from API
 
     // Batch mode functions
     let batchCardData = {}; // Store card data by ID for editing
@@ -3420,17 +3638,18 @@
             <span class="batch-field-label">Cert #</span>
             <div class="batch-field-value" contenteditable="true" data-field="cert_number" data-card="${cardId}" onblur="saveBatchField(this)">-</div>
           </div>
-        </div>
-        <div class="batch-pricing" id="batch-pricing-${cardId}" style="display: flex; flex-direction: column; gap: 4px; min-width: 90px;">
-          <div style="font-size: 10px; color: var(--text-muted); text-transform: uppercase;">Pricing</div>
-          <div class="scp-price-row"><span style="font-size: 10px; color: #9ca3af;">Raw:</span> <span class="scp-price raw" id="scp-raw-${cardId}">--</span></div>
-          <div class="scp-price-row"><span style="font-size: 10px; color: #60a5fa;">PSA 9:</span> <span class="scp-price psa9" id="scp-psa9-${cardId}">--</span></div>
-          <div class="scp-price-row"><span style="font-size: 10px; color: #4ade80;">PSA 10:</span> <span class="scp-price psa10" id="scp-psa10-${cardId}">--</span></div>
+          <div class="batch-field">
+            <span class="batch-field-label">My Price</span>
+            <div class="batch-field-value placeholder" contenteditable="true" data-field="my_price" data-card="${cardId}" onblur="saveBatchField(this)" style="color: var(--success);">$</div>
+          </div>
+          <div class="batch-field wide">
+            <span class="batch-field-label">Notes</span>
+            <div class="batch-field-value placeholder" contenteditable="true" data-field="notes" data-card="${cardId}" onblur="saveBatchField(this)">-</div>
+          </div>
         </div>
         <div class="batch-status">
           <span class="batch-status-badge identifying">SCANNING</span>
           <div style="display: flex; flex-direction: column; gap: 8px; margin-top: 12px;">
-            <button class="btn btn-secondary btn-sm" onclick="fetchBatchCardPricing('${cardId}')" title="Get Pricing" style="font-size: 12px;">💰 Price</button>
             <button class="batch-delete" onclick="deleteBatchCard('${cardId}')" title="Remove">🗑️</button>
           </div>
         </div>
@@ -3479,10 +3698,20 @@
         } else {
           // contenteditable div
           if (value !== null && value !== undefined && value !== '') {
-            field.textContent = value;
+            // Special handling for my_price to show $ prefix
+            if (key === 'my_price') {
+              field.textContent = '$' + value;
+            } else {
+              field.textContent = value;
+            }
             field.classList.remove('placeholder');
           } else {
-            field.textContent = '-';
+            // Show placeholder
+            if (key === 'my_price') {
+              field.textContent = '$';
+            } else {
+              field.textContent = '-';
+            }
             field.classList.add('placeholder');
           }
         }
@@ -3492,78 +3721,6 @@
       if (cardData.is_graded) {
         toggleBatchGradeRow(cardId, 'true');
       }
-
-      // Auto-fetch pricing after identification
-      fetchBatchCardPricing(cardId);
-    }
-
-    // Fetch SportsCardPro pricing for a batch card
-    async function fetchBatchCardPricing(cardId) {
-      const rawEl = document.getElementById(`scp-raw-${cardId}`);
-      const psa9El = document.getElementById(`scp-psa9-${cardId}`);
-      const psa10El = document.getElementById(`scp-psa10-${cardId}`);
-
-      if (!rawEl || !psa9El || !psa10El) return;
-
-      // Set loading state
-      rawEl.textContent = '...';
-      psa9El.textContent = '...';
-      psa10El.textContent = '...';
-      rawEl.classList.add('loading');
-      psa9El.classList.add('loading');
-      psa10El.classList.add('loading');
-
-      try {
-        const response = await fetch(`${API_URL}/pricing/${cardId}`, {
-          headers: { 'Authorization': `Bearer ${token}` }
-        });
-
-        if (!response.ok) throw new Error('Failed to fetch pricing');
-
-        const data = await response.json();
-
-        rawEl.classList.remove('loading');
-        psa9El.classList.remove('loading');
-        psa10El.classList.remove('loading');
-
-        if (data.error) {
-          rawEl.textContent = '--';
-          psa9El.textContent = '--';
-          psa10El.textContent = '--';
-          return;
-        }
-
-        // Update with prices
-        if (data.prices.raw) {
-          rawEl.textContent = '$' + data.prices.raw.toFixed(0);
-          rawEl.classList.add('has-value');
-        } else {
-          rawEl.textContent = '--';
-        }
-
-        if (data.prices.psa9) {
-          psa9El.textContent = '$' + data.prices.psa9.toFixed(0);
-          psa9El.classList.add('has-value');
-        } else {
-          psa9El.textContent = '--';
-        }
-
-        if (data.prices.psa10) {
-          psa10El.textContent = '$' + data.prices.psa10.toFixed(0);
-          psa10El.classList.add('has-value');
-        } else {
-          psa10El.textContent = '--';
-        }
-
-      } catch (e) {
-        console.error('Pricing fetch error:', e);
-        rawEl.classList.remove('loading');
-        psa9El.classList.remove('loading');
-        psa10El.classList.remove('loading');
-        rawEl.textContent = '--';
-        psa9El.textContent = '--';
-        psa10El.textContent = '--';
-      }
     }
 
     async function saveBatchField(element) {
@@ -3572,9 +3729,14 @@
       let value = element.tagName === 'SELECT' ? element.value : element.textContent.trim();
 
       // Handle special values
-      if (value === '-' || value === 'Identifying...') value = '';
+      if (value === '-' || value === 'Identifying...' || value === '$') value = '';
       if (field === 'year' && value) value = parseInt(value) || null;
       if (field === 'is_graded' || field === 'is_autograph') value = value === 'true';
+      if (field === 'my_price' && value) {
+        // Strip $ and parse as price
+        value = value.replace(/[$,]/g, '').trim();
+        value = parseFloat(value) || null;
+      }
 
       // Update local data
       if (!batchCardData[cardId]) batchCardData[cardId] = { data: {} };
@@ -3824,85 +3986,6 @@
       renderCards();
     }
 
-    // Refresh prices for all collection cards
-    async function refreshAllPrices() {
-      if (cards.length === 0) {
-        showToast('No cards to fetch prices for', 'error');
-        return;
-      }
-
-      const cardIds = cards.map(c => c.id);
-      showToast(`Fetching prices for ${cardIds.length} cards...`, 'info');
-
-      // Set all prices to loading state
-      cardIds.forEach(id => {
-        const rawEl = document.getElementById(`price-raw-${id}`);
-        const psa9El = document.getElementById(`price-psa9-${id}`);
-        const psa10El = document.getElementById(`price-psa10-${id}`);
-        if (rawEl) { rawEl.textContent = '...'; rawEl.classList.add('loading'); }
-        if (psa9El) { psa9El.textContent = '...'; psa9El.classList.add('loading'); }
-        if (psa10El) { psa10El.textContent = '...'; psa10El.classList.add('loading'); }
-      });
-
-      // Fetch in batches of 20
-      const batchSize = 20;
-      let foundCount = 0;
-
-      for (let i = 0; i < cardIds.length; i += batchSize) {
-        const batch = cardIds.slice(i, i + batchSize);
-
-        try {
-          const response = await fetch(`${API_URL}/pricing/bulk`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${token}`
-            },
-            body: JSON.stringify({ cardIds: batch })
-          });
-
-          if (!response.ok) continue;
-
-          const data = await response.json();
-
-          // Update UI with results
-          data.results.forEach(result => {
-            const rawEl = document.getElementById(`price-raw-${result.cardId}`);
-            const psa9El = document.getElementById(`price-psa9-${result.cardId}`);
-            const psa10El = document.getElementById(`price-psa10-${result.cardId}`);
-
-            if (rawEl) rawEl.classList.remove('loading');
-            if (psa9El) psa9El.classList.remove('loading');
-            if (psa10El) psa10El.classList.remove('loading');
-
-            if (result.error) {
-              if (rawEl) rawEl.textContent = '--';
-              if (psa9El) psa9El.textContent = '--';
-              if (psa10El) psa10El.textContent = '--';
-            } else {
-              foundCount++;
-              // Cache the prices
-              cardPriceCache[result.cardId] = result.prices;
-
-              if (rawEl) rawEl.textContent = result.prices.raw ? '$' + result.prices.raw.toFixed(0) : '--';
-              if (psa9El) psa9El.textContent = result.prices.psa9 ? '$' + result.prices.psa9.toFixed(0) : '--';
-              if (psa10El) psa10El.textContent = result.prices.psa10 ? '$' + result.prices.psa10.toFixed(0) : '--';
-            }
-          });
-
-        } catch (e) {
-          console.error('Batch pricing error:', e);
-        }
-
-        // Small delay between batches
-        if (i + batchSize < cardIds.length) {
-          await new Promise(r => setTimeout(r, 500));
-        }
-      }
-
-      showToast(`Found prices for ${foundCount}/${cardIds.length} cards`, 'success');
-    }
-
     // Render cards
     function renderCards() {
       const grid = document.getElementById('cards-grid');
@@ -3924,27 +4007,6 @@
         const gradeInfo = card.is_graded ? `${card.grading_company} ${card.grade}` : '';
         const parallelInfo = card.parallel && card.parallel !== 'Base' ? card.parallel : '';
         const isSelected = selectedCards.has(card.id);
-
-        // Pricing section - shows cached prices or placeholder
-        const cachedPrices = cardPriceCache[card.id];
-        let pricingHtml = `
-          <div class="card-pricing" id="card-pricing-${card.id}">
-            <div class="price-grid">
-              <div class="price-item">
-                <span class="price-label">Raw</span>
-                <span class="price-value" id="price-raw-${card.id}">${cachedPrices?.raw ? '$' + cachedPrices.raw.toFixed(0) : '--'}</span>
-              </div>
-              <div class="price-item psa9">
-                <span class="price-label">PSA 9</span>
-                <span class="price-value" id="price-psa9-${card.id}">${cachedPrices?.psa9 ? '$' + cachedPrices.psa9.toFixed(0) : '--'}</span>
-              </div>
-              <div class="price-item psa10">
-                <span class="price-label">PSA 10</span>
-                <span class="price-value" id="price-psa10-${card.id}">${cachedPrices?.psa10 ? '$' + cachedPrices.psa10.toFixed(0) : '--'}</span>
-              </div>
-            </div>
-          </div>
-        `;
 
         const checkboxHtml = selectMode ? `
           <div style="position: absolute; top: 12px; left: 12px; z-index: 10;">
@@ -3978,9 +4040,9 @@
               <div class="card-meta">
                 ${gradeInfo ? `<span class="card-grade">${gradeInfo}</span>` : ''}
               </div>
-              ${pricingHtml}
             </div>
             <div class="card-actions">
+              <button class="btn btn-ai btn-sm" onclick="analyzeCard('${card.id}')" title="AI Analysis (Beta)">🤖</button>
               <button class="btn btn-secondary btn-sm" onclick="priceCheckCard('${card.id}')" title="Quick Price Check">🔍</button>
               <button class="btn btn-secondary btn-sm" onclick="setCardPrice('${card.id}')" title="Set Price">💲</button>
               <button class="btn btn-secondary" onclick="editCard('${card.id}')">Edit</button>
@@ -5638,15 +5700,19 @@
       }
 
       const formatNames = {
-        slabtrack: 'SlabTrack',
+        slabtrack: 'SlabTrack Excel',
         whatnot: 'Whatnot CSV',
         cardladder: 'CardLadder CSV',
-        sportscardspro: 'SportsCardsPro CSV',
         csv: 'CSV',
         json: 'JSON'
       };
 
-      showToast(`Exporting ${exportCardIds.length} cards to ${formatNames[format]}...`, 'info');
+      // SlabTrack takes longer due to image embedding
+      if (format === 'slabtrack') {
+        showToast(`Creating SlabTrack Excel with embedded images for ${exportCardIds.length} cards... This may take a moment.`, 'info');
+      } else {
+        showToast(`Exporting ${exportCardIds.length} cards to ${formatNames[format]}...`, 'info');
+      }
 
       try {
         const response = await fetch(`${API_URL}/export/${format}`, {
@@ -5670,6 +5736,15 @@
           const a = document.createElement('a');
           a.href = url;
           a.download = `CardFlow-Export-${Date.now()}.json`;
+          a.click();
+          URL.revokeObjectURL(url);
+        } else if (format === 'slabtrack') {
+          // SlabTrack Excel - download .xlsx with images
+          const blob = await response.blob();
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = response.headers.get('Content-Disposition')?.split('filename=')[1]?.replace(/"/g, '') || `CardFlow-SlabTrack-${Date.now()}.xlsx`;
           a.click();
           URL.revokeObjectURL(url);
         } else {
@@ -6241,6 +6316,349 @@
         document.body.removeChild(input);
         showToast('URL copied!', 'success');
       });
+    }
+
+    // ============================================
+    // AI ANALYSIS FUNCTIONS (Beta)
+    // ============================================
+
+    let aiAnalysisCard = null;
+    let aiUsage = { used: 0, limit: 3, remaining: 3 };
+
+    // Open AI Analysis Modal and run analysis
+    async function analyzeCard(cardId) {
+      const card = cards.find(c => c.id === cardId);
+      if (!card) {
+        showToast('Card not found', 'error');
+        return;
+      }
+
+      aiAnalysisCard = card;
+
+      // Open modal
+      document.getElementById('ai-analysis-modal').classList.add('open');
+      document.getElementById('ai-analysis-loading').style.display = 'block';
+      document.getElementById('ai-analysis-result').style.display = 'none';
+      document.getElementById('ai-analysis-error').style.display = 'none';
+
+      try {
+        // First check usage
+        const usageResponse = await api('/agent/usage');
+        if (usageResponse) {
+          aiUsage = usageResponse.quota;
+          updateAiUsageDisplay();
+
+          // Check if user has beta access
+          if (!usageResponse.betaEnabled) {
+            showAiBetaRequired();
+            return;
+          }
+
+          // Check if quota exceeded
+          if (!usageResponse.quota.canAnalyze) {
+            showAiUpgradeModal();
+            closeAiAnalysisModal();
+            return;
+          }
+
+          // Check if user has API key
+          const provider = usageResponse.preferredProvider || 'anthropic';
+          if (!usageResponse.apiKeys[provider]) {
+            document.getElementById('ai-analysis-loading').style.display = 'none';
+            document.getElementById('ai-analysis-error').style.display = 'block';
+            document.getElementById('ai-analysis-error-message').innerHTML = `
+              No ${provider} API key configured.<br>
+              <button class="btn btn-accent" style="margin-top: 12px;" onclick="openAiSettings()">Add API Key</button>
+            `;
+            return;
+          }
+        }
+
+        // Run analysis
+        const response = await fetch(`${API_URL}/agent/analyze-card`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({
+            cardId: cardId,
+            photoUrl: card.front
+          })
+        });
+
+        const data = await response.json();
+
+        if (!response.ok || !data.success) {
+          throw new Error(data.error || 'Analysis failed');
+        }
+
+        // Update usage
+        if (data.usage) {
+          aiUsage.remaining = data.usage.analysesRemaining;
+          aiUsage.used = data.usage.limit - data.usage.analysesRemaining;
+          updateAiUsageDisplay();
+        }
+
+        // Show results
+        renderAiAnalysisResult(data.analysis, data.meta);
+
+      } catch (error) {
+        console.error('AI Analysis error:', error);
+        document.getElementById('ai-analysis-loading').style.display = 'none';
+        document.getElementById('ai-analysis-error').style.display = 'block';
+
+        let errorMessage = error.message;
+        if (error.message.includes('API key') || error.message.includes('401')) {
+          errorMessage = 'Invalid API key. Please check your settings.';
+        } else if (error.message.includes('rate')) {
+          errorMessage = 'Rate limit exceeded. Please try again later.';
+        }
+
+        document.getElementById('ai-analysis-error-message').innerHTML = `
+          ${errorMessage}<br>
+          <button class="btn btn-secondary" style="margin-top: 12px;" onclick="openAiSettings()">Check Settings</button>
+        `;
+      }
+    }
+
+    // Render AI analysis results
+    function renderAiAnalysisResult(analysis, meta) {
+      document.getElementById('ai-analysis-loading').style.display = 'none';
+      document.getElementById('ai-analysis-result').style.display = 'block';
+
+      const actionClass = (analysis.advice?.action || 'HOLD').toLowerCase();
+      const valueRange = analysis.marketData?.valueRange;
+      const valueStr = valueRange ? `$${valueRange.low || 0} - $${valueRange.high || 0}` : 'N/A';
+
+      let salesHtml = '';
+      if (analysis.marketData?.recentSales?.length > 0) {
+        salesHtml = `
+          <table class="ai-sales-table">
+            <thead>
+              <tr><th>Price</th><th>Condition</th><th>Source</th></tr>
+            </thead>
+            <tbody>
+              ${analysis.marketData.recentSales.map(sale => `
+                <tr>
+                  <td style="color: var(--success); font-weight: 600;">$${sale.price?.toFixed(2) || 'N/A'}</td>
+                  <td>${sale.condition || 'N/A'}</td>
+                  <td>${sale.source || 'eBay'}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        `;
+      }
+
+      let gradedSalesHtml = '';
+      if (analysis.marketData?.gradedSales?.length > 0) {
+        gradedSalesHtml = analysis.marketData.gradedSales.map(sale => `
+          <div class="ai-result-item">
+            <div class="ai-result-label">${sale.grade}</div>
+            <div class="ai-result-value" style="color: var(--success);">
+              ${sale.price ? '$' + sale.price : sale.note || 'N/A'}
+            </div>
+          </div>
+        `).join('');
+      }
+
+      document.getElementById('ai-analysis-result').innerHTML = `
+        <!-- Card Info Header -->
+        <div style="display: flex; gap: 16px; margin-bottom: 20px; padding-bottom: 16px; border-bottom: 1px solid var(--glass-border);">
+          <img src="${aiAnalysisCard?.front || ''}" style="width: 80px; height: 110px; object-fit: cover; border-radius: 8px;">
+          <div>
+            <h3 style="margin: 0 0 4px;">${analysis.identification?.player || aiAnalysisCard?.player || 'Unknown'}</h3>
+            <div style="color: var(--text-muted); font-size: 13px;">
+              ${analysis.identification?.year || aiAnalysisCard?.year || ''} ${analysis.identification?.set || aiAnalysisCard?.set_name || ''}
+            </div>
+            <div style="color: var(--text-muted); font-size: 12px;">
+              #${analysis.identification?.number || aiAnalysisCard?.card_number || ''} ${analysis.identification?.parallel || ''}
+            </div>
+          </div>
+        </div>
+
+        <!-- Recommendation -->
+        <div class="ai-result-section" style="text-align: center; background: linear-gradient(135deg, rgba(16, 185, 129, 0.1), rgba(6, 182, 212, 0.1));">
+          <h4>Recommendation</h4>
+          <div class="ai-action-badge ${actionClass}">${analysis.advice?.action || 'HOLD'}</div>
+          <p style="margin-top: 12px; color: var(--text-muted); font-size: 13px;">${analysis.advice?.reasoning || ''}</p>
+        </div>
+
+        <!-- Condition Assessment -->
+        <div class="ai-result-section">
+          <h4>📋 Condition Assessment</h4>
+          <div style="font-size: 20px; font-weight: 700; color: var(--cyan); margin-bottom: 12px;">
+            ${analysis.condition?.grade || 'N/A'}
+          </div>
+          <div class="ai-result-grid">
+            <div class="ai-result-item">
+              <div class="ai-result-label">Corners</div>
+              <div class="ai-result-value">${analysis.condition?.corners || 'N/A'}</div>
+            </div>
+            <div class="ai-result-item">
+              <div class="ai-result-label">Centering</div>
+              <div class="ai-result-value">${analysis.condition?.centering || 'N/A'}</div>
+            </div>
+            <div class="ai-result-item">
+              <div class="ai-result-label">Surface</div>
+              <div class="ai-result-value">${analysis.condition?.surface || 'N/A'}</div>
+            </div>
+            <div class="ai-result-item">
+              <div class="ai-result-label">Edges</div>
+              <div class="ai-result-value">${analysis.condition?.edges || 'N/A'}</div>
+            </div>
+          </div>
+          ${analysis.condition?.flaws?.length > 0 ? `
+            <div style="margin-top: 12px; padding: 12px; background: rgba(239, 68, 68, 0.1); border-radius: 8px;">
+              <div class="ai-result-label" style="color: var(--error);">Flaws Noted</div>
+              <div style="font-size: 13px;">${analysis.condition.flaws.join(', ')}</div>
+            </div>
+          ` : ''}
+          <div style="margin-top: 12px; padding: 12px; background: rgba(16, 185, 129, 0.1); border-radius: 8px;">
+            <div class="ai-result-label" style="color: var(--success);">Grading Potential</div>
+            <div style="font-size: 14px; font-weight: 600;">${analysis.condition?.gradingPotential || 'N/A'}</div>
+          </div>
+        </div>
+
+        <!-- Market Value -->
+        <div class="ai-result-section">
+          <h4>💰 Market Value</h4>
+          <div style="font-size: 24px; font-weight: 700; color: var(--success); margin-bottom: 8px;">
+            ${valueStr}
+          </div>
+          <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 16px;">${analysis.marketData?.context || ''}</p>
+
+          ${salesHtml ? `
+            <div style="margin-bottom: 16px;">
+              <div class="ai-result-label" style="margin-bottom: 8px;">Recent Raw Sales</div>
+              ${salesHtml}
+            </div>
+          ` : ''}
+
+          ${gradedSalesHtml ? `
+            <div>
+              <div class="ai-result-label" style="margin-bottom: 8px;">Graded Card Prices</div>
+              <div class="ai-result-grid">
+                ${gradedSalesHtml}
+              </div>
+            </div>
+          ` : ''}
+        </div>
+
+        <!-- Advice -->
+        <div class="ai-result-section">
+          <h4>💡 Expert Advice</h4>
+          ${analysis.advice?.gradingAdvice ? `
+            <div style="margin-bottom: 12px;">
+              <div class="ai-result-label">On Grading</div>
+              <div style="font-size: 13px;">${analysis.advice.gradingAdvice}</div>
+            </div>
+          ` : ''}
+          ${analysis.advice?.sellAdvice ? `
+            <div style="margin-bottom: 12px;">
+              <div class="ai-result-label">On Selling</div>
+              <div style="font-size: 13px;">${analysis.advice.sellAdvice}</div>
+            </div>
+          ` : ''}
+          ${analysis.advice?.holdReason ? `
+            <div>
+              <div class="ai-result-label">On Holding</div>
+              <div style="font-size: 13px;">${analysis.advice.holdReason}</div>
+            </div>
+          ` : ''}
+        </div>
+
+        <!-- Meta Info -->
+        <div style="text-align: center; padding: 12px; font-size: 11px; color: var(--text-muted);">
+          Analysis by ${meta?.provider || 'AI'} (${meta?.model || 'unknown'}) in ${meta?.responseTime?.toFixed(1) || '?'}s
+          • Cost: $${meta?.cost?.toFixed(4) || '0.00'}
+        </div>
+      `;
+    }
+
+    function showAiBetaRequired() {
+      document.getElementById('ai-analysis-loading').style.display = 'none';
+      document.getElementById('ai-analysis-error').style.display = 'block';
+      document.getElementById('ai-analysis-error-message').innerHTML = `
+        AI Analysis is currently in beta.<br>
+        Contact <a href="mailto:huddleeco@gmail.com" style="color: var(--cyan);">huddleeco@gmail.com</a> to request access.
+      `;
+    }
+
+    function updateAiUsageDisplay() {
+      document.getElementById('ai-analysis-usage').innerHTML = `
+        ${aiUsage.remaining} of ${aiUsage.limit} analyses remaining this month
+      `;
+      document.getElementById('ai-settings-used').textContent = aiUsage.used || 0;
+      document.getElementById('ai-settings-remaining').textContent = aiUsage.remaining || 0;
+    }
+
+    function closeAiAnalysisModal() {
+      document.getElementById('ai-analysis-modal').classList.remove('open');
+      aiAnalysisCard = null;
+    }
+
+    // AI Settings Modal
+    async function openAiSettings() {
+      document.getElementById('ai-settings-modal').classList.add('open');
+
+      try {
+        const usage = await api('/agent/usage');
+        if (usage) {
+          aiUsage = usage.quota;
+          updateAiUsageDisplay();
+          document.getElementById('ai-preferred-provider').value = usage.preferredProvider || 'anthropic';
+        }
+      } catch (e) {
+        console.error('Failed to load AI settings:', e);
+      }
+    }
+
+    function closeAiSettings() {
+      document.getElementById('ai-settings-modal').classList.remove('open');
+    }
+
+    async function saveAiSettings() {
+      const anthropicKey = document.getElementById('ai-anthropic-key').value.trim();
+      const openaiKey = document.getElementById('ai-openai-key').value.trim();
+      const googleKey = document.getElementById('ai-google-key').value.trim();
+      const preferredProvider = document.getElementById('ai-preferred-provider').value;
+
+      try {
+        const response = await fetch(`${API_URL}/agent/save-settings`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({
+            anthropicKey: anthropicKey || undefined,
+            openaiKey: openaiKey || undefined,
+            googleKey: googleKey || undefined,
+            preferredProvider
+          })
+        });
+
+        const data = await response.json();
+        if (data.success) {
+          showToast('AI settings saved!', 'success');
+          closeAiSettings();
+        } else {
+          throw new Error(data.error);
+        }
+      } catch (e) {
+        showToast('Failed to save settings: ' + e.message, 'error');
+      }
+    }
+
+    // AI Upgrade Modal
+    function showAiUpgradeModal() {
+      document.getElementById('ai-upgrade-modal').classList.add('open');
+    }
+
+    function closeAiUpgradeModal() {
+      document.getElementById('ai-upgrade-modal').classList.remove('open');
     }
 
     // Initialize

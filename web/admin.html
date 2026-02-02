@@ -648,10 +648,11 @@
 
     async function loadDashboard() {
       try {
-        const [analytics, usersData, scanHistory] = await Promise.all([
+        const [analytics, usersData, scanHistory, aiAnalytics] = await Promise.all([
           api('/admin/analytics'),
           api('/admin/users'),
-          api('/admin/scan-history?limit=50')
+          api('/admin/scan-history?limit=50'),
+          api('/admin/agent-analytics/overview').catch(() => null)
         ]);
 
         if (!analytics || !usersData) return;
@@ -660,6 +661,7 @@
         const { users } = usersData;
         const scans = scanHistory?.scans || [];
         const scanSummary = scanHistory?.summary || {};
+        const ai = aiAnalytics || { today: {}, month: {}, allTime: {}, byProvider: [], byPlan: [] };
 
         // Render dashboard
         document.getElementById('main-content').innerHTML = `
@@ -782,6 +784,58 @@
                   return `<div class="chart-bar" style="height: ${height}px;" title="${day.date}: $${parseFloat(day.cost).toFixed(2)}, ${day.operations} ops"></div>`;
                 }).join('')}
                 ${dailyStats.length === 0 ? '<span style="color: var(--text-muted);">No usage data yet</span>' : ''}
+              </div>
+            </div>
+          </div>
+
+          <!-- AI AGENT ANALYTICS PANEL -->
+          <div class="panel" style="margin-top: 24px;">
+            <div class="panel-header">
+              <div class="panel-title" style="display: flex; align-items: center; gap: 8px;">
+                🤖 AI Agent Analytics
+                <span style="font-size: 10px; background: var(--success); color: #000; padding: 2px 6px; border-radius: 4px;">BETA</span>
+              </div>
+              <button class="btn btn-sm btn-ghost" onclick="openBetaManagement()">Manage Beta Users</button>
+            </div>
+            <div class="panel-body">
+              <!-- AI Stats Grid -->
+              <div class="scan-stats-row" style="margin-bottom: 20px;">
+                <div class="scan-stat-box">
+                  <div class="scan-stat-value" style="color: var(--cyan);">${ai.today?.analyses || 0}</div>
+                  <div class="scan-stat-label">Analyses Today</div>
+                </div>
+                <div class="scan-stat-box">
+                  <div class="scan-stat-value" style="color: var(--success);">$${(ai.today?.cost || 0).toFixed(4)}</div>
+                  <div class="scan-stat-label">Cost Today</div>
+                </div>
+                <div class="scan-stat-box">
+                  <div class="scan-stat-value" style="color: var(--purple);">${ai.month?.analyses || 0}</div>
+                  <div class="scan-stat-label">This Month</div>
+                </div>
+                <div class="scan-stat-box">
+                  <div class="scan-stat-value" style="color: var(--warning);">$${(ai.month?.cost || 0).toFixed(4)}</div>
+                  <div class="scan-stat-label">Month Cost</div>
+                </div>
+                <div class="scan-stat-box">
+                  <div class="scan-stat-value" style="color: var(--text);">${ai.allTime?.analyses || 0}</div>
+                  <div class="scan-stat-label">All Time</div>
+                </div>
+                <div class="scan-stat-box">
+                  <div class="scan-stat-value" style="color: var(--error);">${ai.errorRate || '0%'}</div>
+                  <div class="scan-stat-label">Error Rate</div>
+                </div>
+              </div>
+
+              <!-- By Provider -->
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+                <div>
+                  <div style="font-size: 12px; color: var(--text-muted); margin-bottom: 8px;">By Provider</div>
+                  <div id="ai-by-provider">${ai.byProvider?.length > 0 ? 'Loading...' : '<span style="color: var(--text-muted); font-size: 13px;">No data yet</span>'}</div>
+                </div>
+                <div>
+                  <div style="font-size: 12px; color: var(--text-muted); margin-bottom: 8px;">By Plan</div>
+                  <div id="ai-by-plan">${ai.byPlan?.length > 0 ? 'Loading...' : '<span style="color: var(--text-muted); font-size: 13px;">No data yet</span>'}</div>
+                </div>
               </div>
             </div>
           </div>
@@ -941,6 +995,30 @@
           </div>
         `;
 
+        // Populate AI analytics data after DOM is ready
+        setTimeout(() => {
+          const providerEl = document.getElementById('ai-by-provider');
+          const planEl = document.getElementById('ai-by-plan');
+
+          if (providerEl && ai.byProvider?.length > 0) {
+            providerEl.innerHTML = ai.byProvider.map(p =>
+              '<div style="display: flex; justify-content: space-between; padding: 8px 12px; background: var(--glass); border-radius: 6px; margin-bottom: 6px;">' +
+              '<span style="text-transform: capitalize;">' + (p.ai_provider || 'Unknown') + '</span>' +
+              '<span>' + p.count + ' ($' + parseFloat(p.cost || 0).toFixed(4) + ')</span>' +
+              '</div>'
+            ).join('');
+          }
+
+          if (planEl && ai.byPlan?.length > 0) {
+            planEl.innerHTML = ai.byPlan.map(p =>
+              '<div style="display: flex; justify-content: space-between; padding: 8px 12px; background: var(--glass); border-radius: 6px; margin-bottom: 6px;">' +
+              '<span style="text-transform: capitalize;">' + (p.plan || 'Free') + '</span>' +
+              '<span>' + p.count + ' ($' + parseFloat(p.cost || 0).toFixed(4) + ')</span>' +
+              '</div>'
+            ).join('');
+          }
+        }, 0);
+
       } catch (e) {
         console.error('Failed to load admin data:', e);
         document.getElementById('main-content').innerHTML = `
@@ -975,6 +1053,169 @@
         }
         row.style.display = 'table-row';
         expandedScanId = scanId;
+      }
+    }
+
+    // ============================================
+    // AI BETA MANAGEMENT
+    // ============================================
+
+    let betaModalOpen = false;
+
+    async function openBetaManagement() {
+      betaModalOpen = true;
+
+      // Create modal if doesn't exist
+      if (!document.getElementById('beta-modal')) {
+        const modalHtml = `
+          <div class="modal open" id="beta-modal" style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.8); display: flex; align-items: center; justify-content: center; z-index: 1000;">
+            <div style="background: var(--bg-card); border-radius: 16px; max-width: 600px; width: 90%; max-height: 80vh; overflow: hidden;">
+              <div style="padding: 20px 24px; border-bottom: 1px solid var(--glass-border); display: flex; justify-content: space-between; align-items: center;">
+                <h2 style="font-size: 18px;">🤖 AI Beta Management</h2>
+                <button onclick="closeBetaModal()" style="background: none; border: none; color: var(--text); font-size: 24px; cursor: pointer;">&times;</button>
+              </div>
+              <div style="padding: 24px; max-height: 60vh; overflow-y: auto;" id="beta-users-list">
+                Loading users...
+              </div>
+            </div>
+          </div>
+        `;
+        document.body.insertAdjacentHTML('beforeend', modalHtml);
+      } else {
+        document.getElementById('beta-modal').classList.add('open');
+        document.getElementById('beta-modal').style.display = 'flex';
+      }
+
+      await loadBetaUsers();
+    }
+
+    function closeBetaModal() {
+      const modal = document.getElementById('beta-modal');
+      if (modal) {
+        modal.style.display = 'none';
+      }
+      betaModalOpen = false;
+    }
+
+    async function loadBetaUsers() {
+      try {
+        const usersData = await api('/admin/users');
+        const aiUsers = await api('/admin/agent-analytics/users').catch(() => ({ users: [] }));
+
+        const users = usersData?.users || [];
+        const aiUserMap = new Map((aiUsers.users || []).map(u => [u.id, u]));
+
+        let tableRows = '';
+        users.forEach(u => {
+          const aiData = aiUserMap.get(u.id) || {};
+          const betaEnabled = u.beta_features?.agentAnalysis || false;
+          tableRows += `
+            <tr style="border-bottom: 1px solid var(--glass-border);">
+              <td style="padding: 12px 8px;">
+                <div style="font-weight: 500;">${u.name || u.email.split('@')[0]}</div>
+                <div style="font-size: 11px; color: var(--text-muted);">${u.email}</div>
+              </td>
+              <td style="text-align: center; padding: 12px 8px;">
+                <span style="color: ${betaEnabled ? 'var(--success)' : 'var(--text-muted)'};">
+                  ${betaEnabled ? '✓ Enabled' : '○ Disabled'}
+                </span>
+              </td>
+              <td style="text-align: center; padding: 12px 8px;">
+                ${u.agent_analyses_limit || 3}
+              </td>
+              <td style="text-align: center; padding: 12px 8px;">
+                ${u.agent_analyses_used || 0}
+              </td>
+              <td style="text-align: center; padding: 12px 8px;">
+                <button onclick="toggleBeta('${u.id}', ${!betaEnabled})" class="btn btn-sm" style="background: ${betaEnabled ? 'var(--error)' : 'var(--success)'}; color: white; padding: 6px 12px; font-size: 11px;">
+                  ${betaEnabled ? 'Disable' : 'Enable'}
+                </button>
+                <button onclick="setUserLimit('${u.id}')" class="btn btn-sm btn-ghost" style="padding: 6px 12px; font-size: 11px;">
+                  Set Limit
+                </button>
+              </td>
+            </tr>
+          `;
+        });
+
+        document.getElementById('beta-users-list').innerHTML = `
+          <div style="margin-bottom: 16px;">
+            <div style="font-size: 13px; color: var(--text-muted); margin-bottom: 12px;">
+              Enable AI Analysis beta for users. They'll need to provide their own API key.
+            </div>
+          </div>
+          <table style="width: 100%; border-collapse: collapse;">
+            <thead>
+              <tr style="font-size: 11px; color: var(--text-muted); text-transform: uppercase;">
+                <th style="text-align: left; padding: 8px;">User</th>
+                <th style="text-align: center; padding: 8px;">Beta</th>
+                <th style="text-align: center; padding: 8px;">Limit</th>
+                <th style="text-align: center; padding: 8px;">Used</th>
+                <th style="text-align: center; padding: 8px;">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${tableRows}
+            </tbody>
+          </table>
+        `;
+      } catch (e) {
+        document.getElementById('beta-users-list').innerHTML = `
+          <div style="color: var(--error);">Failed to load users: ${e.message}</div>
+        `;
+      }
+    }
+
+    async function toggleBeta(userId, enabled) {
+      try {
+        const response = await fetch(`${API_URL}/admin/agent-analytics/enable-beta`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({ userId, enabled })
+        });
+
+        const data = await response.json();
+        if (data.success) {
+          await loadBetaUsers();
+        } else {
+          alert('Failed: ' + data.error);
+        }
+      } catch (e) {
+        alert('Error: ' + e.message);
+      }
+    }
+
+    async function setUserLimit(userId) {
+      const limit = prompt('Set monthly analysis limit for this user:', '50');
+      if (limit === null) return;
+
+      const limitNum = parseInt(limit);
+      if (isNaN(limitNum) || limitNum < 0) {
+        alert('Please enter a valid number');
+        return;
+      }
+
+      try {
+        const response = await fetch(`${API_URL}/admin/agent-analytics/enable-beta`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({ userId, enabled: true, limit: limitNum })
+        });
+
+        const data = await response.json();
+        if (data.success) {
+          await loadBetaUsers();
+        } else {
+          alert('Failed: ' + data.error);
+        }
+      } catch (e) {
+        alert('Error: ' + e.message);
       }
     }
 

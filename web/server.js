@@ -25,6 +25,7 @@ const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const { Pool } = require('pg');
 const multer = require('multer');
+const ExcelJS = require('exceljs');
 
 const app = express();
 const server = http.createServer(app);
@@ -36,9 +37,6 @@ const JWT_EXPIRY = '7d';
 const crypto = require('crypto');
 const axios = require('axios');
 const XLSX = require('xlsx');
-
-// SportsCardPro API Config
-const SPORTSCARDSPRO_API_KEY = process.env.SPORTSCARDSPRO_API_KEY || '16643d2a854926e78a7935490e4af893cd4027e8';
 
 // eBay OAuth Config
 const EBAY_APP_ID = process.env.EBAY_APP_ID;
@@ -670,202 +668,6 @@ app.delete('/api/cards/:id', authenticateToken, async (req, res) => {
   }
 });
 
-// ============================================
-// SPORTSCARDSPRO PRICING API
-// ============================================
-
-// Get pricing for a single card from SportsCardPro
-app.get('/api/pricing/:cardId', authenticateToken, async (req, res) => {
-  try {
-    // Get card data
-    const cardResult = await pool.query(
-      'SELECT * FROM cards WHERE id = $1 AND user_id = $2',
-      [req.params.cardId, req.user.id]
-    );
-
-    if (cardResult.rows.length === 0) {
-      return res.status(404).json({ error: 'Card not found' });
-    }
-
-    const card = cardResult.rows[0];
-    const cardData = card.card_data || {};
-
-    // Build search query for SportsCardPro
-    const searchParts = [];
-    if (cardData.player) searchParts.push(cardData.player);
-    if (cardData.year) searchParts.push(cardData.year);
-    if (cardData.set_name) searchParts.push(cardData.set_name);
-    if (cardData.card_number) searchParts.push(cardData.card_number);
-    if (cardData.parallel && cardData.parallel !== 'Base') searchParts.push(cardData.parallel);
-
-    const searchQuery = searchParts.join(' ');
-
-    if (!searchQuery) {
-      return res.json({ error: 'Insufficient card data for pricing lookup' });
-    }
-
-    // Call SportsCardPro API
-    const scpResponse = await axios.get('https://www.sportscardspro.com/api/product', {
-      params: {
-        t: SPORTSCARDSPRO_API_KEY,
-        q: searchQuery
-      },
-      timeout: 10000
-    });
-
-    if (scpResponse.data.status !== 'success') {
-      return res.json({ error: 'Card not found in SportsCardPro', query: searchQuery });
-    }
-
-    // Parse pricing data (prices are in pennies)
-    const pricing = {
-      source: 'sportscardspro',
-      query: searchQuery,
-      productId: scpResponse.data.id,
-      productName: scpResponse.data['product-name'],
-      setName: scpResponse.data['console-name'],
-      prices: {
-        raw: scpResponse.data['loose-price'] ? scpResponse.data['loose-price'] / 100 : null,
-        psa7: scpResponse.data['cib-price'] ? scpResponse.data['cib-price'] / 100 : null,
-        psa8: scpResponse.data['new-price'] ? scpResponse.data['new-price'] / 100 : null,
-        psa9: scpResponse.data['graded-price'] ? scpResponse.data['graded-price'] / 100 : null,
-        psa10: scpResponse.data['manual-only-price'] ? scpResponse.data['manual-only-price'] / 100 : null,
-        sgc10: scpResponse.data['condition-18-price'] ? scpResponse.data['condition-18-price'] / 100 : null,
-        cgc10: scpResponse.data['condition-17-price'] ? scpResponse.data['condition-17-price'] / 100 : null
-      }
-    };
-
-    res.json(pricing);
-
-  } catch (e) {
-    console.error('SportsCardPro pricing error:', e.message);
-    res.status(500).json({ error: 'Failed to fetch pricing', message: e.message });
-  }
-});
-
-// Get pricing for multiple cards (bulk)
-app.post('/api/pricing/bulk', authenticateToken, async (req, res) => {
-  try {
-    const { cardIds } = req.body;
-
-    if (!cardIds || !Array.isArray(cardIds) || cardIds.length === 0) {
-      return res.status(400).json({ error: 'cardIds array required' });
-    }
-
-    // Limit to 20 cards per request
-    const limitedIds = cardIds.slice(0, 20);
-
-    // Get card data
-    const cardsResult = await pool.query(
-      'SELECT * FROM cards WHERE id = ANY($1) AND user_id = $2',
-      [limitedIds, req.user.id]
-    );
-
-    const results = [];
-
-    for (const card of cardsResult.rows) {
-      const cardData = card.card_data || {};
-
-      // Build search query
-      const searchParts = [];
-      if (cardData.player) searchParts.push(cardData.player);
-      if (cardData.year) searchParts.push(cardData.year);
-      if (cardData.set_name) searchParts.push(cardData.set_name);
-      if (cardData.card_number) searchParts.push(cardData.card_number);
-      if (cardData.parallel && cardData.parallel !== 'Base') searchParts.push(cardData.parallel);
-
-      const searchQuery = searchParts.join(' ');
-
-      if (!searchQuery) {
-        results.push({ cardId: card.id, error: 'Insufficient data' });
-        continue;
-      }
-
-      try {
-        // Call SportsCardPro API
-        const scpResponse = await axios.get('https://www.sportscardspro.com/api/product', {
-          params: {
-            t: SPORTSCARDSPRO_API_KEY,
-            q: searchQuery
-          },
-          timeout: 10000
-        });
-
-        if (scpResponse.data.status !== 'success') {
-          results.push({ cardId: card.id, error: 'Not found', query: searchQuery });
-          continue;
-        }
-
-        results.push({
-          cardId: card.id,
-          source: 'sportscardspro',
-          productId: scpResponse.data.id,
-          productName: scpResponse.data['product-name'],
-          prices: {
-            raw: scpResponse.data['loose-price'] ? scpResponse.data['loose-price'] / 100 : null,
-            psa9: scpResponse.data['graded-price'] ? scpResponse.data['graded-price'] / 100 : null,
-            psa10: scpResponse.data['manual-only-price'] ? scpResponse.data['manual-only-price'] / 100 : null
-          }
-        });
-
-        // Small delay to avoid rate limiting
-        await new Promise(r => setTimeout(r, 200));
-
-      } catch (err) {
-        results.push({ cardId: card.id, error: err.message });
-      }
-    }
-
-    res.json({ results, total: results.length });
-
-  } catch (e) {
-    console.error('Bulk pricing error:', e.message);
-    res.status(500).json({ error: 'Failed to fetch bulk pricing' });
-  }
-});
-
-// Search SportsCardPro directly (for Link Matrix)
-app.get('/api/pricing/search', authenticateToken, async (req, res) => {
-  try {
-    const { q } = req.query;
-
-    if (!q) {
-      return res.status(400).json({ error: 'Search query required' });
-    }
-
-    const scpResponse = await axios.get('https://www.sportscardspro.com/api/product', {
-      params: {
-        t: SPORTSCARDSPRO_API_KEY,
-        q: q
-      },
-      timeout: 10000
-    });
-
-    if (scpResponse.data.status !== 'success') {
-      return res.json({ error: 'Not found', query: q });
-    }
-
-    res.json({
-      source: 'sportscardspro',
-      query: q,
-      productId: scpResponse.data.id,
-      productName: scpResponse.data['product-name'],
-      setName: scpResponse.data['console-name'],
-      url: `https://www.sportscardspro.com/game/${scpResponse.data['console-name'].toLowerCase().replace(/\s+/g, '-')}/${scpResponse.data['product-name'].toLowerCase().replace(/\s+/g, '-')}`,
-      prices: {
-        raw: scpResponse.data['loose-price'] ? scpResponse.data['loose-price'] / 100 : null,
-        psa7: scpResponse.data['cib-price'] ? scpResponse.data['cib-price'] / 100 : null,
-        psa8: scpResponse.data['new-price'] ? scpResponse.data['new-price'] / 100 : null,
-        psa9: scpResponse.data['graded-price'] ? scpResponse.data['graded-price'] / 100 : null,
-        psa10: scpResponse.data['manual-only-price'] ? scpResponse.data['manual-only-price'] / 100 : null
-      }
-    });
-
-  } catch (e) {
-    console.error('SportsCardPro search error:', e.message);
-    res.status(500).json({ error: 'Search failed' });
-  }
-});
 
 // Reset all cards
 app.post('/api/reset', authenticateToken, async (req, res) => {
@@ -4655,7 +4457,7 @@ app.post('/api/export/whatnot', authenticateToken, async (req, res) => {
   }
 });
 
-// Export to SlabTrack-compatible CSV format
+// Export to SlabTrack Excel format with embedded images
 app.post('/api/export/slabtrack', authenticateToken, async (req, res) => {
   try {
     const { cardIds } = req.body;
@@ -4665,7 +4467,7 @@ app.post('/api/export/slabtrack', authenticateToken, async (req, res) => {
       return res.status(400).json({ error: 'No cards selected' });
     }
 
-    console.log(`[Export] SlabTrack CSV: ${cardIds.length} cards for user ${userId}`);
+    console.log(`[Export] SlabTrack Excel: ${cardIds.length} cards for user ${userId}`);
 
     const placeholders = cardIds.map((_, i) => `$${i + 1}`).join(',');
     const result = await pool.query(`
@@ -4675,50 +4477,136 @@ app.post('/api/export/slabtrack', authenticateToken, async (req, res) => {
 
     const cards = result.rows;
 
-    // SlabTrack-compatible headers
-    const headers = [
-      'ID', 'Player', 'Year', 'Set', 'Card #', 'Parallel', 'Sport', 'Team',
-      'Graded', 'Grading Co', 'Grade', 'Cert #', 'Auto', 'Numbered', 'Serial #',
-      'Print Run', 'Current Price', 'Added Date', 'Front Image URL', 'Back Image URL'
+    // Create Excel workbook
+    const workbook = new ExcelJS.Workbook();
+    workbook.creator = 'CardFlow';
+    workbook.created = new Date();
+    const worksheet = workbook.addWorksheet('Cards');
+
+    // Define columns with headers - images are separate columns
+    worksheet.columns = [
+      { header: 'Front Image', key: 'frontImage', width: 18 },
+      { header: 'Back Image', key: 'backImage', width: 18 },
+      { header: 'Player', key: 'player', width: 20 },
+      { header: 'Year', key: 'year', width: 8 },
+      { header: 'Set', key: 'set', width: 25 },
+      { header: 'Card #', key: 'cardNumber', width: 10 },
+      { header: 'Parallel', key: 'parallel', width: 15 },
+      { header: 'Sport', key: 'sport', width: 12 },
+      { header: 'Team', key: 'team', width: 15 },
+      { header: 'Graded', key: 'graded', width: 8 },
+      { header: 'Grading Co', key: 'gradingCo', width: 12 },
+      { header: 'Grade', key: 'grade', width: 8 },
+      { header: 'Cert #', key: 'cert', width: 15 },
+      { header: 'Auto', key: 'auto', width: 6 },
+      { header: 'Serial #', key: 'serial', width: 12 },
+      { header: 'Notes', key: 'notes', width: 20 },
+      { header: 'My Price', key: 'myPrice', width: 10 },
+      { header: 'Added Date', key: 'addedDate', width: 12 }
     ];
 
-    const csvRows = [
-      headers.join(','),
-      ...cards.map(card => {
-        const data = typeof card.card_data === 'string' ? JSON.parse(card.card_data) : card.card_data;
+    // Style header row
+    worksheet.getRow(1).font = { bold: true };
+    worksheet.getRow(1).fill = {
+      type: 'pattern',
+      pattern: 'solid',
+      fgColor: { argb: 'FF2563EB' }
+    };
+    worksheet.getRow(1).font = { bold: true, color: { argb: 'FFFFFFFF' } };
 
-        return [
-          card.id,
-          `"${data.player || ''}"`,
-          data.year || '',
-          `"${data.set_name || ''}"`,
-          data.card_number || '',
-          `"${data.parallel || 'Base'}"`,
-          data.sport || '',
-          `"${data.team || ''}"`,
-          data.is_graded ? 'Yes' : 'No',
-          data.grading_company || '',
-          data.grade || '',
-          data.cert_number || '',
-          data.is_autograph ? 'Yes' : 'No',
-          data.serial_number ? 'Yes' : 'No',
-          data.serial_number || '',
-          '',
-          '',
-          new Date(card.created_at).toISOString(),
-          card.front_image_path || '',
-          card.back_image_path || ''
-        ].join(',');
-      })
-    ];
+    // Helper function to fetch image as buffer
+    const fetchImageBuffer = async (url) => {
+      if (!url) return null;
+      try {
+        const axios = require('axios');
+        const response = await axios.get(url, { responseType: 'arraybuffer', timeout: 10000 });
+        return Buffer.from(response.data);
+      } catch (e) {
+        console.error(`Failed to fetch image ${url}:`, e.message);
+        return null;
+      }
+    };
 
-    const csv = csvRows.join('\n');
+    // Process each card
+    const imageHeight = 100; // pixels
+    const rowHeight = 80; // Excel row height units
 
-    res.setHeader('Content-Type', 'text/csv');
-    res.setHeader('Content-Disposition', `attachment; filename="CardFlow-SlabTrack-${Date.now()}.csv"`);
-    res.send(csv);
+    for (let i = 0; i < cards.length; i++) {
+      const card = cards[i];
+      const data = typeof card.card_data === 'string' ? JSON.parse(card.card_data) : card.card_data;
+      const rowNum = i + 2; // Row 1 is header
 
-    console.log(`[Export] SlabTrack CSV complete: ${cards.length} cards`);
+      // Add row data
+      const row = worksheet.addRow({
+        frontImage: '',
+        backImage: '',
+        player: data.player || '',
+        year: data.year || '',
+        set: data.set_name || '',
+        cardNumber: data.card_number || '',
+        parallel: data.parallel || 'Base',
+        sport: data.sport || '',
+        team: data.team || '',
+        graded: data.is_graded ? 'Yes' : 'No',
+        gradingCo: data.grading_company || '',
+        grade: data.grade || '',
+        cert: data.cert_number || '',
+        auto: data.is_autograph ? 'Yes' : 'No',
+        serial: data.serial_number || '',
+        notes: data.notes || '',
+        myPrice: data.my_price || '',
+        addedDate: new Date(card.created_at).toLocaleDateString()
+      });
+
+      // Set row height for images
+      row.height = rowHeight;
+
+      // Fetch and embed front image
+      const frontUrl = card.front_image_path;
+      if (frontUrl) {
+        const frontBuffer = await fetchImageBuffer(frontUrl);
+        if (frontBuffer) {
+          const frontImageId = workbook.addImage({
+            buffer: frontBuffer,
+            extension: 'png'
+          });
+          worksheet.addImage(frontImageId, {
+            tl: { col: 0, row: rowNum - 1 },
+            ext: { width: 100, height: imageHeight }
+          });
+        }
+      }
+
+      // Fetch and embed back image
+      const backUrl = card.back_image_path;
+      if (backUrl) {
+        const backBuffer = await fetchImageBuffer(backUrl);
+        if (backBuffer) {
+          const backImageId = workbook.addImage({
+            buffer: backBuffer,
+            extension: 'png'
+          });
+          worksheet.addImage(backImageId, {
+            tl: { col: 1, row: rowNum - 1 },
+            ext: { width: 100, height: imageHeight }
+          });
+        }
+      }
+
+      // Log progress for large exports
+      if ((i + 1) % 10 === 0) {
+        console.log(`[Export] Processed ${i + 1}/${cards.length} cards...`);
+      }
+    }
+
+    // Generate Excel buffer
+    const buffer = await workbook.xlsx.writeBuffer();
+
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="CardFlow-SlabTrack-${Date.now()}.xlsx"`);
+    res.send(buffer);
+
+    console.log(`[Export] SlabTrack Excel complete: ${cards.length} cards with embedded images`);
 
   } catch (e) {
     console.error('SlabTrack export error:', e);
@@ -4904,86 +4792,879 @@ app.post('/api/export/cardladder', authenticateToken, async (req, res) => {
   }
 });
 
-// Export for SportsCardsPro (CSV format for their collection)
-app.post('/api/export/sportscardspro', authenticateToken, async (req, res) => {
-  try {
-    const { cardIds } = req.body;
-    const userId = req.user.id;
+// ============================================
+// AI AGENT ANALYSIS (Beta Feature)
+// ============================================
 
-    if (!cardIds || cardIds.length === 0) {
-      return res.status(400).json({ error: 'No cards selected' });
+// Supported AI providers configuration
+const AI_PROVIDERS = {
+  anthropic: {
+    name: 'Anthropic Claude',
+    models: ['claude-sonnet-4-20250514', 'claude-3-5-sonnet-20241022'],
+    defaultModel: 'claude-sonnet-4-20250514',
+    supportsVision: true,
+    supportsWebSearch: true,
+    costPer1M: { input: 3, output: 15, cacheRead: 0.30, cacheWrite: 3.75 }
+  },
+  openai: {
+    name: 'OpenAI GPT-4',
+    models: ['gpt-4o', 'gpt-4-turbo'],
+    defaultModel: 'gpt-4o',
+    supportsVision: true,
+    supportsWebSearch: false,
+    costPer1M: { input: 2.5, output: 10 }
+  },
+  google: {
+    name: 'Google Gemini',
+    models: ['gemini-1.5-pro', 'gemini-1.5-flash'],
+    defaultModel: 'gemini-1.5-pro',
+    supportsVision: true,
+    supportsWebSearch: true,
+    costPer1M: { input: 1.25, output: 5 }
+  }
+};
+
+// Helper: Calculate cost from tokens
+function calculateAgentCost(provider, tokens) {
+  const pricing = AI_PROVIDERS[provider]?.costPer1M || { input: 3, output: 15 };
+  let cost = (tokens.input / 1_000_000 * pricing.input) +
+             (tokens.output / 1_000_000 * pricing.output);
+  if (tokens.cacheRead && pricing.cacheRead) {
+    cost += tokens.cacheRead / 1_000_000 * pricing.cacheRead;
+  }
+  if (tokens.cacheWrite && pricing.cacheWrite) {
+    cost += tokens.cacheWrite / 1_000_000 * pricing.cacheWrite;
+  }
+  return parseFloat(cost.toFixed(6));
+}
+
+// Helper: Check if user can analyze (quota check)
+async function canUserAnalyze(userId) {
+  const result = await pool.query(
+    'SELECT agent_analyses_used, agent_analyses_limit, agent_analyses_reset, beta_features FROM users WHERE id = $1',
+    [userId]
+  );
+  if (result.rows.length === 0) return { allowed: false, reason: 'User not found' };
+
+  const user = result.rows[0];
+  const betaFeatures = user.beta_features || {};
+
+  // Check if beta feature is enabled
+  if (!betaFeatures.agentAnalysis) {
+    return { allowed: false, reason: 'Agent analysis not enabled for your account', needsBeta: true };
+  }
+
+  // Reset quota if needed (monthly reset)
+  const now = new Date();
+  if (!user.agent_analyses_reset || new Date(user.agent_analyses_reset) < now) {
+    const nextReset = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+    await pool.query(
+      'UPDATE users SET agent_analyses_used = 0, agent_analyses_reset = $1 WHERE id = $2',
+      [nextReset, userId]
+    );
+    user.agent_analyses_used = 0;
+  }
+
+  if (user.agent_analyses_used >= user.agent_analyses_limit) {
+    return {
+      allowed: false,
+      reason: 'Monthly analysis quota exceeded',
+      used: user.agent_analyses_used,
+      limit: user.agent_analyses_limit,
+      needsUpgrade: true
+    };
+  }
+
+  return {
+    allowed: true,
+    used: user.agent_analyses_used,
+    limit: user.agent_analyses_limit,
+    remaining: user.agent_analyses_limit - user.agent_analyses_used
+  };
+}
+
+// Helper: Track analysis in database
+async function trackAgentAnalysis(data) {
+  try {
+    await pool.query(`
+      INSERT INTO agent_analyses (
+        user_id, card_id, analysis_type, ai_provider, model, cost,
+        tokens_input, tokens_output, cache_read_tokens, cache_write_tokens,
+        response_time, success, error_type, card_data, result_summary, analysis_result, source
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+    `, [
+      data.userId,
+      data.cardId || null,
+      data.analysisType || 'single-card',
+      data.provider || 'anthropic',
+      data.model,
+      data.cost || 0,
+      data.tokens?.input || 0,
+      data.tokens?.output || 0,
+      data.tokens?.cacheRead || 0,
+      data.tokens?.cacheWrite || 0,
+      data.responseTime || null,
+      data.success !== false,
+      data.errorType || null,
+      JSON.stringify(data.cardData || {}),
+      JSON.stringify(data.resultSummary || {}),
+      JSON.stringify(data.analysisResult || {}),
+      data.source || 'cardflow-web'
+    ]);
+  } catch (e) {
+    console.error('[Agent] Failed to track analysis:', e);
+  }
+}
+
+// Helper: Generate analysis prompt
+function generateAnalysisPrompt(card) {
+  const cardInfo = card ? `
+CARD DETAILS (for context):
+- Year: ${card.year || 'Unknown'}
+- Set: ${card.set_name || 'Unknown'}
+- Player: ${card.player || 'Unknown'}
+- Number: ${card.card_number || 'Unknown'}
+- Parallel: ${card.parallel || 'Base'}
+` : '';
+
+  return `You are an expert sports card appraiser with decades of experience. Analyze this card photo.
+${cardInfo}
+PROVIDE DETAILED ANALYSIS:
+
+1. IDENTIFICATION (if not provided or to verify):
+   - Year, Set, Player, Card Number
+   - Any parallel or variation
+
+2. CONDITION ASSESSMENT:
+   - Overall grade estimate (e.g., "EX to NM", "VG", "MINT")
+   - Corners condition (Sharp, Slightly rounded, Dinged, etc.)
+   - Centering quality (Perfect, Slight tilt, Off-center, etc.)
+   - Surface condition (Clean, Scratches, Print defects, etc.)
+   - Edge condition
+   - Any notable flaws
+   - PSA/BGS grade potential estimate
+
+3. MARKET VALUE:
+   - Search for recent eBay sold listings for this exact card
+   - Recent raw card sales (last 90 days)
+   - Graded card sales (PSA 9, PSA 10 if available)
+   - Current market value range for raw card
+   - Context about set/player (HOF status, rookie, popularity)
+
+4. RECOMMENDATION:
+   - Should they: HOLD, SELL, or GRADE?
+   - Clear reasoning for your recommendation
+   - Is grading worth it? (consider grading costs ~$20-50)
+   - Best time/platform to sell if applicable
+
+USE WEB SEARCH to find current eBay sold listings and pricing data. Be specific with prices found.
+
+FORMAT YOUR RESPONSE AS VALID JSON with this exact structure:
+{
+  "identification": {
+    "year": "string",
+    "set": "string",
+    "player": "string",
+    "number": "string",
+    "parallel": "string or null",
+    "confidence": 0.0-1.0
+  },
+  "condition": {
+    "grade": "string (e.g., 'EX-NM', 'MINT')",
+    "corners": "string",
+    "centering": "string",
+    "surface": "string",
+    "edges": "string",
+    "flaws": ["string array of any flaws"],
+    "gradingPotential": "string (e.g., 'PSA 8 candidate', 'PSA 9-10 potential')"
+  },
+  "marketData": {
+    "recentSales": [{"price": number, "condition": "string", "date": "string", "source": "eBay"}],
+    "gradedSales": [{"grade": "string", "price": number or null, "note": "string"}],
+    "valueRange": {"low": number, "high": number, "currency": "USD"},
+    "context": "string explaining market factors"
+  },
+  "advice": {
+    "action": "HOLD" or "SELL" or "GRADE",
+    "reasoning": "string",
+    "gradingAdvice": "string",
+    "sellAdvice": "string or null",
+    "holdReason": "string or null"
+  }
+}`;
+}
+
+// GET /api/agent/providers - List available AI providers
+app.get('/api/agent/providers', authenticateToken, (req, res) => {
+  const providers = Object.entries(AI_PROVIDERS).map(([key, config]) => ({
+    id: key,
+    name: config.name,
+    models: config.models,
+    defaultModel: config.defaultModel,
+    supportsVision: config.supportsVision,
+    supportsWebSearch: config.supportsWebSearch
+  }));
+  res.json({ providers });
+});
+
+// GET /api/agent/usage - Get user's analysis usage stats
+app.get('/api/agent/usage', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const quotaCheck = await canUserAnalyze(userId);
+
+    // Get user's API keys (masked)
+    const userResult = await pool.query(
+      'SELECT anthropic_api_key, openai_api_key, google_api_key, preferred_ai_provider, beta_features FROM users WHERE id = $1',
+      [userId]
+    );
+    const user = userResult.rows[0];
+
+    res.json({
+      quota: {
+        used: quotaCheck.used || 0,
+        limit: quotaCheck.limit || 3,
+        remaining: quotaCheck.remaining || 0,
+        canAnalyze: quotaCheck.allowed
+      },
+      betaEnabled: user?.beta_features?.agentAnalysis || false,
+      apiKeys: {
+        anthropic: user?.anthropic_api_key ? '....' + user.anthropic_api_key.slice(-4) : null,
+        openai: user?.openai_api_key ? '....' + user.openai_api_key.slice(-4) : null,
+        google: user?.google_api_key ? '....' + user.google_api_key.slice(-4) : null
+      },
+      preferredProvider: user?.preferred_ai_provider || 'anthropic'
+    });
+  } catch (e) {
+    console.error('[Agent] Usage check error:', e);
+    res.status(500).json({ error: 'Failed to get usage stats' });
+  }
+});
+
+// POST /api/agent/save-settings - Save user's AI settings
+app.post('/api/agent/save-settings', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { anthropicKey, openaiKey, googleKey, preferredProvider } = req.body;
+
+    const updates = [];
+    const values = [];
+    let paramIndex = 1;
+
+    if (anthropicKey !== undefined) {
+      updates.push(`anthropic_api_key = $${paramIndex++}`);
+      values.push(anthropicKey || null);
+    }
+    if (openaiKey !== undefined) {
+      updates.push(`openai_api_key = $${paramIndex++}`);
+      values.push(openaiKey || null);
+    }
+    if (googleKey !== undefined) {
+      updates.push(`google_api_key = $${paramIndex++}`);
+      values.push(googleKey || null);
+    }
+    if (preferredProvider) {
+      updates.push(`preferred_ai_provider = $${paramIndex++}`);
+      values.push(preferredProvider);
     }
 
-    const placeholders = cardIds.map((_, i) => `$${i + 1}`).join(',');
-    const result = await pool.query(`
-      SELECT * FROM cards
-      WHERE id IN (${placeholders}) AND user_id = $${cardIds.length + 1}
-    `, [...cardIds, userId]);
+    if (updates.length > 0) {
+      values.push(userId);
+      await pool.query(
+        `UPDATE users SET ${updates.join(', ')} WHERE id = $${paramIndex}`,
+        values
+      );
+    }
 
-    // SportsCardsPro format (matches their text import)
-    // Format: "Year Set Player #Number [Parallel] [Company Grade]"
-    const headers = [
-      'Card Name',
-      'Year',
-      'Set',
-      'Player',
-      'Card Number',
-      'Parallel',
-      'Grading Company',
-      'Grade',
-      'Cert',
-      'Quantity'
-    ];
+    res.json({ success: true, message: 'Settings saved' });
+  } catch (e) {
+    console.error('[Agent] Save settings error:', e);
+    res.status(500).json({ error: 'Failed to save settings' });
+  }
+});
 
-    const rows = result.rows.map(card => {
-      const data = typeof card.card_data === 'string' ? JSON.parse(card.card_data) : card.card_data;
+// POST /api/agent/analyze-card - Main analysis endpoint
+app.post('/api/agent/analyze-card', authenticateToken, async (req, res) => {
+  const startTime = Date.now();
+  const userId = req.user.id;
 
-      // Build card name in SportsCardsPro format
-      const nameParts = [];
-      if (data.year) nameParts.push(data.year);
-      if (data.set_name) nameParts.push(data.set_name);
-      if (data.player || data.subject) nameParts.push(data.player || data.subject);
-      if (data.card_number) nameParts.push(`#${data.card_number}`);
-      if (data.parallel && data.parallel !== 'Base') nameParts.push(data.parallel);
-      if (data.is_graded && data.grading_company && data.grade) {
-        nameParts.push(`${data.grading_company} ${data.grade}`);
+  try {
+    const { cardId, photoUrl, provider = 'anthropic', apiKey } = req.body;
+
+    // 1. CHECK QUOTA
+    const quotaCheck = await canUserAnalyze(userId);
+    if (!quotaCheck.allowed) {
+      return res.status(403).json({
+        success: false,
+        error: quotaCheck.reason,
+        needsUpgrade: quotaCheck.needsUpgrade,
+        needsBeta: quotaCheck.needsBeta,
+        usage: { used: quotaCheck.used, limit: quotaCheck.limit }
+      });
+    }
+
+    // 2. GET API KEY (from request or user's saved key)
+    let userApiKey = apiKey;
+    if (!userApiKey) {
+      const keyResult = await pool.query(
+        `SELECT ${provider}_api_key as api_key FROM users WHERE id = $1`,
+        [userId]
+      );
+      userApiKey = keyResult.rows[0]?.api_key;
+    }
+
+    if (!userApiKey) {
+      return res.status(400).json({
+        success: false,
+        error: `No ${AI_PROVIDERS[provider]?.name || provider} API key provided. Please add your API key in settings.`,
+        needsApiKey: true
+      });
+    }
+
+    // 3. GET CARD DATA (if cardId provided)
+    let card = null;
+    if (cardId) {
+      const cardResult = await pool.query(
+        'SELECT * FROM cards WHERE id = $1 AND user_id = $2',
+        [cardId, userId]
+      );
+      if (cardResult.rows.length > 0) {
+        const row = cardResult.rows[0];
+        const cardData = typeof row.card_data === 'string' ? JSON.parse(row.card_data) : row.card_data;
+        card = { ...cardData, front: row.front_image_path, back: row.back_image_path };
+      }
+    }
+
+    // Use card's front image if no photoUrl provided
+    const imageUrl = photoUrl || card?.front;
+    if (!imageUrl) {
+      return res.status(400).json({
+        success: false,
+        error: 'No image URL provided'
+      });
+    }
+
+    // 4. CALL AI API
+    let analysisResult, tokensUsed, modelUsed;
+
+    if (provider === 'anthropic') {
+      // Anthropic Claude API
+      const claudeResponse = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'x-api-key': userApiKey,
+          'anthropic-version': '2023-06-01',
+          'content-type': 'application/json'
+        },
+        body: JSON.stringify({
+          model: AI_PROVIDERS.anthropic.defaultModel,
+          max_tokens: 3000,
+          messages: [{
+            role: 'user',
+            content: [
+              {
+                type: 'image',
+                source: { type: 'url', url: imageUrl }
+              },
+              {
+                type: 'text',
+                text: generateAnalysisPrompt(card)
+              }
+            ]
+          }],
+          tools: [{ type: 'web_search_20250305', name: 'web_search' }]
+        })
+      });
+
+      if (!claudeResponse.ok) {
+        const errorData = await claudeResponse.json().catch(() => ({}));
+        throw new Error(errorData.error?.message || `Claude API error: ${claudeResponse.status}`);
       }
 
-      return [
-        nameParts.join(' '),
-        data.year || '',
-        data.set_name || '',
-        data.player || data.subject || '',
-        data.card_number || '',
-        data.parallel && data.parallel !== 'Base' ? data.parallel : '',
-        data.is_graded ? (data.grading_company || '') : '',
-        data.is_graded ? (data.grade || '') : '',
-        data.cert_number || '',
-        '1' // Quantity
-      ];
+      const claudeData = await claudeResponse.json();
+      modelUsed = claudeData.model || AI_PROVIDERS.anthropic.defaultModel;
+      tokensUsed = {
+        input: claudeData.usage?.input_tokens || 0,
+        output: claudeData.usage?.output_tokens || 0,
+        cacheRead: claudeData.usage?.cache_read_input_tokens || 0,
+        cacheWrite: claudeData.usage?.cache_creation_input_tokens || 0
+      };
+
+      // Extract text response
+      const analysisText = claudeData.content
+        .filter(block => block.type === 'text')
+        .map(block => block.text)
+        .join('\n');
+
+      // Parse JSON from response
+      const jsonMatch = analysisText.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        analysisResult = JSON.parse(jsonMatch[0]);
+      } else {
+        throw new Error('Failed to parse analysis response');
+      }
+
+    } else if (provider === 'openai') {
+      // OpenAI GPT-4 Vision API
+      const openaiResponse = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${userApiKey}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          model: AI_PROVIDERS.openai.defaultModel,
+          max_tokens: 3000,
+          messages: [{
+            role: 'user',
+            content: [
+              { type: 'image_url', image_url: { url: imageUrl } },
+              { type: 'text', text: generateAnalysisPrompt(card) }
+            ]
+          }],
+          response_format: { type: 'json_object' }
+        })
+      });
+
+      if (!openaiResponse.ok) {
+        const errorData = await openaiResponse.json().catch(() => ({}));
+        throw new Error(errorData.error?.message || `OpenAI API error: ${openaiResponse.status}`);
+      }
+
+      const openaiData = await openaiResponse.json();
+      modelUsed = openaiData.model || AI_PROVIDERS.openai.defaultModel;
+      tokensUsed = {
+        input: openaiData.usage?.prompt_tokens || 0,
+        output: openaiData.usage?.completion_tokens || 0
+      };
+      analysisResult = JSON.parse(openaiData.choices[0].message.content);
+
+    } else if (provider === 'google') {
+      // Google Gemini API
+      const geminiResponse = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${AI_PROVIDERS.google.defaultModel}:generateContent?key=${userApiKey}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [{
+              parts: [
+                { inline_data: { mime_type: 'image/jpeg', data: await fetchImageAsBase64(imageUrl) } },
+                { text: generateAnalysisPrompt(card) }
+              ]
+            }],
+            generationConfig: { maxOutputTokens: 3000 }
+          })
+        }
+      );
+
+      if (!geminiResponse.ok) {
+        const errorData = await geminiResponse.json().catch(() => ({}));
+        throw new Error(errorData.error?.message || `Gemini API error: ${geminiResponse.status}`);
+      }
+
+      const geminiData = await geminiResponse.json();
+      modelUsed = AI_PROVIDERS.google.defaultModel;
+      tokensUsed = {
+        input: geminiData.usageMetadata?.promptTokenCount || 0,
+        output: geminiData.usageMetadata?.candidatesTokenCount || 0
+      };
+
+      const responseText = geminiData.candidates[0].content.parts[0].text;
+      const jsonMatch = responseText.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        analysisResult = JSON.parse(jsonMatch[0]);
+      } else {
+        throw new Error('Failed to parse Gemini response');
+      }
+
+    } else {
+      return res.status(400).json({ success: false, error: 'Unsupported AI provider' });
+    }
+
+    const responseTime = (Date.now() - startTime) / 1000;
+    const cost = calculateAgentCost(provider, tokensUsed);
+
+    // 5. UPDATE USER QUOTA
+    await pool.query(
+      'UPDATE users SET agent_analyses_used = agent_analyses_used + 1 WHERE id = $1',
+      [userId]
+    );
+
+    // 6. TRACK ANALYSIS
+    await trackAgentAnalysis({
+      userId,
+      cardId,
+      analysisType: 'single-card',
+      provider,
+      model: modelUsed,
+      cost,
+      tokens: tokensUsed,
+      responseTime,
+      success: true,
+      cardData: card ? { year: card.year, set_name: card.set_name, player: card.player, card_number: card.card_number } : null,
+      resultSummary: {
+        condition: analysisResult.condition?.grade,
+        value: analysisResult.marketData?.valueRange ? `$${analysisResult.marketData.valueRange.low}-${analysisResult.marketData.valueRange.high}` : null,
+        action: analysisResult.advice?.action
+      },
+      analysisResult
     });
 
-    // Build CSV
-    const escapeCSV = (val) => {
-      if (val === null || val === undefined) return '';
-      const str = String(val);
-      if (str.includes(',') || str.includes('"') || str.includes('\n')) {
-        return '"' + str.replace(/"/g, '""') + '"';
+    // 7. RETURN RESPONSE
+    res.json({
+      success: true,
+      analysis: analysisResult,
+      usage: {
+        analysesRemaining: quotaCheck.remaining - 1,
+        limit: quotaCheck.limit,
+        resetDate: new Date(new Date().getFullYear(), new Date().getMonth() + 1, 1).toISOString()
+      },
+      meta: {
+        provider,
+        model: modelUsed,
+        cost,
+        responseTime,
+        tokensUsed
       }
-      return str;
-    };
+    });
 
-    const csv = [
-      headers.join(','),
-      ...rows.map(row => row.map(escapeCSV).join(','))
-    ].join('\n');
+  } catch (error) {
+    console.error('[Agent] Analysis error:', error);
+
+    // Track failed analysis
+    await trackAgentAnalysis({
+      userId,
+      success: false,
+      errorType: error.message.includes('API key') || error.message.includes('401') ? 'INVALID_API_KEY' :
+                 error.message.includes('rate') ? 'RATE_LIMIT' :
+                 error.message.includes('timeout') ? 'TIMEOUT' : 'API_ERROR',
+      responseTime: (Date.now() - startTime) / 1000
+    });
+
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Analysis failed',
+      errorType: error.message.includes('API key') ? 'INVALID_API_KEY' : 'API_ERROR'
+    });
+  }
+});
+
+// Helper: Fetch image as base64 (for Gemini)
+async function fetchImageAsBase64(url) {
+  const response = await axios.get(url, { responseType: 'arraybuffer' });
+  return Buffer.from(response.data).toString('base64');
+}
+
+// ============================================
+// ADMIN: AGENT ANALYTICS
+// ============================================
+
+// GET /api/admin/agent-analytics/overview
+app.get('/api/admin/agent-analytics/overview', authenticateToken, async (req, res) => {
+  try {
+    // Check admin
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'Admin access required' });
+    }
+
+    const now = new Date();
+    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const last30Days = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+
+    // Today's stats
+    const todayResult = await pool.query(`
+      SELECT
+        COUNT(*) as total_analyses,
+        COALESCE(SUM(cost), 0) as total_cost,
+        COUNT(DISTINCT user_id) as unique_users,
+        COALESCE(AVG(response_time), 0) as avg_response_time,
+        COUNT(*) FILTER (WHERE success = false) as errors
+      FROM agent_analyses
+      WHERE timestamp >= $1
+    `, [startOfToday]);
+
+    // This month's stats
+    const monthResult = await pool.query(`
+      SELECT
+        COUNT(*) as total_analyses,
+        COALESCE(SUM(cost), 0) as total_cost,
+        COUNT(DISTINCT user_id) as unique_users
+      FROM agent_analyses
+      WHERE timestamp >= $1
+    `, [startOfMonth]);
+
+    // All-time stats
+    const allTimeResult = await pool.query(`
+      SELECT
+        COUNT(*) as total_analyses,
+        COALESCE(SUM(cost), 0) as total_cost,
+        COUNT(DISTINCT user_id) as unique_users
+      FROM agent_analyses
+    `);
+
+    // By provider
+    const providerResult = await pool.query(`
+      SELECT
+        ai_provider,
+        COUNT(*) as count,
+        COALESCE(SUM(cost), 0) as cost
+      FROM agent_analyses
+      GROUP BY ai_provider
+    `);
+
+    // By plan (would need join with users)
+    const planResult = await pool.query(`
+      SELECT
+        u.subscription_tier as plan,
+        COUNT(a.*) as count,
+        COALESCE(SUM(a.cost), 0) as cost
+      FROM agent_analyses a
+      JOIN users u ON a.user_id = u.id
+      GROUP BY u.subscription_tier
+    `);
+
+    // Cost trend (last 30 days)
+    const trendResult = await pool.query(`
+      SELECT
+        DATE(timestamp) as date,
+        COUNT(*) as count,
+        COALESCE(SUM(cost), 0) as cost
+      FROM agent_analyses
+      WHERE timestamp >= $1
+      GROUP BY DATE(timestamp)
+      ORDER BY date
+    `, [last30Days]);
+
+    // Error rate
+    const errorResult = await pool.query(`
+      SELECT
+        COUNT(*) FILTER (WHERE success = false) as errors,
+        COUNT(*) as total
+      FROM agent_analyses
+    `);
+
+    res.json({
+      today: {
+        analyses: parseInt(todayResult.rows[0].total_analyses),
+        cost: parseFloat(todayResult.rows[0].total_cost),
+        users: parseInt(todayResult.rows[0].unique_users),
+        avgResponseTime: parseFloat(todayResult.rows[0].avg_response_time).toFixed(2),
+        errors: parseInt(todayResult.rows[0].errors)
+      },
+      month: {
+        analyses: parseInt(monthResult.rows[0].total_analyses),
+        cost: parseFloat(monthResult.rows[0].total_cost),
+        users: parseInt(monthResult.rows[0].unique_users)
+      },
+      allTime: {
+        analyses: parseInt(allTimeResult.rows[0].total_analyses),
+        cost: parseFloat(allTimeResult.rows[0].total_cost),
+        users: parseInt(allTimeResult.rows[0].unique_users)
+      },
+      byProvider: providerResult.rows,
+      byPlan: planResult.rows,
+      costTrend: trendResult.rows,
+      errorRate: errorResult.rows[0].total > 0
+        ? ((errorResult.rows[0].errors / errorResult.rows[0].total) * 100).toFixed(2) + '%'
+        : '0%'
+    });
+
+  } catch (e) {
+    console.error('[Admin Analytics] Overview error:', e);
+    res.status(500).json({ error: 'Failed to load analytics' });
+  }
+});
+
+// GET /api/admin/agent-analytics/users
+app.get('/api/admin/agent-analytics/users', authenticateToken, async (req, res) => {
+  try {
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'Admin access required' });
+    }
+
+    const { limit = 50 } = req.query;
+
+    const result = await pool.query(`
+      SELECT
+        u.id,
+        u.email,
+        u.subscription_tier,
+        u.agent_analyses_used,
+        u.agent_analyses_limit,
+        u.beta_features,
+        COUNT(a.id) as total_analyses,
+        COALESCE(SUM(a.cost), 0) as total_cost,
+        MAX(a.timestamp) as last_analysis,
+        COALESCE(AVG(a.response_time), 0) as avg_response_time
+      FROM users u
+      LEFT JOIN agent_analyses a ON u.id = a.user_id
+      GROUP BY u.id
+      HAVING COUNT(a.id) > 0
+      ORDER BY total_analyses DESC
+      LIMIT $1
+    `, [parseInt(limit)]);
+
+    res.json({ users: result.rows });
+
+  } catch (e) {
+    console.error('[Admin Analytics] Users error:', e);
+    res.status(500).json({ error: 'Failed to load user stats' });
+  }
+});
+
+// GET /api/admin/agent-analytics/recent
+app.get('/api/admin/agent-analytics/recent', authenticateToken, async (req, res) => {
+  try {
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'Admin access required' });
+    }
+
+    const { limit = 50 } = req.query;
+
+    const result = await pool.query(`
+      SELECT
+        a.*,
+        u.email as user_email
+      FROM agent_analyses a
+      JOIN users u ON a.user_id = u.id
+      ORDER BY a.timestamp DESC
+      LIMIT $1
+    `, [parseInt(limit)]);
+
+    res.json({ analyses: result.rows });
+
+  } catch (e) {
+    console.error('[Admin Analytics] Recent error:', e);
+    res.status(500).json({ error: 'Failed to load recent analyses' });
+  }
+});
+
+// GET /api/admin/agent-analytics/errors
+app.get('/api/admin/agent-analytics/errors', authenticateToken, async (req, res) => {
+  try {
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'Admin access required' });
+    }
+
+    // Error breakdown
+    const errorTypes = await pool.query(`
+      SELECT
+        error_type,
+        COUNT(*) as count,
+        MAX(timestamp) as last_seen
+      FROM agent_analyses
+      WHERE success = false
+      GROUP BY error_type
+      ORDER BY count DESC
+    `);
+
+    // Recent errors
+    const recentErrors = await pool.query(`
+      SELECT
+        a.*,
+        u.email as user_email
+      FROM agent_analyses a
+      JOIN users u ON a.user_id = u.id
+      WHERE a.success = false
+      ORDER BY a.timestamp DESC
+      LIMIT 20
+    `);
+
+    res.json({
+      byType: errorTypes.rows,
+      recent: recentErrors.rows
+    });
+
+  } catch (e) {
+    console.error('[Admin Analytics] Errors error:', e);
+    res.status(500).json({ error: 'Failed to load error stats' });
+  }
+});
+
+// POST /api/admin/agent-analytics/enable-beta - Enable beta for a user
+app.post('/api/admin/agent-analytics/enable-beta', authenticateToken, async (req, res) => {
+  try {
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'Admin access required' });
+    }
+
+    const { userId, enabled = true, limit = 3 } = req.body;
+
+    await pool.query(`
+      UPDATE users
+      SET beta_features = jsonb_set(COALESCE(beta_features, '{}'), '{agentAnalysis}', $1::jsonb),
+          agent_analyses_limit = $2
+      WHERE id = $3
+    `, [JSON.stringify(enabled), limit, userId]);
+
+    res.json({ success: true, message: `Beta ${enabled ? 'enabled' : 'disabled'} for user` });
+
+  } catch (e) {
+    console.error('[Admin] Enable beta error:', e);
+    res.status(500).json({ error: 'Failed to update user' });
+  }
+});
+
+// POST /api/admin/agent-analytics/export
+app.post('/api/admin/agent-analytics/export', authenticateToken, async (req, res) => {
+  try {
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'Admin access required' });
+    }
+
+    const { startDate, endDate } = req.body;
+
+    let query = `
+      SELECT
+        a.*,
+        u.email as user_email,
+        u.subscription_tier
+      FROM agent_analyses a
+      JOIN users u ON a.user_id = u.id
+    `;
+    const params = [];
+
+    if (startDate || endDate) {
+      const conditions = [];
+      if (startDate) {
+        params.push(startDate);
+        conditions.push(`a.timestamp >= $${params.length}`);
+      }
+      if (endDate) {
+        params.push(endDate);
+        conditions.push(`a.timestamp <= $${params.length}`);
+      }
+      query += ' WHERE ' + conditions.join(' AND ');
+    }
+
+    query += ' ORDER BY a.timestamp DESC';
+
+    const result = await pool.query(query, params);
+
+    // Convert to CSV
+    const headers = ['Timestamp', 'User Email', 'Plan', 'Provider', 'Model', 'Cost', 'Success', 'Response Time', 'Action'];
+    const rows = result.rows.map(r => [
+      r.timestamp,
+      r.user_email,
+      r.subscription_tier,
+      r.ai_provider,
+      r.model,
+      r.cost,
+      r.success,
+      r.response_time,
+      r.result_summary?.action || ''
+    ]);
+
+    const csv = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
 
     res.setHeader('Content-Type', 'text/csv');
-    res.setHeader('Content-Disposition', `attachment; filename="CardFlow-SportsCardsPro-${Date.now()}.csv"`);
+    res.setHeader('Content-Disposition', `attachment; filename="agent-analytics-${Date.now()}.csv"`);
     res.send(csv);
 
   } catch (e) {
-    console.error('SportsCardsPro export error:', e);
+    console.error('[Admin Analytics] Export error:', e);
     res.status(500).json({ error: 'Export failed' });
   }
 });
