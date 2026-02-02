@@ -4457,7 +4457,8 @@ app.post('/api/export/whatnot', authenticateToken, async (req, res) => {
   }
 });
 
-// Export to SlabTrack Excel format with embedded images
+// Export to SlabTrack Excel format with exact column names for import compatibility
+// SlabTrack expects specific column names and data types (booleans, not Yes/No)
 app.post('/api/export/slabtrack', authenticateToken, async (req, res) => {
   try {
     const { cardIds } = req.body;
@@ -4483,26 +4484,28 @@ app.post('/api/export/slabtrack', authenticateToken, async (req, res) => {
     workbook.created = new Date();
     const worksheet = workbook.addWorksheet('Cards');
 
-    // Define columns with headers - images are separate columns
+    // SlabTrack exact column names (required for import compatibility)
     worksheet.columns = [
-      { header: 'Front Image', key: 'frontImage', width: 18 },
-      { header: 'Back Image', key: 'backImage', width: 18 },
-      { header: 'Player', key: 'player', width: 20 },
-      { header: 'Year', key: 'year', width: 8 },
-      { header: 'Set', key: 'set', width: 25 },
-      { header: 'Card #', key: 'cardNumber', width: 10 },
-      { header: 'Parallel', key: 'parallel', width: 15 },
-      { header: 'Sport', key: 'sport', width: 12 },
-      { header: 'Team', key: 'team', width: 15 },
-      { header: 'Graded', key: 'graded', width: 8 },
-      { header: 'Grading Co', key: 'gradingCo', width: 12 },
-      { header: 'Grade', key: 'grade', width: 8 },
-      { header: 'Cert #', key: 'cert', width: 15 },
-      { header: 'Auto', key: 'auto', width: 6 },
-      { header: 'Serial #', key: 'serial', width: 12 },
-      { header: 'Notes', key: 'notes', width: 20 },
-      { header: 'My Price', key: 'myPrice', width: 10 },
-      { header: 'Added Date', key: 'addedDate', width: 12 }
+      { header: 'player', key: 'player', width: 20 },
+      { header: 'year', key: 'year', width: 8 },
+      { header: 'set_name', key: 'set_name', width: 25 },
+      { header: 'card_number', key: 'card_number', width: 10 },
+      { header: 'parallel', key: 'parallel', width: 15 },
+      { header: 'sport', key: 'sport', width: 12 },
+      { header: 'team', key: 'team', width: 15 },
+      { header: 'is_graded', key: 'is_graded', width: 10 },
+      { header: 'grading_company', key: 'grading_company', width: 12 },
+      { header: 'grade', key: 'grade', width: 8 },
+      { header: 'cert_number', key: 'cert_number', width: 15 },
+      { header: 'is_autographed', key: 'is_autographed', width: 12 },
+      { header: 'serial_number', key: 'serial_number', width: 12 },
+      { header: 'numbered_to', key: 'numbered_to', width: 10 },
+      { header: 'asking_price', key: 'asking_price', width: 12 },
+      { header: 'purchase_price', key: 'purchase_price', width: 12 },
+      { header: 'condition', key: 'condition', width: 12 },
+      { header: 'notes', key: 'notes', width: 25 },
+      { header: 'front_image_url', key: 'front_image_url', width: 40 },
+      { header: 'back_image_url', key: 'back_image_url', width: 40 }
     ];
 
     // Style header row
@@ -4514,87 +4517,43 @@ app.post('/api/export/slabtrack', authenticateToken, async (req, res) => {
     };
     worksheet.getRow(1).font = { bold: true, color: { argb: 'FFFFFFFF' } };
 
-    // Helper function to fetch image as buffer
-    const fetchImageBuffer = async (url) => {
-      if (!url) return null;
-      try {
-        const axios = require('axios');
-        const response = await axios.get(url, { responseType: 'arraybuffer', timeout: 10000 });
-        return Buffer.from(response.data);
-      } catch (e) {
-        console.error(`Failed to fetch image ${url}:`, e.message);
-        return null;
-      }
-    };
-
-    // Process each card
-    const imageHeight = 100; // pixels
-    const rowHeight = 80; // Excel row height units
-
+    // Process each card with SlabTrack-compatible data types
     for (let i = 0; i < cards.length; i++) {
       const card = cards[i];
       const data = typeof card.card_data === 'string' ? JSON.parse(card.card_data) : card.card_data;
-      const rowNum = i + 2; // Row 1 is header
 
-      // Add row data
-      const row = worksheet.addRow({
-        frontImage: '',
-        backImage: '',
+      // Convert values to SlabTrack format
+      // Booleans: true/false (not "Yes"/"No")
+      // Numbers: actual numbers (not strings)
+      const isGraded = data.is_graded === true || data.is_graded === 'Yes' || data.is_graded === 'yes';
+      const isAutographed = data.is_autograph === true || data.is_autograph === 'Yes' || data.is_autograph === 'yes' ||
+                            data.is_autographed === true || data.is_autographed === 'Yes';
+
+      worksheet.addRow({
         player: data.player || '',
-        year: data.year || '',
-        set: data.set_name || '',
-        cardNumber: data.card_number || '',
+        year: data.year ? parseInt(data.year) : '',
+        set_name: data.set_name || '',
+        card_number: String(data.card_number || ''),
         parallel: data.parallel || 'Base',
-        sport: data.sport || '',
+        sport: (data.sport || '').toLowerCase(),
         team: data.team || '',
-        graded: data.is_graded ? 'Yes' : 'No',
-        gradingCo: data.grading_company || '',
-        grade: data.grade || '',
-        cert: data.cert_number || '',
-        auto: data.is_autograph ? 'Yes' : 'No',
-        serial: data.serial_number || '',
+        is_graded: isGraded,
+        grading_company: isGraded ? (data.grading_company || '') : '',
+        grade: isGraded ? (data.grade || '') : '',
+        cert_number: isGraded ? (data.cert_number || '') : '',
+        is_autographed: isAutographed,
+        serial_number: data.serial_number || '',
+        numbered_to: data.numbered_to ? parseInt(data.numbered_to) : '',
+        asking_price: data.my_price ? parseFloat(data.my_price) : (data.asking_price ? parseFloat(data.asking_price) : ''),
+        purchase_price: data.purchase_price ? parseFloat(data.purchase_price) : '',
+        condition: !isGraded ? (data.condition || '') : '',
         notes: data.notes || '',
-        myPrice: data.my_price || '',
-        addedDate: new Date(card.created_at).toLocaleDateString()
+        front_image_url: card.front_image_path || '',
+        back_image_url: card.back_image_path || ''
       });
 
-      // Set row height for images
-      row.height = rowHeight;
-
-      // Fetch and embed front image
-      const frontUrl = card.front_image_path;
-      if (frontUrl) {
-        const frontBuffer = await fetchImageBuffer(frontUrl);
-        if (frontBuffer) {
-          const frontImageId = workbook.addImage({
-            buffer: frontBuffer,
-            extension: 'png'
-          });
-          worksheet.addImage(frontImageId, {
-            tl: { col: 0, row: rowNum - 1 },
-            ext: { width: 100, height: imageHeight }
-          });
-        }
-      }
-
-      // Fetch and embed back image
-      const backUrl = card.back_image_path;
-      if (backUrl) {
-        const backBuffer = await fetchImageBuffer(backUrl);
-        if (backBuffer) {
-          const backImageId = workbook.addImage({
-            buffer: backBuffer,
-            extension: 'png'
-          });
-          worksheet.addImage(backImageId, {
-            tl: { col: 1, row: rowNum - 1 },
-            ext: { width: 100, height: imageHeight }
-          });
-        }
-      }
-
       // Log progress for large exports
-      if ((i + 1) % 10 === 0) {
+      if ((i + 1) % 50 === 0) {
         console.log(`[Export] Processed ${i + 1}/${cards.length} cards...`);
       }
     }
@@ -4606,7 +4565,7 @@ app.post('/api/export/slabtrack', authenticateToken, async (req, res) => {
     res.setHeader('Content-Disposition', `attachment; filename="CardFlow-SlabTrack-${Date.now()}.xlsx"`);
     res.send(buffer);
 
-    console.log(`[Export] SlabTrack Excel complete: ${cards.length} cards with embedded images`);
+    console.log(`[Export] SlabTrack Excel complete: ${cards.length} cards`);
 
   } catch (e) {
     console.error('SlabTrack export error:', e);
