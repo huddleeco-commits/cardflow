@@ -33,7 +33,6 @@
       object-fit: cover;
     }
 
-    /* Card frame guide - this is what gets captured */
     .card-frame {
       position: absolute;
       top: 50%;
@@ -48,20 +47,25 @@
       box-shadow: 0 0 0 9999px rgba(0,0,0,0.5);
     }
 
-    /* Status at top */
+    .card-frame.back-mode {
+      border-color: #7b2ff7;
+    }
+
     .status-bar {
       position: absolute;
       top: 0;
       left: 0;
       right: 0;
-      padding: 20px;
-      background: linear-gradient(to bottom, rgba(0,0,0,0.8), transparent);
-      text-align: center;
+      padding: 16px 20px;
+      background: linear-gradient(to bottom, rgba(0,0,0,0.9), transparent);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
       z-index: 10;
     }
 
     .logo {
-      font-size: 18px;
+      font-size: 16px;
       font-weight: 700;
       background: linear-gradient(135deg, #00f6ff, #7b2ff7);
       -webkit-background-clip: text;
@@ -69,56 +73,97 @@
     }
 
     .connection {
-      font-size: 12px;
+      font-size: 11px;
       opacity: 0.7;
-      margin-top: 4px;
     }
-
     .connection.connected { color: #00ff88; }
 
-    /* Current state - FRONT or BACK */
+    .mode-toggle {
+      padding: 8px 16px;
+      background: rgba(255,255,255,0.1);
+      border: 1px solid rgba(255,255,255,0.2);
+      border-radius: 20px;
+      color: #fff;
+      font-size: 11px;
+      cursor: pointer;
+    }
+    .mode-toggle.active {
+      background: rgba(0, 246, 255, 0.2);
+      border-color: #00f6ff;
+      color: #00f6ff;
+    }
+
+    /* State badge */
     .state-badge {
       position: absolute;
-      top: 100px;
+      top: 80px;
       left: 50%;
       transform: translateX(-50%);
-      padding: 12px 40px;
+      padding: 12px 32px;
       background: rgba(0,0,0,0.9);
       border-radius: 30px;
-      font-size: 24px;
+      font-size: 20px;
       font-weight: 700;
-      letter-spacing: 4px;
+      letter-spacing: 3px;
       z-index: 10;
       border: 2px solid #00f6ff;
       color: #00f6ff;
     }
-
     .state-badge.back {
       border-color: #7b2ff7;
       color: #7b2ff7;
     }
 
-    /* Big capture button */
-    .capture-btn {
+    /* Bulk mode info bar */
+    .bulk-info {
       position: absolute;
-      bottom: 40px;
+      top: 140px;
       left: 50%;
       transform: translateX(-50%);
+      padding: 8px 20px;
+      background: rgba(0,0,0,0.8);
+      border-radius: 20px;
+      font-size: 14px;
+      z-index: 10;
+      display: none;
+    }
+    .bulk-info.show { display: block; }
+    .bulk-info .count {
+      font-weight: 700;
+      color: #00f6ff;
+    }
+    .bulk-info.back-phase .count {
+      color: #7b2ff7;
+    }
+
+    /* Bottom controls */
+    .bottom-bar {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      padding: 20px;
+      background: linear-gradient(to top, rgba(0,0,0,0.9), transparent);
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+      z-index: 10;
+    }
+
+    .capture-btn {
       width: 80px;
       height: 80px;
       border-radius: 50%;
       background: #fff;
       border: 4px solid rgba(255,255,255,0.3);
       cursor: pointer;
-      z-index: 20;
       transition: transform 0.1s;
+      position: relative;
     }
-
     .capture-btn:active {
-      transform: translateX(-50%) scale(0.9);
+      transform: scale(0.9);
       background: #00f6ff;
     }
-
     .capture-btn::after {
       content: '';
       position: absolute;
@@ -131,25 +176,38 @@
       border: 3px solid rgba(0,0,0,0.3);
     }
 
-    /* Counter */
-    .counter {
-      position: absolute;
-      bottom: 40px;
-      right: 20px;
+    .side-info {
       text-align: center;
-      z-index: 10;
+      min-width: 70px;
     }
-
-    .counter-value {
-      font-size: 32px;
+    .side-info .value {
+      font-size: 28px;
       font-weight: 700;
     }
-
-    .counter-label {
+    .side-info .label {
       font-size: 10px;
       opacity: 0.6;
       text-transform: uppercase;
     }
+
+    /* Done button for bulk mode */
+    .done-btn {
+      position: absolute;
+      bottom: 120px;
+      left: 50%;
+      transform: translateX(-50%);
+      padding: 14px 40px;
+      background: linear-gradient(135deg, #00f6ff, #7b2ff7);
+      border: none;
+      border-radius: 30px;
+      color: #fff;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      z-index: 20;
+      display: none;
+    }
+    .done-btn.show { display: block; }
 
     /* Login screen */
     .login-screen {
@@ -163,7 +221,6 @@
       padding: 24px;
       z-index: 200;
     }
-
     .login-screen h1 {
       font-size: 32px;
       margin-bottom: 8px;
@@ -171,9 +228,7 @@
       -webkit-background-clip: text;
       -webkit-text-fill-color: transparent;
     }
-
     .login-screen p { opacity: 0.6; margin-bottom: 32px; }
-
     .login-screen input {
       width: 100%;
       max-width: 300px;
@@ -185,7 +240,6 @@
       color: #fff;
       font-size: 16px;
     }
-
     .login-screen button {
       width: 100%;
       max-width: 300px;
@@ -199,7 +253,6 @@
       cursor: pointer;
     }
 
-    /* Flash effect */
     .flash {
       position: fixed;
       top: 0; left: 0; right: 0; bottom: 0;
@@ -208,17 +261,14 @@
       pointer-events: none;
       z-index: 100;
     }
-
     .flash.show {
-      animation: flashAnim 0.2s;
+      animation: flashAnim 0.15s;
     }
-
     @keyframes flashAnim {
-      0% { opacity: 0.8; }
+      0% { opacity: 0.7; }
       100% { opacity: 0; }
     }
 
-    /* Hidden elements */
     #canvas { display: none; }
   </style>
 </head>
@@ -238,17 +288,33 @@
     <div class="card-frame" id="card-frame"></div>
 
     <div class="status-bar">
-      <div class="logo">CARDFLOW</div>
-      <div class="connection" id="connection">Connecting...</div>
+      <div>
+        <div class="logo">CARDFLOW</div>
+        <div class="connection" id="connection">Connecting...</div>
+      </div>
+      <button class="mode-toggle" id="mode-toggle" onclick="toggleMode()">PAIR MODE</button>
     </div>
 
     <div class="state-badge" id="state-badge">FRONT</div>
 
-    <button class="capture-btn" id="capture-btn" onclick="capture()"></button>
+    <div class="bulk-info" id="bulk-info">
+      <span class="count" id="bulk-count">0</span> fronts captured
+    </div>
 
-    <div class="counter">
-      <div class="counter-value" id="counter">0</div>
-      <div class="counter-label">Cards</div>
+    <button class="done-btn" id="done-btn" onclick="finishFronts()">Done with Fronts →</button>
+
+    <div class="bottom-bar">
+      <div class="side-info">
+        <div class="value" id="fronts-count">0</div>
+        <div class="label">Fronts</div>
+      </div>
+
+      <button class="capture-btn" id="capture-btn" onclick="capture()"></button>
+
+      <div class="side-info">
+        <div class="value" id="cards-count">0</div>
+        <div class="label">Cards</div>
+      </div>
     </div>
 
     <div class="flash" id="flash"></div>
@@ -262,13 +328,22 @@
     let ws = null;
     let video, canvas, ctx;
     let audioCtx = null;
-
-    let phase = 'front'; // 'front' or 'back'
-    let frontBlob = null;
-    let cardCount = 0;
-
-    // Frame dimensions for cropping
     let frameRect = null;
+
+    // Mode: 'pair' (front-back-front-back) or 'bulk' (all fronts, then all backs)
+    let scanMode = 'pair';
+
+    // Pair mode state
+    let pairPhase = 'front';
+    let pairFrontBlob = null;
+
+    // Bulk mode state
+    let bulkPhase = 'fronts'; // 'fronts' or 'backs'
+    let bulkFronts = []; // Array of blobs
+    let bulkBacks = []; // Array of blobs
+    let bulkIndex = 0; // Current back index
+
+    let totalCards = 0;
 
     if (token) {
       initScanner();
@@ -306,16 +381,16 @@
       canvas = document.getElementById('canvas');
       ctx = canvas.getContext('2d');
 
-      // Init audio on first interaction
       document.body.addEventListener('click', initAudio, { once: true });
       document.body.addEventListener('touchstart', initAudio, { once: true });
 
       await startCamera();
       connectWS();
 
-      // Calculate frame position after video is ready
       video.addEventListener('loadedmetadata', calculateFrameRect);
       window.addEventListener('resize', calculateFrameRect);
+
+      updateUI();
     }
 
     function initAudio() {
@@ -341,16 +416,13 @@
     }
 
     function calculateFrameRect() {
-      // Get the card frame element position relative to video
       const frame = document.getElementById('card-frame');
       const frameBox = frame.getBoundingClientRect();
       const videoBox = video.getBoundingClientRect();
 
-      // Calculate scale between display size and actual video resolution
       const scaleX = video.videoWidth / videoBox.width;
       const scaleY = video.videoHeight / videoBox.height;
 
-      // Frame position in video coordinates
       frameRect = {
         x: (frameBox.left - videoBox.left) * scaleX,
         y: (frameBox.top - videoBox.top) * scaleY,
@@ -358,7 +430,6 @@
         height: frameBox.height * scaleY
       };
 
-      // Set canvas to frame size (cropped output)
       canvas.width = frameRect.width;
       canvas.height = frameRect.height;
     }
@@ -378,69 +449,107 @@
         document.getElementById('connection').classList.remove('connected');
         setTimeout(connectWS, 2000);
       };
+    }
 
-      ws.onmessage = (e) => {
-        // Handle any server messages if needed
-      };
+    function toggleMode() {
+      if (scanMode === 'pair') {
+        scanMode = 'bulk';
+        bulkPhase = 'fronts';
+        bulkFronts = [];
+        bulkBacks = [];
+        bulkIndex = 0;
+      } else {
+        scanMode = 'pair';
+        pairPhase = 'front';
+        pairFrontBlob = null;
+      }
+      updateUI();
     }
 
     async function capture() {
-      if (!frameRect) {
-        calculateFrameRect();
-      }
+      if (!frameRect) calculateFrameRect();
 
-      // Flash effect
+      // Flash
       const flash = document.getElementById('flash');
       flash.classList.add('show');
-      setTimeout(() => flash.classList.remove('show'), 200);
+      setTimeout(() => flash.classList.remove('show'), 150);
 
-      // Draw only the cropped frame area
-      ctx.drawImage(
-        video,
-        frameRect.x, frameRect.y, frameRect.width, frameRect.height,
-        0, 0, canvas.width, canvas.height
-      );
-
+      // Capture cropped frame
+      ctx.drawImage(video, frameRect.x, frameRect.y, frameRect.width, frameRect.height, 0, 0, canvas.width, canvas.height);
       const blob = await new Promise(r => canvas.toBlob(r, 'image/jpeg', 0.92));
 
-      if (phase === 'front') {
-        // Captured front
-        frontBlob = blob;
-        playSound('front'); // single beep
-
-        // Switch to back
-        phase = 'back';
-        updateStateUI();
-
+      if (scanMode === 'pair') {
+        await capturePairMode(blob);
       } else {
-        // Captured back - upload pair
-        playSound('back'); // double beep
+        await captureBulkMode(blob);
+      }
 
-        await uploadPair(frontBlob, blob);
+      updateUI();
+    }
 
-        // Complete
-        playSound('complete'); // ding
-        cardCount++;
-        document.getElementById('counter').textContent = cardCount;
-
-        // Reset for next card
-        phase = 'front';
-        frontBlob = null;
-        updateStateUI();
+    async function capturePairMode(blob) {
+      if (pairPhase === 'front') {
+        pairFrontBlob = blob;
+        playSound('front');
+        pairPhase = 'back';
+      } else {
+        playSound('back');
+        await uploadPair(pairFrontBlob, blob);
+        playSound('complete');
+        totalCards++;
+        pairPhase = 'front';
+        pairFrontBlob = null;
       }
     }
 
-    function updateStateUI() {
-      const badge = document.getElementById('state-badge');
-      badge.textContent = phase.toUpperCase();
-      badge.classList.toggle('back', phase === 'back');
+    async function captureBulkMode(blob) {
+      if (bulkPhase === 'fronts') {
+        bulkFronts.push(blob);
+        playSound('front');
+      } else {
+        bulkBacks.push(blob);
+        playSound('back');
+        bulkIndex++;
+
+        // If we have all backs, upload them all
+        if (bulkBacks.length === bulkFronts.length) {
+          await uploadAllPairs();
+        }
+      }
+    }
+
+    function finishFronts() {
+      if (bulkFronts.length === 0) {
+        alert('Capture at least one front first');
+        return;
+      }
+      bulkPhase = 'backs';
+      bulkIndex = 0;
+      playSound('complete');
+      updateUI();
+    }
+
+    async function uploadAllPairs() {
+      playSound('complete');
+
+      for (let i = 0; i < bulkFronts.length; i++) {
+        await uploadPair(bulkFronts[i], bulkBacks[i]);
+        totalCards++;
+      }
+
+      // Reset bulk mode
+      bulkFronts = [];
+      bulkBacks = [];
+      bulkPhase = 'fronts';
+      bulkIndex = 0;
+      updateUI();
     }
 
     async function uploadPair(front, back) {
       const formData = new FormData();
       formData.append('front', front, 'front.jpg');
       formData.append('back', back, 'back.jpg');
-      formData.append('batch', 'true'); // Flag for batch mode
+      formData.append('batch', 'true');
 
       try {
         const res = await fetch(`${API_URL}/upload-pair`, {
@@ -450,13 +559,54 @@
         });
         const data = await res.json();
 
-        // Notify dashboard
         if (ws && ws.readyState === WebSocket.OPEN) {
           ws.send(JSON.stringify({ type: 'batch_card', cardId: data.cardId }));
         }
       } catch (e) {
         playSound('error');
       }
+    }
+
+    function updateUI() {
+      const badge = document.getElementById('state-badge');
+      const modeBtn = document.getElementById('mode-toggle');
+      const bulkInfo = document.getElementById('bulk-info');
+      const doneBtn = document.getElementById('done-btn');
+      const cardFrame = document.getElementById('card-frame');
+
+      modeBtn.textContent = scanMode === 'pair' ? 'PAIR MODE' : 'BULK MODE';
+      modeBtn.classList.toggle('active', scanMode === 'bulk');
+
+      if (scanMode === 'pair') {
+        badge.textContent = pairPhase.toUpperCase();
+        badge.classList.toggle('back', pairPhase === 'back');
+        cardFrame.classList.toggle('back-mode', pairPhase === 'back');
+        bulkInfo.classList.remove('show');
+        doneBtn.classList.remove('show');
+        document.getElementById('fronts-count').textContent = pairPhase === 'back' ? '1' : '0';
+      } else {
+        if (bulkPhase === 'fronts') {
+          badge.textContent = 'FRONTS';
+          badge.classList.remove('back');
+          cardFrame.classList.remove('back-mode');
+          bulkInfo.classList.add('show');
+          bulkInfo.classList.remove('back-phase');
+          bulkInfo.innerHTML = `<span class="count">${bulkFronts.length}</span> fronts captured`;
+          doneBtn.classList.toggle('show', bulkFronts.length > 0);
+          doneBtn.textContent = `Done with Fronts (${bulkFronts.length}) →`;
+          document.getElementById('fronts-count').textContent = bulkFronts.length;
+        } else {
+          badge.textContent = `BACK ${bulkBacks.length + 1}/${bulkFronts.length}`;
+          badge.classList.add('back');
+          cardFrame.classList.add('back-mode');
+          bulkInfo.classList.add('show', 'back-phase');
+          bulkInfo.innerHTML = `<span class="count">${bulkBacks.length}/${bulkFronts.length}</span> backs captured`;
+          doneBtn.classList.remove('show');
+          document.getElementById('fronts-count').textContent = bulkFronts.length;
+        }
+      }
+
+      document.getElementById('cards-count').textContent = totalCards;
     }
 
     function playSound(type) {
@@ -469,12 +619,10 @@
       gain.gain.value = 0.3;
 
       if (type === 'front') {
-        // Single beep
         osc.frequency.value = 880;
         osc.start();
-        osc.stop(audioCtx.currentTime + 0.12);
+        osc.stop(audioCtx.currentTime + 0.1);
       } else if (type === 'back') {
-        // Double beep
         osc.frequency.value = 988;
         osc.start();
         osc.stop(audioCtx.currentTime + 0.08);
@@ -489,7 +637,6 @@
           o2.stop(audioCtx.currentTime + 0.08);
         }, 100);
       } else if (type === 'complete') {
-        // Rising ding
         osc.frequency.setValueAtTime(523, audioCtx.currentTime);
         osc.frequency.linearRampToValueAtTime(784, audioCtx.currentTime + 0.1);
         osc.frequency.linearRampToValueAtTime(1047, audioCtx.currentTime + 0.2);
@@ -504,7 +651,6 @@
       }
     }
 
-    // Prevent zoom
     document.addEventListener('touchstart', e => {
       if (e.touches.length > 1) e.preventDefault();
     }, { passive: false });
