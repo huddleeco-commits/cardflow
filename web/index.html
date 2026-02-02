@@ -1638,164 +1638,198 @@
       color: var(--text-muted);
     }
     .batch-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(400px, 1fr));
+      display: flex;
+      flex-direction: column;
       gap: 16px;
       padding: 24px;
       min-height: 400px;
     }
     .batch-empty {
-      grid-column: 1 / -1;
       text-align: center;
       padding: 60px 20px;
       color: var(--text-muted);
     }
+    /* Batch Card - Horizontal Layout */
     .batch-card {
       background: var(--glass);
       border: 1px solid var(--glass-border);
       border-radius: 12px;
+      display: flex;
       overflow: hidden;
       transition: all 0.3s;
     }
     .batch-card.identifying {
       border-color: var(--warning);
-      animation: batchPulse 1s infinite;
     }
     .batch-card.identified {
       border-color: var(--success);
     }
-    .batch-card.editing {
-      border-color: var(--cyan);
-    }
-    @keyframes batchPulse {
-      0%, 100% { box-shadow: 0 0 10px rgba(255, 170, 0, 0.3); }
-      50% { box-shadow: 0 0 20px rgba(255, 170, 0, 0.5); }
-    }
-    .batch-card-images {
+    /* Images Section */
+    .batch-images {
       display: flex;
       gap: 8px;
-      padding: 12px;
+      padding: 16px;
       background: rgba(0,0,0,0.3);
-      justify-content: center;
+      flex-shrink: 0;
     }
-    .batch-card-img {
-      width: 120px;
-      height: 168px;
+    .batch-img {
+      width: 100px;
+      height: 140px;
       border-radius: 8px;
       overflow: hidden;
-      border: 1px solid var(--glass-border);
+      border: 2px solid var(--glass-border);
       cursor: pointer;
+      transition: border-color 0.2s;
     }
-    .batch-card-img img {
+    .batch-img:hover {
+      border-color: var(--cyan);
+    }
+    .batch-img img {
       width: 100%;
       height: 100%;
       object-fit: cover;
     }
-    .batch-card-info {
-      padding: 16px;
-    }
-    .batch-card-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: flex-start;
-      margin-bottom: 12px;
-    }
-    .batch-card-status {
-      font-size: 11px;
-      padding: 4px 10px;
-      border-radius: 12px;
-      font-weight: 600;
-    }
-    .batch-card-status.identifying {
-      background: rgba(255, 170, 0, 0.2);
-      color: var(--warning);
-    }
-    .batch-card-status.identified {
-      background: rgba(0, 255, 136, 0.2);
-      color: var(--success);
-    }
-    .batch-card-player {
-      font-size: 18px;
-      font-weight: 700;
-      color: var(--text);
-      margin-bottom: 4px;
-    }
-    .batch-card-set {
-      font-size: 13px;
-      color: var(--text-muted);
-      margin-bottom: 8px;
-    }
-    .batch-card-meta {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
-      margin-bottom: 12px;
-    }
-    .batch-meta-tag {
-      font-size: 11px;
-      padding: 4px 8px;
-      background: var(--glass);
-      border: 1px solid var(--glass-border);
-      border-radius: 6px;
-      color: var(--text-muted);
-    }
-    .batch-meta-tag.grade {
-      background: rgba(123, 47, 247, 0.2);
-      border-color: var(--purple);
-      color: var(--purple);
-    }
-    .batch-card-actions {
-      display: flex;
-      gap: 8px;
-      padding-top: 12px;
-      border-top: 1px solid var(--glass-border);
-    }
-    .batch-card-actions button {
+    /* Fields Section */
+    .batch-fields {
       flex: 1;
-    }
-    /* Batch edit form */
-    .batch-edit-form {
-      display: none;
-      padding: 12px;
-      background: rgba(0,0,0,0.2);
-    }
-    .batch-card.editing .batch-edit-form {
-      display: block;
-    }
-    .batch-card.editing .batch-card-info {
-      display: none;
-    }
-    .batch-edit-row {
+      padding: 16px;
       display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 8px;
-      margin-bottom: 8px;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 12px;
+      align-content: start;
     }
-    .batch-edit-field {
+    .batch-field {
       display: flex;
       flex-direction: column;
       gap: 4px;
     }
-    .batch-edit-field.full {
-      grid-column: 1 / -1;
+    .batch-field.wide {
+      grid-column: span 2;
     }
-    .batch-edit-field label {
+    .batch-field.full {
+      grid-column: span 4;
+    }
+    .batch-field-label {
       font-size: 10px;
       color: var(--text-muted);
       text-transform: uppercase;
+      letter-spacing: 0.5px;
     }
-    .batch-edit-field input, .batch-edit-field select {
-      padding: 8px;
-      background: var(--bg-deep);
-      border: 1px solid var(--glass-border);
-      border-radius: 6px;
+    .batch-field-value {
+      font-size: 14px;
       color: var(--text);
-      font-size: 13px;
+      padding: 8px 10px;
+      background: rgba(0,0,0,0.2);
+      border: 1px solid transparent;
+      border-radius: 6px;
+      cursor: text;
+      min-height: 36px;
+      transition: all 0.2s;
     }
-    .batch-edit-actions {
+    .batch-field-value:hover {
+      border-color: var(--glass-border);
+      background: rgba(0,0,0,0.3);
+    }
+    .batch-field-value:focus {
+      outline: none;
+      border-color: var(--cyan);
+      background: var(--bg-deep);
+    }
+    .batch-field-value.placeholder {
+      color: var(--text-muted);
+      font-style: italic;
+    }
+    .batch-field-value[contenteditable="true"] {
+      cursor: text;
+    }
+    /* Special field styles */
+    .batch-field-value.player {
+      font-size: 16px;
+      font-weight: 600;
+    }
+    .batch-field-value.graded {
       display: flex;
+      align-items: center;
       gap: 8px;
-      margin-top: 12px;
+    }
+    .batch-badge {
+      font-size: 10px;
+      padding: 3px 8px;
+      border-radius: 4px;
+      font-weight: 600;
+    }
+    .batch-badge.auto {
+      background: rgba(255, 215, 0, 0.2);
+      color: #ffd700;
+    }
+    .batch-badge.serial {
+      background: rgba(0, 246, 255, 0.2);
+      color: var(--cyan);
+    }
+    .batch-badge.grade {
+      background: rgba(123, 47, 247, 0.2);
+      color: var(--purple);
+    }
+    /* Status & Actions */
+    .batch-status {
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      padding: 16px;
+      background: rgba(0,0,0,0.2);
+      min-width: 100px;
+      align-items: center;
+    }
+    .batch-status-badge {
+      font-size: 10px;
+      padding: 6px 12px;
+      border-radius: 20px;
+      font-weight: 600;
+      text-transform: uppercase;
+    }
+    .batch-status-badge.identifying {
+      background: rgba(255, 170, 0, 0.2);
+      color: var(--warning);
+      animation: pulse 1.5s infinite;
+    }
+    .batch-status-badge.identified {
+      background: rgba(0, 255, 136, 0.2);
+      color: var(--success);
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+    .batch-delete {
+      background: none;
+      border: none;
+      color: var(--text-muted);
+      cursor: pointer;
+      padding: 8px;
+      border-radius: 6px;
+      transition: all 0.2s;
+    }
+    .batch-delete:hover {
+      background: rgba(255, 68, 102, 0.2);
+      color: var(--error);
+    }
+    /* Select dropdown styling */
+    .batch-select {
+      font-size: 14px;
+      color: var(--text);
+      padding: 8px 10px;
+      background: rgba(0,0,0,0.2);
+      border: 1px solid transparent;
+      border-radius: 6px;
+      cursor: pointer;
+      min-height: 36px;
+    }
+    .batch-select:hover {
+      border-color: var(--glass-border);
+    }
+    .batch-select:focus {
+      outline: none;
+      border-color: var(--cyan);
     }
     .scan-pulse {
       width: 12px;
@@ -2961,97 +2995,102 @@
       const empty = grid.querySelector('.batch-empty');
       if (empty) empty.remove();
 
-      // Store URLs for later
-      batchCardData[cardId] = { front: frontUrl, back: backUrl, data: null };
+      // Store URLs and initial empty data
+      batchCardData[cardId] = { front: frontUrl, back: backUrl, data: {} };
 
       const cardEl = document.createElement('div');
       cardEl.className = 'batch-card identifying';
       cardEl.id = `batch-card-${cardId}`;
       cardEl.innerHTML = `
-        <div class="batch-card-images">
-          <div class="batch-card-img" onclick="openLightbox('${frontUrl}')">
+        <div class="batch-images">
+          <div class="batch-img" onclick="openLightbox('${frontUrl}')">
             <img src="${frontUrl}" alt="Front">
           </div>
-          ${backUrl ? `<div class="batch-card-img" onclick="openLightbox('${backUrl}')"><img src="${backUrl}" alt="Back"></div>` : ''}
+          ${backUrl ? `<div class="batch-img" onclick="openLightbox('${backUrl}')"><img src="${backUrl}" alt="Back"></div>` : '<div class="batch-img" style="border-style: dashed; display: flex; align-items: center; justify-content: center; color: var(--text-muted); font-size: 11px;">No Back</div>'}
         </div>
-        <div class="batch-card-info">
-          <div class="batch-card-header">
-            <div>
-              <div class="batch-card-player">Identifying...</div>
-              <div class="batch-card-set"></div>
-            </div>
-            <span class="batch-card-status identifying">SCANNING</span>
+        <div class="batch-fields">
+          <div class="batch-field wide">
+            <span class="batch-field-label">Player</span>
+            <div class="batch-field-value player placeholder" contenteditable="true" data-field="player" data-card="${cardId}" onblur="saveBatchField(this)">Identifying...</div>
           </div>
-          <div class="batch-card-meta"></div>
-          <div class="batch-card-actions" style="display: none;">
-            <button class="btn btn-secondary btn-sm" onclick="editBatchCard('${cardId}')">Edit</button>
-            <button class="btn btn-secondary btn-sm" onclick="deleteBatchCard('${cardId}')">Remove</button>
+          <div class="batch-field">
+            <span class="batch-field-label">Year</span>
+            <div class="batch-field-value placeholder" contenteditable="true" data-field="year" data-card="${cardId}" onblur="saveBatchField(this)">-</div>
+          </div>
+          <div class="batch-field">
+            <span class="batch-field-label">Card #</span>
+            <div class="batch-field-value placeholder" contenteditable="true" data-field="card_number" data-card="${cardId}" onblur="saveBatchField(this)">-</div>
+          </div>
+          <div class="batch-field wide">
+            <span class="batch-field-label">Set</span>
+            <div class="batch-field-value placeholder" contenteditable="true" data-field="set_name" data-card="${cardId}" onblur="saveBatchField(this)">-</div>
+          </div>
+          <div class="batch-field">
+            <span class="batch-field-label">Parallel</span>
+            <div class="batch-field-value placeholder" contenteditable="true" data-field="parallel" data-card="${cardId}" onblur="saveBatchField(this)">-</div>
+          </div>
+          <div class="batch-field">
+            <span class="batch-field-label">Serial #</span>
+            <div class="batch-field-value placeholder" contenteditable="true" data-field="serial_number" data-card="${cardId}" onblur="saveBatchField(this)">-</div>
+          </div>
+          <div class="batch-field">
+            <span class="batch-field-label">Autograph</span>
+            <select class="batch-select" data-field="is_autograph" data-card="${cardId}" onchange="saveBatchField(this)">
+              <option value="">No</option>
+              <option value="true">Yes</option>
+            </select>
+          </div>
+          <div class="batch-field">
+            <span class="batch-field-label">Sport</span>
+            <select class="batch-select" data-field="sport" data-card="${cardId}" onchange="saveBatchField(this)">
+              <option value="">-</option>
+              <option value="baseball">Baseball</option>
+              <option value="basketball">Basketball</option>
+              <option value="football">Football</option>
+              <option value="hockey">Hockey</option>
+              <option value="soccer">Soccer</option>
+            </select>
+          </div>
+          <div class="batch-field">
+            <span class="batch-field-label">Graded</span>
+            <select class="batch-select" data-field="is_graded" data-card="${cardId}" onchange="toggleBatchGradeRow('${cardId}', this.value); saveBatchField(this)">
+              <option value="">Raw</option>
+              <option value="true">Graded</option>
+            </select>
+          </div>
+          <div class="batch-field" id="batch-company-${cardId}" style="display:none;">
+            <span class="batch-field-label">Company</span>
+            <select class="batch-select" data-field="grading_company" data-card="${cardId}" onchange="saveBatchField(this)">
+              <option value="PSA">PSA</option>
+              <option value="BGS">BGS</option>
+              <option value="SGC">SGC</option>
+              <option value="CGC">CGC</option>
+            </select>
+          </div>
+          <div class="batch-field" id="batch-grade-${cardId}" style="display:none;">
+            <span class="batch-field-label">Grade</span>
+            <div class="batch-field-value" contenteditable="true" data-field="grade" data-card="${cardId}" onblur="saveBatchField(this)">10</div>
+          </div>
+          <div class="batch-field" id="batch-cert-${cardId}" style="display:none;">
+            <span class="batch-field-label">Cert #</span>
+            <div class="batch-field-value" contenteditable="true" data-field="cert_number" data-card="${cardId}" onblur="saveBatchField(this)">-</div>
           </div>
         </div>
-        <div class="batch-edit-form" id="batch-edit-${cardId}">
-          <div class="batch-edit-row">
-            <div class="batch-edit-field">
-              <label>Player</label>
-              <input type="text" id="batch-player-${cardId}" placeholder="Player Name">
-            </div>
-            <div class="batch-edit-field">
-              <label>Year</label>
-              <input type="number" id="batch-year-${cardId}" placeholder="2024">
-            </div>
-          </div>
-          <div class="batch-edit-row">
-            <div class="batch-edit-field full">
-              <label>Set Name</label>
-              <input type="text" id="batch-set-${cardId}" placeholder="Topps Chrome">
-            </div>
-          </div>
-          <div class="batch-edit-row">
-            <div class="batch-edit-field">
-              <label>Card #</label>
-              <input type="text" id="batch-number-${cardId}" placeholder="123">
-            </div>
-            <div class="batch-edit-field">
-              <label>Parallel</label>
-              <input type="text" id="batch-parallel-${cardId}" placeholder="Base, Refractor...">
-            </div>
-          </div>
-          <div class="batch-edit-row">
-            <div class="batch-edit-field">
-              <label>Graded?</label>
-              <select id="batch-graded-${cardId}" onchange="toggleBatchGradeFields('${cardId}')">
-                <option value="no">Raw (Ungraded)</option>
-                <option value="yes">Graded/Slabbed</option>
-              </select>
-            </div>
-            <div class="batch-edit-field" id="batch-company-wrap-${cardId}" style="display:none;">
-              <label>Company</label>
-              <select id="batch-company-${cardId}">
-                <option value="PSA">PSA</option>
-                <option value="BGS">BGS</option>
-                <option value="SGC">SGC</option>
-                <option value="CGC">CGC</option>
-              </select>
-            </div>
-          </div>
-          <div class="batch-edit-row" id="batch-grade-wrap-${cardId}" style="display:none;">
-            <div class="batch-edit-field">
-              <label>Grade</label>
-              <input type="text" id="batch-grade-${cardId}" placeholder="10, 9.5...">
-            </div>
-            <div class="batch-edit-field">
-              <label>Cert #</label>
-              <input type="text" id="batch-cert-${cardId}" placeholder="12345678">
-            </div>
-          </div>
-          <div class="batch-edit-actions">
-            <button class="btn btn-secondary" onclick="cancelBatchEdit('${cardId}')">Cancel</button>
-            <button class="btn btn-primary" onclick="saveBatchEdit('${cardId}')">Save</button>
-          </div>
+        <div class="batch-status">
+          <span class="batch-status-badge identifying">SCANNING</span>
+          <button class="batch-delete" onclick="deleteBatchCard('${cardId}')" title="Remove">🗑️</button>
         </div>
       `;
       grid.insertBefore(cardEl, grid.firstChild);
       batchCards.push(cardId);
       document.getElementById('batch-count').textContent = `${batchCards.length} cards scanned`;
+    }
+
+    function toggleBatchGradeRow(cardId, isGraded) {
+      const show = isGraded === 'true';
+      document.getElementById(`batch-company-${cardId}`).style.display = show ? 'flex' : 'none';
+      document.getElementById(`batch-grade-${cardId}`).style.display = show ? 'flex' : 'none';
+      document.getElementById(`batch-cert-${cardId}`).style.display = show ? 'flex' : 'none';
     }
 
     function updateBatchCard(cardId, cardData) {
@@ -3066,93 +3105,79 @@
       cardEl.classList.remove('identifying');
       cardEl.classList.add('identified');
 
-      const playerEl = cardEl.querySelector('.batch-card-player');
-      const setEl = cardEl.querySelector('.batch-card-set');
-      const statusEl = cardEl.querySelector('.batch-card-status');
-      const metaEl = cardEl.querySelector('.batch-card-meta');
-      const actionsEl = cardEl.querySelector('.batch-card-actions');
+      // Update status badge
+      const badge = cardEl.querySelector('.batch-status-badge');
+      badge.className = 'batch-status-badge identified';
+      badge.textContent = 'READY';
 
-      playerEl.textContent = cardData.player || 'Unknown';
-      setEl.textContent = [cardData.year, cardData.set_name].filter(Boolean).join(' ');
-      statusEl.className = 'batch-card-status identified';
-      statusEl.textContent = 'IDENTIFIED';
+      // Update all editable fields
+      const fields = cardEl.querySelectorAll('[data-field]');
+      fields.forEach(field => {
+        const key = field.dataset.field;
+        let value = cardData[key];
 
-      // Build meta tags
-      let metaHtml = '';
-      if (cardData.card_number) metaHtml += `<span class="batch-meta-tag">#${cardData.card_number}</span>`;
-      if (cardData.parallel && cardData.parallel !== 'Base') metaHtml += `<span class="batch-meta-tag">${cardData.parallel}</span>`;
-      if (cardData.sport) metaHtml += `<span class="batch-meta-tag">${cardData.sport}</span>`;
-      if (cardData.is_graded) metaHtml += `<span class="batch-meta-tag grade">${cardData.grading_company} ${cardData.grade}</span>`;
-      if (cardData.cert_number) metaHtml += `<span class="batch-meta-tag">Cert: ${cardData.cert_number}</span>`;
-      metaEl.innerHTML = metaHtml;
+        if (field.tagName === 'SELECT') {
+          if (key === 'is_graded' || key === 'is_autograph') {
+            field.value = value ? 'true' : '';
+          } else {
+            field.value = value || '';
+          }
+        } else {
+          // contenteditable div
+          if (value !== null && value !== undefined && value !== '') {
+            field.textContent = value;
+            field.classList.remove('placeholder');
+          } else {
+            field.textContent = '-';
+            field.classList.add('placeholder');
+          }
+        }
+      });
 
-      actionsEl.style.display = 'flex';
+      // Show grade fields if graded
+      if (cardData.is_graded) {
+        toggleBatchGradeRow(cardId, 'true');
+      }
     }
 
-    function editBatchCard(cardId) {
-      const cardEl = document.getElementById(`batch-card-${cardId}`);
-      if (!cardEl) return;
+    async function saveBatchField(element) {
+      const cardId = element.dataset.card;
+      const field = element.dataset.field;
+      let value = element.tagName === 'SELECT' ? element.value : element.textContent.trim();
 
-      cardEl.classList.add('editing');
-      const data = batchCardData[cardId]?.data || {};
+      // Handle special values
+      if (value === '-' || value === 'Identifying...') value = '';
+      if (field === 'year' && value) value = parseInt(value) || null;
+      if (field === 'is_graded' || field === 'is_autograph') value = value === 'true';
 
-      // Populate form
-      document.getElementById(`batch-player-${cardId}`).value = data.player || '';
-      document.getElementById(`batch-year-${cardId}`).value = data.year || '';
-      document.getElementById(`batch-set-${cardId}`).value = data.set_name || '';
-      document.getElementById(`batch-number-${cardId}`).value = data.card_number || '';
-      document.getElementById(`batch-parallel-${cardId}`).value = data.parallel || '';
-      document.getElementById(`batch-graded-${cardId}`).value = data.is_graded ? 'yes' : 'no';
-      document.getElementById(`batch-company-${cardId}`).value = data.grading_company || 'PSA';
-      document.getElementById(`batch-grade-${cardId}`).value = data.grade || '';
-      document.getElementById(`batch-cert-${cardId}`).value = data.cert_number || '';
+      // Update local data
+      if (!batchCardData[cardId]) batchCardData[cardId] = { data: {} };
+      if (!batchCardData[cardId].data) batchCardData[cardId].data = {};
+      batchCardData[cardId].data[field] = value;
 
-      toggleBatchGradeFields(cardId);
-    }
+      // Update placeholder styling
+      if (element.tagName !== 'SELECT') {
+        if (value) {
+          element.classList.remove('placeholder');
+        } else {
+          element.textContent = '-';
+          element.classList.add('placeholder');
+        }
+      }
 
-    function toggleBatchGradeFields(cardId) {
-      const isGraded = document.getElementById(`batch-graded-${cardId}`).value === 'yes';
-      document.getElementById(`batch-company-wrap-${cardId}`).style.display = isGraded ? 'flex' : 'none';
-      document.getElementById(`batch-grade-wrap-${cardId}`).style.display = isGraded ? 'grid' : 'none';
-    }
-
-    function cancelBatchEdit(cardId) {
-      const cardEl = document.getElementById(`batch-card-${cardId}`);
-      if (cardEl) cardEl.classList.remove('editing');
-    }
-
-    async function saveBatchEdit(cardId) {
-      const isGraded = document.getElementById(`batch-graded-${cardId}`).value === 'yes';
-      const cardData = {
-        player: document.getElementById(`batch-player-${cardId}`).value,
-        year: parseInt(document.getElementById(`batch-year-${cardId}`).value) || null,
-        set_name: document.getElementById(`batch-set-${cardId}`).value,
-        card_number: document.getElementById(`batch-number-${cardId}`).value,
-        parallel: document.getElementById(`batch-parallel-${cardId}`).value || 'Base',
-        is_graded: isGraded,
-        grading_company: isGraded ? document.getElementById(`batch-company-${cardId}`).value : null,
-        grade: isGraded ? document.getElementById(`batch-grade-${cardId}`).value : null,
-        cert_number: isGraded ? document.getElementById(`batch-cert-${cardId}`).value : null
-      };
-
+      // Save to server
       try {
         await api(`/cards/${cardId}`, {
           method: 'PUT',
-          body: JSON.stringify(cardData)
+          body: JSON.stringify({ [field]: value })
         });
-
-        // Update local data and UI
-        if (batchCardData[cardId]) batchCardData[cardId].data = cardData;
-        updateBatchCard(cardId, cardData);
-        cancelBatchEdit(cardId);
-        showToast('Card updated', 'success');
       } catch (e) {
-        showToast('Error saving card', 'error');
+        console.error('Error saving field:', e);
       }
     }
 
     async function deleteBatchCard(cardId) {
-      if (!confirm('Remove this card from batch?')) return;
+      if (!confirm('Remove this card?')) return;
 
       try {
         await api(`/cards/${cardId}`, { method: 'DELETE' });
@@ -3161,7 +3186,17 @@
         batchCards = batchCards.filter(id => id !== cardId);
         delete batchCardData[cardId];
         document.getElementById('batch-count').textContent = `${batchCards.length} cards scanned`;
-        showToast('Card removed', 'success');
+
+        // Show empty state if no cards left
+        if (batchCards.length === 0) {
+          document.getElementById('batch-grid').innerHTML = `
+            <div class="batch-empty">
+              <div style="font-size: 48px; margin-bottom: 16px;">📱</div>
+              <h3>Waiting for scans...</h3>
+              <p style="color: var(--text-muted);">Scan cards from your phone - they'll appear here as they're identified</p>
+            </div>
+          `;
+        }
       } catch (e) {
         showToast('Error removing card', 'error');
       }

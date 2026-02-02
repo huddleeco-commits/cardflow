@@ -1288,6 +1288,8 @@ Return ONLY a JSON object with these fields (no other text):
   "set_name": "Full set name (e.g., Topps Chrome, Panini Prizm)",
   "card_number": "Card number from label or card",
   "parallel": "Parallel type if any (Base, Refractor, Silver, Gold, etc.)",
+  "serial_number": "If numbered card, the serial (e.g., 25/99) or null",
+  "is_autograph": false,
   "is_graded": true,
   "grading_company": "PSA, BGS, SGC, or null",
   "grade": "10, 9.5, 9, etc. or null",
@@ -1450,16 +1452,16 @@ Return ONLY a JSON object with these fields (no other text):
   "set_name": "Full set name (e.g., Topps Chrome, Panini Prizm)",
   "card_number": "Card number from label or card",
   "parallel": "Parallel type if any (Base, Refractor, Silver, Gold, etc.)",
-  "numbered": "Serial numbering if any (/99, /25, etc.) or null",
+  "serial_number": "If numbered card, the serial (e.g., 25/99) or null",
+  "is_autograph": false,
   "team": "Team name visible on card",
-  "sport": "Sport (Baseball, Basketball, Football, Hockey, Soccer, Pokemon)",
+  "sport": "baseball, basketball, football, hockey, soccer",
   "is_graded": true,
   "grading_company": "PSA, BGS, SGC, CGC - READ FROM LABEL",
   "grade": "Grade number from label (10, 9.5, 9, etc.)",
   "cert_number": "Certification number from label",
   "condition": "mint, near_mint, excellent, good, fair, poor",
-  "confidence": "high, medium, or low - be honest if unclear",
-  "notes": "What text did you read from the grading label?"
+  "confidence": "high, medium, or low - be honest if unclear"
 }`
         });
 
