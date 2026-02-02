@@ -4988,6 +4988,26 @@ Respond with ONLY valid JSON in this exact format:
 }`;
 }
 
+// Helper: Parse JSON from AI response (handles common formatting issues)
+function parseAiJsonResponse(text) {
+  const jsonMatch = text.match(/\{[\s\S]*\}/);
+  if (!jsonMatch) return null;
+
+  let jsonStr = jsonMatch[0];
+
+  // Fix common JSON issues from AI responses:
+  // 1. Replace actual newlines inside string values with spaces
+  jsonStr = jsonStr.replace(/"([^"]*?)"/g, (match, content) => {
+    return '"' + content.replace(/\n/g, ' ').replace(/\r/g, '') + '"';
+  });
+  // 2. Remove trailing commas
+  jsonStr = jsonStr.replace(/,\s*([}\]])/g, '$1');
+  // 3. Fix unquoted null values that might appear as text
+  jsonStr = jsonStr.replace(/:\s*null\s*([,}])/gi, ': null$1');
+
+  return JSON.parse(jsonStr);
+}
+
 // GET /api/agent/providers - List available AI providers
 app.get('/api/agent/providers', authenticateToken, (req, res) => {
   const providers = Object.entries(AI_PROVIDERS).map(([key, config]) => ({
@@ -5184,10 +5204,8 @@ app.post('/api/agent/analyze-card', authenticateToken, async (req, res) => {
         .join('\n');
 
       // Parse JSON from response
-      const jsonMatch = responseText.match(/\{[\s\S]*\}/);
-      if (jsonMatch) {
-        priceResult = JSON.parse(jsonMatch[0]);
-      } else {
+      priceResult = parseAiJsonResponse(responseText);
+      if (!priceResult) {
         throw new Error('Failed to parse price response');
       }
 
@@ -5256,10 +5274,8 @@ app.post('/api/agent/analyze-card', authenticateToken, async (req, res) => {
       };
 
       const responseText = geminiData.candidates[0].content.parts[0].text;
-      const jsonMatch = responseText.match(/\{[\s\S]*\}/);
-      if (jsonMatch) {
-        priceResult = JSON.parse(jsonMatch[0]);
-      } else {
+      priceResult = parseAiJsonResponse(responseText);
+      if (!priceResult) {
         throw new Error('Failed to parse Gemini response');
       }
 
