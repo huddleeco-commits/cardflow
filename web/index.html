@@ -1990,6 +1990,7 @@
       <div class="modal-body">
         <div class="settings-tabs">
           <button class="settings-tab active" data-tab="api" onclick="switchSettingsTab('api')">API Key</button>
+          <button class="settings-tab" data-tab="ai" onclick="switchSettingsTab('ai')">AI Analysis</button>
           <button class="settings-tab" data-tab="ebay" onclick="switchSettingsTab('ebay')">eBay</button>
           <button class="settings-tab" data-tab="models" onclick="switchSettingsTab('models')">Models</button>
           <button class="settings-tab" data-tab="costs" onclick="switchSettingsTab('costs')">Costs</button>
@@ -2016,6 +2017,80 @@
             <div id="api-key-result" style="margin-top: 8px; font-size: 13px;"></div>
           </div>
           <p style="font-size: 12px; color: var(--text-muted);">Get your API key at <a href="https://console.anthropic.com" target="_blank" style="color: var(--cyan);">console.anthropic.com</a></p>
+        </div>
+
+        <!-- AI Analysis Panel -->
+        <div class="settings-panel" id="panel-ai">
+          <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 16px;">
+            <h4>AI Card Analysis</h4>
+            <span style="font-size: 10px; background: var(--success); color: #000; padding: 2px 6px; border-radius: 4px; font-weight: 600;">BETA</span>
+          </div>
+
+          <p style="color: var(--text-muted); margin-bottom: 20px; font-size: 13px;">
+            Get AI-powered condition assessment, market values, and investment advice for your cards. Bring Your Own Key (BYOK) - you pay for your own API usage.
+          </p>
+
+          <!-- Provider Selection -->
+          <div style="margin-bottom: 20px;">
+            <label style="display: block; margin-bottom: 8px; font-size: 12px; font-weight: 600;">Preferred AI Provider</label>
+            <select id="settings-ai-provider" style="width: 100%; padding: 12px; background: rgba(0,0,0,0.3); border: 1px solid var(--glass-border); border-radius: 8px; color: var(--text);">
+              <option value="anthropic">Anthropic Claude (Recommended - has web search)</option>
+              <option value="openai">OpenAI GPT-4</option>
+              <option value="google">Google Gemini</option>
+            </select>
+          </div>
+
+          <!-- API Keys -->
+          <div style="background: var(--glass); padding: 20px; border-radius: 12px; margin-bottom: 20px;">
+            <div style="margin-bottom: 16px;">
+              <label style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px; font-size: 12px; font-weight: 600;">
+                Anthropic API Key
+                <a href="https://console.anthropic.com/settings/keys" target="_blank" style="font-size: 11px; color: var(--cyan);">Get key</a>
+                <span id="ai-key-status-anthropic" style="font-size: 10px; padding: 2px 6px; border-radius: 4px;"></span>
+              </label>
+              <input type="password" id="settings-ai-anthropic-key" placeholder="sk-ant-..." style="width: 100%; padding: 12px; background: rgba(0,0,0,0.3); border: 1px solid var(--glass-border); border-radius: 8px; color: var(--text); font-family: monospace;">
+            </div>
+
+            <div style="margin-bottom: 16px;">
+              <label style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px; font-size: 12px; font-weight: 600;">
+                OpenAI API Key
+                <a href="https://platform.openai.com/api-keys" target="_blank" style="font-size: 11px; color: var(--cyan);">Get key</a>
+                <span id="ai-key-status-openai" style="font-size: 10px; padding: 2px 6px; border-radius: 4px;"></span>
+              </label>
+              <input type="password" id="settings-ai-openai-key" placeholder="sk-..." style="width: 100%; padding: 12px; background: rgba(0,0,0,0.3); border: 1px solid var(--glass-border); border-radius: 8px; color: var(--text); font-family: monospace;">
+            </div>
+
+            <div>
+              <label style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px; font-size: 12px; font-weight: 600;">
+                Google Gemini API Key
+                <a href="https://aistudio.google.com/app/apikey" target="_blank" style="font-size: 11px; color: var(--cyan);">Get key</a>
+                <span id="ai-key-status-google" style="font-size: 10px; padding: 2px 6px; border-radius: 4px;"></span>
+              </label>
+              <input type="password" id="settings-ai-google-key" placeholder="AI..." style="width: 100%; padding: 12px; background: rgba(0,0,0,0.3); border: 1px solid var(--glass-border); border-radius: 8px; color: var(--text); font-family: monospace;">
+            </div>
+          </div>
+
+          <button class="btn btn-success" onclick="saveAiApiKeys()" style="width: 100%; margin-bottom: 16px;">Save AI Settings</button>
+          <div id="ai-save-result" style="text-align: center; font-size: 13px;"></div>
+
+          <!-- Usage Stats -->
+          <div style="background: var(--glass); padding: 16px; border-radius: 12px; margin-top: 20px;">
+            <h5 style="margin-bottom: 12px; font-size: 12px; color: var(--text-muted); text-transform: uppercase;">Your AI Analysis Usage</h5>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+              <div style="text-align: center;">
+                <div id="ai-usage-count" style="font-size: 24px; font-weight: 700; color: var(--cyan);">0</div>
+                <div style="font-size: 11px; color: var(--text-muted);">Total Analyses</div>
+              </div>
+              <div style="text-align: center;">
+                <div id="ai-usage-status" style="font-size: 14px; font-weight: 600; color: var(--success);">Ready</div>
+                <div style="font-size: 11px; color: var(--text-muted);">Status</div>
+              </div>
+            </div>
+          </div>
+
+          <div style="margin-top: 16px; text-align: center; font-size: 12px; color: var(--text-muted);">
+            Questions? Contact <a href="mailto:huddleeco@gmail.com" style="color: var(--cyan);">huddleeco@gmail.com</a>
+          </div>
         </div>
 
         <div class="settings-panel" id="panel-ebay">
@@ -2652,96 +2727,6 @@
           <button class="btn btn-secondary" onclick="openAiSettings()">Settings</button>
           <button class="btn btn-secondary" onclick="closeAiAnalysisModal()">Close</button>
         </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- AI Settings Modal -->
-  <div class="modal" id="ai-settings-modal">
-    <div class="modal-content" style="max-width: 500px;">
-      <div class="modal-header">
-        <h2>⚙️ AI Analysis Settings</h2>
-        <button class="modal-close" onclick="closeAiSettings()">&times;</button>
-      </div>
-      <div class="modal-body">
-        <p style="color: var(--text-muted); margin-bottom: 20px; font-size: 13px;">
-          Bring Your Own Key (BYOK) - Enter your API key to use AI analysis. Your key is stored securely and only used for your analyses.
-        </p>
-
-        <!-- Provider Selection -->
-        <div style="margin-bottom: 20px;">
-          <label style="display: block; margin-bottom: 8px; font-weight: 600;">Preferred AI Provider</label>
-          <select id="ai-preferred-provider" class="batch-select" style="width: 100%; padding: 12px; font-size: 14px;">
-            <option value="anthropic">Anthropic Claude (Recommended)</option>
-            <option value="openai">OpenAI GPT-4</option>
-            <option value="google">Google Gemini</option>
-          </select>
-        </div>
-
-        <!-- Anthropic API Key -->
-        <div style="margin-bottom: 16px;">
-          <label style="display: block; margin-bottom: 8px; font-weight: 600;">
-            <span style="display: flex; align-items: center; gap: 8px;">
-              Anthropic API Key
-              <a href="https://console.anthropic.com/settings/keys" target="_blank" style="font-size: 11px; color: var(--cyan);">Get key</a>
-            </span>
-          </label>
-          <input type="password" id="ai-anthropic-key" placeholder="sk-ant-..." style="width: 100%; padding: 12px; background: var(--glass); border: 1px solid var(--glass-border); border-radius: 8px; color: var(--text); font-family: monospace;">
-          <p style="font-size: 11px; color: var(--text-muted); margin-top: 4px;">Best for card analysis - supports web search for live pricing</p>
-        </div>
-
-        <!-- OpenAI API Key -->
-        <div style="margin-bottom: 16px;">
-          <label style="display: block; margin-bottom: 8px; font-weight: 600;">
-            <span style="display: flex; align-items: center; gap: 8px;">
-              OpenAI API Key
-              <a href="https://platform.openai.com/api-keys" target="_blank" style="font-size: 11px; color: var(--cyan);">Get key</a>
-            </span>
-          </label>
-          <input type="password" id="ai-openai-key" placeholder="sk-..." style="width: 100%; padding: 12px; background: var(--glass); border: 1px solid var(--glass-border); border-radius: 8px; color: var(--text); font-family: monospace;">
-        </div>
-
-        <!-- Google API Key -->
-        <div style="margin-bottom: 20px;">
-          <label style="display: block; margin-bottom: 8px; font-weight: 600;">
-            <span style="display: flex; align-items: center; gap: 8px;">
-              Google Gemini API Key
-              <a href="https://aistudio.google.com/app/apikey" target="_blank" style="font-size: 11px; color: var(--cyan);">Get key</a>
-            </span>
-          </label>
-          <input type="password" id="ai-google-key" placeholder="AI..." style="width: 100%; padding: 12px; background: var(--glass); border: 1px solid var(--glass-border); border-radius: 8px; color: var(--text); font-family: monospace;">
-        </div>
-
-        <!-- Usage Info -->
-        <div style="background: var(--glass); padding: 16px; border-radius: 12px; margin-bottom: 16px;">
-          <h4 style="margin-bottom: 12px; font-size: 13px;">Your Usage</h4>
-          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
-            <div>
-              <div id="ai-settings-used" style="font-size: 24px; font-weight: 700; color: var(--cyan);">0</div>
-              <div style="font-size: 11px; color: var(--text-muted);">Analyses Used</div>
-            </div>
-            <div>
-              <div id="ai-settings-remaining" style="font-size: 24px; font-weight: 700; color: var(--success);">3</div>
-              <div style="font-size: 11px; color: var(--text-muted);">Remaining This Month</div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Upgrade CTA -->
-        <div style="background: linear-gradient(135deg, rgba(123, 47, 247, 0.2), rgba(0, 246, 255, 0.2)); padding: 16px; border-radius: 12px; border: 1px solid var(--purple);">
-          <div style="font-weight: 600; margin-bottom: 4px;">Want unlimited analyses?</div>
-          <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 12px;">SlabTrack Pro includes unlimited AI analysis, collection management, and more.</p>
-          <a href="https://slabtrack.com" target="_blank" class="btn btn-accent" style="width: 100%; text-align: center;">Try SlabTrack Pro</a>
-        </div>
-
-        <!-- Support -->
-        <div style="margin-top: 16px; text-align: center; font-size: 12px; color: var(--text-muted);">
-          Questions? Contact <a href="mailto:huddleeco@gmail.com" style="color: var(--cyan);">huddleeco@gmail.com</a>
-        </div>
-      </div>
-      <div class="modal-footer">
-        <button class="btn btn-secondary" onclick="closeAiSettings()">Cancel</button>
-        <button class="btn btn-success" onclick="saveAiSettings()">Save Settings</button>
       </div>
     </div>
   </div>
@@ -4138,6 +4123,9 @@
       if (tab === 'ebay') {
         loadEbayStatus();
       }
+      if (tab === 'ai') {
+        loadAiSettings();
+      }
     }
 
     function closeSettingsModal() {
@@ -4151,6 +4139,81 @@
       document.getElementById(`panel-${tab}`).classList.add('active');
       if (tab === 'ebay') {
         loadEbayStatus();
+      }
+      if (tab === 'ai') {
+        loadAiSettings();
+      }
+    }
+
+    // AI Settings functions
+    async function loadAiSettings() {
+      try {
+        const usage = await api('/agent/usage');
+        if (usage) {
+          // Set provider
+          document.getElementById('settings-ai-provider').value = usage.preferredProvider || 'anthropic';
+
+          // Show key status
+          ['anthropic', 'openai', 'google'].forEach(provider => {
+            const statusEl = document.getElementById(`ai-key-status-${provider}`);
+            if (usage.apiKeys[provider]) {
+              statusEl.textContent = 'Configured';
+              statusEl.style.background = 'var(--success)';
+              statusEl.style.color = '#000';
+            } else {
+              statusEl.textContent = '';
+            }
+          });
+
+          // Show usage stats
+          document.getElementById('ai-usage-count').textContent = usage.quota.used || 0;
+          if (usage.quota.canAnalyze) {
+            document.getElementById('ai-usage-status').textContent = 'Ready';
+            document.getElementById('ai-usage-status').style.color = 'var(--success)';
+          } else {
+            document.getElementById('ai-usage-status').textContent = 'Add API Key';
+            document.getElementById('ai-usage-status').style.color = 'var(--warning)';
+          }
+        }
+      } catch (e) {
+        console.error('Failed to load AI settings:', e);
+      }
+    }
+
+    async function saveAiApiKeys() {
+      const anthropicKey = document.getElementById('settings-ai-anthropic-key').value.trim();
+      const openaiKey = document.getElementById('settings-ai-openai-key').value.trim();
+      const googleKey = document.getElementById('settings-ai-google-key').value.trim();
+      const preferredProvider = document.getElementById('settings-ai-provider').value;
+      const resultEl = document.getElementById('ai-save-result');
+
+      resultEl.innerHTML = '<span style="color: var(--text-muted);">Saving...</span>';
+
+      try {
+        const response = await fetch(`${API_URL}/agent/save-settings`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({
+            anthropicKey: anthropicKey || undefined,
+            openaiKey: openaiKey || undefined,
+            googleKey: googleKey || undefined,
+            preferredProvider
+          })
+        });
+
+        const data = await response.json();
+        if (data.success) {
+          resultEl.innerHTML = '<span style="color: var(--success);">Settings saved!</span>';
+          loadAiSettings(); // Refresh the display
+          showToast('AI settings saved!', 'success');
+        } else {
+          throw new Error(data.error);
+        }
+      } catch (e) {
+        resultEl.innerHTML = `<span style="color: var(--error);">Failed: ${e.message}</span>`;
       }
     }
 
@@ -6587,11 +6650,24 @@
     }
 
     function updateAiUsageDisplay() {
-      document.getElementById('ai-analysis-usage').innerHTML = `
-        ${aiUsage.remaining} of ${aiUsage.limit} analyses remaining this month
-      `;
-      document.getElementById('ai-settings-used').textContent = aiUsage.used || 0;
-      document.getElementById('ai-settings-remaining').textContent = aiUsage.remaining || 0;
+      const usageText = aiUsage.isAdmin || aiUsage.hasOwnKey
+        ? 'Unlimited analyses (BYOK/Admin)'
+        : `${aiUsage.remaining} of ${aiUsage.limit} analyses remaining this month`;
+      document.getElementById('ai-analysis-usage').innerHTML = usageText;
+
+      // Update settings modal elements if they exist
+      const countEl = document.getElementById('ai-usage-count');
+      const statusEl = document.getElementById('ai-usage-status');
+      if (countEl) countEl.textContent = aiUsage.used || 0;
+      if (statusEl) {
+        if (aiUsage.isAdmin || aiUsage.hasOwnKey) {
+          statusEl.textContent = 'Unlimited';
+          statusEl.style.color = 'var(--success)';
+        } else {
+          statusEl.textContent = aiUsage.remaining > 0 ? 'Ready' : 'Quota Used';
+          statusEl.style.color = aiUsage.remaining > 0 ? 'var(--success)' : 'var(--error)';
+        }
+      }
     }
 
     function closeAiAnalysisModal() {
@@ -6599,57 +6675,13 @@
       aiAnalysisCard = null;
     }
 
-    // AI Settings Modal
-    async function openAiSettings() {
-      document.getElementById('ai-settings-modal').classList.add('open');
-
-      try {
-        const usage = await api('/agent/usage');
-        if (usage) {
-          aiUsage = usage.quota;
-          updateAiUsageDisplay();
-          document.getElementById('ai-preferred-provider').value = usage.preferredProvider || 'anthropic';
-        }
-      } catch (e) {
-        console.error('Failed to load AI settings:', e);
-      }
+    // AI Settings - redirect to main settings modal
+    function openAiSettings() {
+      showSettingsModal('ai');
     }
 
     function closeAiSettings() {
-      document.getElementById('ai-settings-modal').classList.remove('open');
-    }
-
-    async function saveAiSettings() {
-      const anthropicKey = document.getElementById('ai-anthropic-key').value.trim();
-      const openaiKey = document.getElementById('ai-openai-key').value.trim();
-      const googleKey = document.getElementById('ai-google-key').value.trim();
-      const preferredProvider = document.getElementById('ai-preferred-provider').value;
-
-      try {
-        const response = await fetch(`${API_URL}/agent/save-settings`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`
-          },
-          body: JSON.stringify({
-            anthropicKey: anthropicKey || undefined,
-            openaiKey: openaiKey || undefined,
-            googleKey: googleKey || undefined,
-            preferredProvider
-          })
-        });
-
-        const data = await response.json();
-        if (data.success) {
-          showToast('AI settings saved!', 'success');
-          closeAiSettings();
-        } else {
-          throw new Error(data.error);
-        }
-      } catch (e) {
-        showToast('Failed to save settings: ' + e.message, 'error');
-      }
+      closeSettingsModal();
     }
 
     // AI Upgrade Modal

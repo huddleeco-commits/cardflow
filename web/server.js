@@ -4841,20 +4841,44 @@ function calculateAgentCost(provider, tokens) {
 // Helper: Check if user can analyze (quota check)
 async function canUserAnalyze(userId) {
   const result = await pool.query(
-    'SELECT agent_analyses_used, agent_analyses_limit, agent_analyses_reset, beta_features FROM users WHERE id = $1',
+    'SELECT role, agent_analyses_used, agent_analyses_limit, agent_analyses_reset, beta_features, anthropic_api_key, openai_api_key, google_api_key FROM users WHERE id = $1',
     [userId]
   );
   if (result.rows.length === 0) return { allowed: false, reason: 'User not found' };
 
   const user = result.rows[0];
   const betaFeatures = user.beta_features || {};
+  const isAdmin = user.role === 'admin';
+  const hasOwnApiKey = !!(user.anthropic_api_key || user.openai_api_key || user.google_api_key);
 
-  // Check if beta feature is enabled
-  if (!betaFeatures.agentAnalysis) {
-    return { allowed: false, reason: 'Agent analysis not enabled for your account', needsBeta: true };
+  // Admins always have unlimited access
+  if (isAdmin) {
+    return {
+      allowed: true,
+      used: user.agent_analyses_used || 0,
+      limit: 999999,
+      remaining: 999999,
+      isAdmin: true
+    };
   }
 
-  // Reset quota if needed (monthly reset)
+  // Users with their own API key get unlimited access (BYOK model)
+  if (hasOwnApiKey) {
+    return {
+      allowed: true,
+      used: user.agent_analyses_used || 0,
+      limit: 999999,
+      remaining: 999999,
+      hasOwnKey: true
+    };
+  }
+
+  // For users without API key, check beta access
+  if (!betaFeatures.agentAnalysis) {
+    return { allowed: false, reason: 'Add your API key in Settings to use AI Analysis', needsApiKey: true };
+  }
+
+  // Reset quota if needed (monthly reset) - only for quota-limited users
   const now = new Date();
   if (!user.agent_analyses_reset || new Date(user.agent_analyses_reset) < now) {
     const nextReset = new Date(now.getFullYear(), now.getMonth() + 1, 1);
