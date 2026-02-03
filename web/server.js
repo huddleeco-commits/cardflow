@@ -1551,6 +1551,7 @@ app.post('/api/upload-pair', authenticateToken, (req, res) => {
 
       // Store in database and get the card ID
       const isBatchMode = req.body && req.body.batch === 'true';
+      console.log(`[Upload] Body fields:`, req.body); // Debug: see what's in req.body
       const insertResult = await pool.query(`
         INSERT INTO cards (user_id, card_data, front_image_path, back_image_path, status)
         VALUES ($1, $2, $3, $4, 'pending')
@@ -1575,9 +1576,12 @@ app.post('/api/upload-pair', authenticateToken, (req, res) => {
 
       // Auto-identify in batch mode
       if (isBatchMode) {
+        console.log(`[Batch] Triggering auto-identify for card ${cardId}`);
         identifySingleCard(req.user.id, cardId).catch(e => {
           console.error(`[Batch] Auto-identify error for ${cardId}:`, e.message);
         });
+      } else {
+        console.log(`[Upload] Not batch mode, skipping auto-identify`);
       }
 
       res.json({
