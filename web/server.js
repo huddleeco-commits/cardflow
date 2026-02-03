@@ -1885,10 +1885,18 @@ async function identifySingleCard(userId, cardId) {
         return;
       }
 
-      // Handle TIER_REQUIRED error (user downgraded from Power/Dealer)
-      if (stResponse.data?.error === 'TIER_REQUIRED') {
-        console.log(`[Batch] SlabTrack tier downgraded for user ${userId}, falling back to BYOK`);
-        // Fall through to BYOK if available
+      // Handle non-success response from SlabTrack
+      if (!stResponse.data?.success) {
+        const errorMsg = stResponse.data?.error || stResponse.data?.message || 'Unknown error';
+        console.error(`[SlabTrack Scan] API returned error for card ${cardId}: ${errorMsg}`);
+
+        if (stResponse.data?.error === 'TIER_REQUIRED') {
+          console.log(`[Batch] SlabTrack tier downgraded for user ${userId}, falling back to BYOK`);
+          // Fall through to BYOK if available
+        } else {
+          // Other error - still try BYOK if available
+          console.log(`[Batch] SlabTrack scan failed, will try BYOK if available`);
+        }
       }
     } catch (e) {
       // Detailed error logging for SlabTrack scan failures
@@ -1915,8 +1923,20 @@ async function identifySingleCard(userId, cardId) {
     }
   }
 
-  // Use BYOK (Anthropic API)
+  // Use BYOK (Anthropic API) - only if we have an API key
+  if (!apiKey) {
+    console.error(`[Batch] No API key available for BYOK fallback, card ${cardId}`);
+    broadcast({
+      type: 'batch_identify_error',
+      cardId,
+      error: 'No scanning method available. Connect SlabTrack Power/Dealer or add your Anthropic API key.',
+      userId
+    });
+    return;
+  }
+
   try {
+    console.log(`[Batch] Using BYOK for card ${cardId}`);
     const Anthropic = require('@anthropic-ai/sdk');
     const anthropic = new Anthropic({ apiKey });
 
