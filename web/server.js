@@ -1556,10 +1556,20 @@ async function identifySingleCard(userId, cardId) {
         backBase64 = await getImageBase64(card.back_image_path, FOLDERS.new);
       }
 
-      // Call SlabTrack scanning API
-      const stResponse = await axios.post(`${SLABTRACK_API}/scanner/quick-price-check`, {
-        frontImage: `data:${frontBase64.media_type};base64,${frontBase64.data}`,
-        backImage: backBase64 ? `data:${backBase64.media_type};base64,${backBase64.data}` : null
+      // Call SlabTrack scanning API (atlas/scan endpoint)
+      // Use Cloudinary URLs if available, otherwise base64 data URIs
+      const frontImageUrl = card.front_image_path.startsWith('http')
+        ? card.front_image_path
+        : `data:${frontBase64.media_type};base64,${frontBase64.data}`;
+      const backImageUrl = card.back_image_path?.startsWith('http')
+        ? card.back_image_path
+        : (backBase64 ? `data:${backBase64.media_type};base64,${backBase64.data}` : null);
+
+      const stResponse = await axios.post(`${SLABTRACK_API}/atlas/scan`, {
+        front_image_url: frontImageUrl,
+        back_image_url: backImageUrl,
+        card_type: 'slabs', // Default to slabs, could be detected from card
+        save_to_collection: true
       }, {
         headers: {
           'Content-Type': 'application/json',
@@ -4773,7 +4783,7 @@ app.post('/api/export/slabtrack', authenticateToken, async (req, res) => {
 // SLABTRACK DIRECT API INTEGRATION
 // ==============================
 
-const SLABTRACK_API = process.env.SLABTRACK_API_URL || 'https://slabtrack.be1st.io/api';
+const SLABTRACK_API = process.env.SLABTRACK_API_URL || 'https://slabtrack.io/api';
 
 // Get SlabTrack connection status (with user info from SlabTrack API)
 app.get('/api/slabtrack/status', authenticateToken, async (req, res) => {
@@ -4902,10 +4912,12 @@ app.post('/api/slabtrack/scan', authenticateToken, async (req, res) => {
 
     console.log(`[SlabTrack] Scanning card via SlabTrack API for user ${req.user.id}`);
 
-    // Call SlabTrack's scanning API
-    const response = await axios.post(`${SLABTRACK_API}/scanner/quick-price-check`, {
-      frontImage,
-      backImage: backImage || null
+    // Call SlabTrack's atlas/scan API
+    const response = await axios.post(`${SLABTRACK_API}/atlas/scan`, {
+      front_image_url: frontImage,
+      back_image_url: backImage || null,
+      card_type: req.body.card_type || 'slabs',
+      save_to_collection: req.body.save_to_collection !== false
     }, {
       headers: {
         'Content-Type': 'application/json',
