@@ -420,7 +420,6 @@
 
   <script>
     const API_URL = window.location.origin + '/api';
-    const SLABTRACK_API = 'https://slabtrack.io/api';
     let token = localStorage.getItem('token');
     let ws = null;
     let video, canvas, ctx;
@@ -604,12 +603,12 @@
         document.getElementById('jigsnap-text').textContent = 'Correcting perspective...';
 
         try {
-          // Call SlabTrack JigSnap API for perspective correction
-          const response = await fetch(`${SLABTRACK_API}/jig-scanner/correct`, {
+          // Call CardFlow's JigSnap proxy endpoint (routes to SlabTrack)
+          const response = await fetch(`${API_URL}/jigsnap/correct`, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
-              'X-API-Token': token
+              'Authorization': `Bearer ${token}`
             },
             body: JSON.stringify({
               image: fullBase64,
