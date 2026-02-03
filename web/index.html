@@ -6838,6 +6838,15 @@
         return '❓';
       };
 
+      const getConfidenceColor = (confidence) => {
+        if (confidence === 'high') return 'var(--success)';
+        if (confidence === 'medium') return 'var(--warning)';
+        return 'var(--error)';
+      };
+
+      // Count low confidence cards
+      const lowConfidenceCount = pricings.filter(p => p.confidence === 'low').length;
+
       let html = `
         <!-- Summary Header -->
         <div style="background: linear-gradient(135deg, rgba(16, 185, 129, 0.15), rgba(0, 246, 255, 0.1)); padding: 24px; border-bottom: 1px solid var(--glass-border);">
@@ -6868,25 +6877,58 @@
               </div>
             </div>
           ` : ''}
+
+          ${lowConfidenceCount > 0 ? `
+            <div style="margin-top: 12px; padding: 10px 12px; background: rgba(255, 170, 0, 0.1); border: 1px solid var(--warning); border-radius: 8px;">
+              <div style="font-size: 12px; color: var(--warning);">
+                ⚠️ ${lowConfidenceCount} card${lowConfidenceCount > 1 ? 's' : ''} with low confidence - verify prices manually
+              </div>
+            </div>
+          ` : ''}
         </div>
 
         <!-- Card List -->
         <div style="padding: 16px;">
           ${pricings.map((p, i) => `
-            <div style="background: var(--glass); border: 1px solid var(--glass-border); border-radius: 12px; margin-bottom: 12px; overflow: hidden;">
-              <!-- Card Header -->
-              <div style="padding: 16px; border-bottom: 1px solid var(--glass-border); display: flex; justify-content: space-between; align-items: flex-start;">
-                <div>
-                  <div style="font-size: 12px; color: var(--text-muted);">${p.card.year || ''} ${p.card.setName || ''} ${p.card.cardNumber ? '#' + p.card.cardNumber : ''}</div>
+            <div style="background: var(--glass); border: 1px solid ${p.confidence === 'low' ? 'var(--warning)' : 'var(--glass-border)'}; border-radius: 12px; margin-bottom: 12px; overflow: hidden;" data-card-id="${p.card.id}">
+
+              ${p.warning ? `
+                <div style="padding: 8px 16px; background: rgba(255, 170, 0, 0.15); border-bottom: 1px solid var(--warning); font-size: 12px; color: var(--warning);">
+                  ⚠️ ${p.warning}
+                </div>
+              ` : ''}
+
+              <!-- Card Header with Image -->
+              <div style="padding: 16px; border-bottom: 1px solid var(--glass-border); display: flex; gap: 16px; align-items: flex-start;">
+                <!-- Card Image -->
+                ${p.card.imageUrl ? `
+                  <div style="width: 70px; height: 100px; flex-shrink: 0; border-radius: 6px; overflow: hidden; background: var(--bg-deep);">
+                    <img src="${p.card.imageUrl}" alt="${p.card.player}" style="width: 100%; height: 100%; object-fit: cover;" onerror="this.parentElement.innerHTML='<div style=\\'display:flex;align-items:center;justify-content:center;height:100%;color:var(--text-muted);font-size:10px;\\'>No Image</div>'">
+                  </div>
+                ` : ''}
+
+                <!-- Card Info -->
+                <div style="flex: 1; min-width: 0;">
+                  <div style="display: flex; gap: 8px; align-items: center; margin-bottom: 4px;">
+                    <span style="font-size: 12px; color: var(--text-muted);">${p.card.year || ''} ${p.card.setName || ''} ${p.card.cardNumber ? '#' + p.card.cardNumber : ''}</span>
+                    ${p.card.isBase !== false && !p.card.parallel ? `
+                      <span style="background: var(--glass); padding: 2px 6px; border-radius: 4px; font-size: 9px; color: var(--text-muted); text-transform: uppercase;">BASE</span>
+                    ` : ''}
+                  </div>
                   <div style="font-size: 16px; font-weight: 600;">${p.card.player || 'Unknown'}</div>
-                  ${p.card.parallel ? `<div style="font-size: 11px; color: var(--purple);">✨ ${p.card.parallel}</div>` : ''}
+                  ${p.card.parallel ? `<div style="font-size: 11px; color: var(--purple); margin-top: 2px;">✨ ${p.card.parallel}</div>` : ''}
                   ${p.card.isGraded ? `<div style="font-size: 11px; color: var(--cyan);">🏆 ${p.card.grade}</div>` : ''}
                 </div>
-                <div style="text-align: right;">
+
+                <!-- Price & Confidence -->
+                <div style="text-align: right; flex-shrink: 0;">
                   ${p.average !== null ? `
                     <div style="font-size: 24px; font-weight: 700; color: var(--success);">$${p.average.toFixed(2)}</div>
                     <div style="font-size: 11px; color: var(--text-muted);">
-                      ${getTrendIcon(p.trend)} ${p.trend} • ${p.confidence} confidence
+                      ${getTrendIcon(p.trend)} ${p.trend}
+                    </div>
+                    <div style="font-size: 10px; color: ${getConfidenceColor(p.confidence)}; margin-top: 2px;">
+                      ${p.confidence === 'high' ? '✓' : p.confidence === 'medium' ? '~' : '!'} ${p.confidence} confidence
                     </div>
                   ` : `
                     <div style="font-size: 16px; color: var(--text-muted);">No data</div>
@@ -6895,13 +6937,13 @@
               </div>
 
               <!-- Sales & Recommendation -->
-              <div style="padding: 12px 16px; display: flex; gap: 16px;">
+              <div style="padding: 12px 16px; display: flex; gap: 16px; flex-wrap: wrap;">
                 <!-- Recent Sales -->
-                <div style="flex: 1;">
+                <div style="flex: 1; min-width: 200px;">
                   ${p.recentSales.length > 0 ? `
-                    <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 6px;">Recent eBay Sales:</div>
+                    <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 6px;">Recent eBay Sales${p.outlierCount > 0 ? ` (${p.outlierCount} outlier${p.outlierCount > 1 ? 's' : ''} removed)` : ''}:</div>
                     <div style="display: flex; flex-wrap: wrap; gap: 6px;">
-                      ${p.recentSales.slice(0, 5).map(s => `
+                      ${p.recentSales.slice(0, 6).map(s => `
                         <span style="background: var(--bg-deep); padding: 4px 8px; border-radius: 4px; font-size: 12px;">
                           $${s.price.toFixed(2)} <span style="color: var(--text-muted);">${s.condition}</span>
                         </span>
@@ -6921,13 +6963,68 @@
                 </div>
               </div>
 
-              ${p.fromCache ? `<div style="padding: 4px 16px 8px; font-size: 10px; color: var(--text-muted);">📦 Cached result</div>` : ''}
+              <!-- Actions Footer -->
+              <div style="padding: 8px 16px; background: var(--bg-deep); display: flex; justify-content: space-between; align-items: center;">
+                <div style="font-size: 10px; color: var(--text-muted);">
+                  ${p.fromCache ? '📦 Cached' : '🔍 Fresh lookup'}
+                  ${p.confidenceReason ? ` • ${p.confidenceReason}` : ''}
+                </div>
+                <div style="display: flex; gap: 8px;">
+                  <button onclick="repriceCard('${p.card.id}')" style="background: none; border: 1px solid var(--glass-border); color: var(--text-muted); padding: 4px 8px; border-radius: 4px; font-size: 11px; cursor: pointer;">🔄 Re-search</button>
+                  <button onclick="setManualPrice('${p.card.id}', ${p.average || 0})" style="background: none; border: 1px solid var(--glass-border); color: var(--text-muted); padding: 4px 8px; border-radius: 4px; font-size: 11px; cursor: pointer;">✏️ Set Price</button>
+                </div>
+              </div>
             </div>
           `).join('')}
         </div>
       `;
 
       document.getElementById('card-pricing-content').innerHTML = html;
+    }
+
+    // Re-price a single card (bypass cache)
+    async function repriceCard(cardId) {
+      showToast('Re-searching price...', 'info');
+      try {
+        // Clear from cache by making a fresh request
+        const response = await api(`/cards/${cardId}/price?fresh=1`);
+        if (response.success) {
+          showToast(`Updated: $${response.pricing.average?.toFixed(2) || 'N/A'}`, 'success');
+          // Re-run full pricing to update display
+          priceCardsIndividually();
+        }
+      } catch (e) {
+        showToast('Re-search failed: ' + e.message, 'error');
+      }
+    }
+
+    // Set manual price for a card
+    async function setManualPrice(cardId, currentPrice) {
+      const newPrice = prompt('Enter price for this card ($):', currentPrice ? currentPrice.toFixed(2) : '');
+      if (newPrice === null) return;
+
+      const price = parseFloat(newPrice);
+      if (isNaN(price) || price < 0) {
+        showToast('Invalid price', 'error');
+        return;
+      }
+
+      try {
+        await api(`/cards/${cardId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ recommended_price: price })
+        });
+
+        // Update local card data
+        const card = cards.find(c => c.id === cardId);
+        if (card) card.recommended_price = price;
+
+        showToast(`Price set to $${price.toFixed(2)}`, 'success');
+        refreshData();
+      } catch (e) {
+        showToast('Failed to set price: ' + e.message, 'error');
+      }
     }
 
     function closeCardPricingModal() {

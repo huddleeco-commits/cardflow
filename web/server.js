@@ -7494,29 +7494,137 @@ function buildCardCacheKey(card) {
   return parts.join('|');
 }
 
-// Get individual card pricing from Perplexity
-async function getIndividualCardPricing(card, context = {}) {
-  const cacheKey = buildCardCacheKey(card);
-
-  // Check cache first
-  const cached = cardPricingCache.get(cacheKey);
-  if (cached && Date.now() - cached.timestamp < CARD_PRICING_CACHE_TTL) {
-    console.log('[Card Pricing] Cache hit:', card.player || card.subject);
-    return { ...cached.data, fromCache: true };
-  }
-
-  // Build search query
+// Build specific pricing query with base/parallel distinction
+function buildPricingQuery(card) {
   const player = card.player || card.subject || 'Unknown';
   const year = card.year || '';
   const setName = card.set_name || card.set || '';
   const cardNumber = card.card_number || '';
-  const parallel = card.parallel && card.parallel !== 'Base' ? card.parallel : '';
+  const parallel = card.parallel || '';
   const graded = card.is_graded ? `${card.grading_company || ''} ${card.grade || ''}`.trim() : '';
 
-  const queryParts = [year, setName, cardNumber ? `#${cardNumber}` : '', player, parallel, graded].filter(Boolean);
-  const query = `${queryParts.join(' ')} trading card eBay sold listings recent prices 2024 2025 - list specific sale prices with dates`;
+  // Detect if this is a base card or parallel
+  const isBase = !parallel ||
+    parallel.toLowerCase() === 'base' ||
+    parallel.toLowerCase() === 'standard' ||
+    parallel.toLowerCase() === 'base set';
 
-  console.log('[Card Pricing] Searching for:', player);
+  // Build the query parts
+  let queryParts = [];
+
+  if (isBase) {
+    // For BASE cards - be very explicit
+    queryParts = [
+      year,
+      setName,
+      'BASE card',
+      cardNumber ? `#${cardNumber}` : '',
+      player,
+      graded
+    ].filter(Boolean);
+
+    // Add explicit exclusions for base cards
+    const exclusions = 'EXCLUDE: parallels, prizm, refractor, holo, auto, autograph, numbered /99 /50 /25 /10, serial numbered, insert, SP, SSP, variation, color, silver, gold, purple, green, pink, blue, red, orange';
+
+    return `${queryParts.join(' ')} eBay sold listings 2024 2025 - ${exclusions}. Show ONLY standard BASE version prices. List 5-8 recent sale prices with conditions.`;
+  } else {
+    // For PARALLEL cards - include the parallel name
+    queryParts = [
+      year,
+      setName,
+      parallel,  // Include the parallel type (e.g., "Silver Prizm", "Refractor")
+      cardNumber ? `#${cardNumber}` : '',
+      player,
+      graded
+    ].filter(Boolean);
+
+    return `${queryParts.join(' ')} eBay sold listings 2024 2025 - show ONLY ${parallel} version prices, not base card. List 5-8 recent sale prices with conditions.`;
+  }
+}
+
+// Validate price consistency and detect outliers
+function validatePriceConsistency(sales) {
+  if (sales.length < 2) {
+    return {
+      confidence: 'low',
+      reason: 'Too few sales to validate',
+      warning: 'Only 1 sale found - verify manually',
+      adjustedAverage: sales[0]?.price || null
+    };
+  }
+
+  const prices = sales.map(s => s.price).sort((a, b) => a - b);
+  const min = prices[0];
+  const max = prices[prices.length - 1];
+
+  // Calculate median
+  const mid = Math.floor(prices.length / 2);
+  const median = prices.length % 2 !== 0
+    ? prices[mid]
+    : (prices[mid - 1] + prices[mid]) / 2;
+
+  // Calculate average without outliers (prices > 3x median)
+  const filteredPrices = prices.filter(p => p <= median * 3 && p >= median * 0.33);
+  const adjustedAverage = filteredPrices.length > 0
+    ? filteredPrices.reduce((a, b) => a + b, 0) / filteredPrices.length
+    : median;
+
+  // If max is 3x+ higher than median, something's wrong (likely parallels mixed in)
+  if (max > median * 3) {
+    return {
+      confidence: 'low',
+      reason: 'Price spread too wide - may include parallels or autos',
+      warning: `Prices range $${min.toFixed(2)} to $${max.toFixed(2)} - verify manually`,
+      adjustedAverage,
+      outlierCount: prices.length - filteredPrices.length
+    };
+  }
+
+  // If spread is tight (within 80%), high confidence
+  if (max < median * 1.8 && min > median * 0.5) {
+    return {
+      confidence: 'high',
+      reason: 'Consistent pricing found',
+      adjustedAverage
+    };
+  }
+
+  // Medium confidence
+  return {
+    confidence: 'medium',
+    reason: 'Some variation in prices',
+    adjustedAverage
+  };
+}
+
+// Get individual card pricing from Perplexity
+async function getIndividualCardPricing(card, context = {}) {
+  const cacheKey = buildCardCacheKey(card);
+  const skipCache = context.skipCache === true;
+
+  // Check cache first (unless skipCache is true for re-search)
+  if (!skipCache) {
+    const cached = cardPricingCache.get(cacheKey);
+    if (cached && Date.now() - cached.timestamp < CARD_PRICING_CACHE_TTL) {
+      console.log('[Card Pricing] Cache hit:', card.player || card.subject);
+      return { ...cached.data, fromCache: true };
+    }
+  } else {
+    console.log('[Card Pricing] Cache bypass requested for:', card.player || card.subject);
+  }
+
+  // Build specific query
+  const player = card.player || card.subject || 'Unknown';
+  const year = card.year || '';
+  const setName = card.set_name || card.set || '';
+  const cardNumber = card.card_number || '';
+  const parallel = card.parallel && card.parallel.toLowerCase() !== 'base' ? card.parallel : '';
+  const graded = card.is_graded ? `${card.grading_company || ''} ${card.grade || ''}`.trim() : '';
+  const isBase = !parallel;
+
+  const query = buildPricingQuery(card);
+
+  console.log('[Card Pricing] Searching for:', player, isBase ? '(BASE)' : `(${parallel})`);
 
   const result = await searchPerplexity(query, {
     ...context,
@@ -7530,7 +7638,7 @@ async function getIndividualCardPricing(card, context = {}) {
       recentSales: [],
       average: null,
       trend: 'unknown',
-      recommendation: { action: 'RESEARCH', reason: 'Unable to find pricing data' },
+      recommendation: { action: 'RESEARCH', emoji: '🔍', reason: 'Unable to find pricing data' },
       confidence: 'low',
       fromCache: false
     };
@@ -7538,9 +7646,14 @@ async function getIndividualCardPricing(card, context = {}) {
 
   // Parse the response to extract prices
   const sales = parseRecentSales(result.content);
-  const average = sales.length > 0
-    ? sales.reduce((sum, s) => sum + s.price, 0) / sales.length
-    : null;
+
+  // Validate price consistency
+  const validation = validatePriceConsistency(sales);
+
+  // Use adjusted average if outliers detected
+  const average = validation.adjustedAverage !== null
+    ? validation.adjustedAverage
+    : (sales.length > 0 ? sales.reduce((sum, s) => sum + s.price, 0) / sales.length : null);
 
   const trend = determinePriceTrend(sales);
   const recommendation = getCardRecommendation(average, trend, sales, card);
@@ -7553,14 +7666,19 @@ async function getIndividualCardPricing(card, context = {}) {
       setName: setName,
       cardNumber: cardNumber,
       parallel: parallel,
+      isBase: isBase,
       isGraded: card.is_graded,
-      grade: graded
+      grade: graded,
+      imageUrl: card.front_image || card.front || null
     },
     recentSales: sales,
     average: average,
     trend: trend,
     recommendation: recommendation,
-    confidence: sales.length >= 3 ? 'high' : sales.length >= 1 ? 'medium' : 'low',
+    confidence: validation.confidence,
+    confidenceReason: validation.reason,
+    warning: validation.warning || null,
+    outlierCount: validation.outlierCount || 0,
     rawResponse: result.content.substring(0, 500),
     citations: result.citations,
     fromCache: false
@@ -7821,9 +7939,11 @@ app.post('/api/cards/price-individual', authenticateToken, async (req, res) => {
 });
 
 // Price a single card (for quick lookup)
+// Use ?fresh=1 to bypass cache and re-search
 app.get('/api/cards/:cardId/price', authenticateToken, async (req, res) => {
   const userId = req.user.id;
   const { cardId } = req.params;
+  const skipCache = req.query.fresh === '1' || req.query.fresh === 'true';
 
   if (!PERPLEXITY_API_KEY) {
     return res.status(400).json({ error: 'Card pricing not available' });
@@ -7847,9 +7967,9 @@ app.get('/api/cards/:cardId/price', authenticateToken, async (req, res) => {
       id: row.id,
       ...cardData,
       front_image: row.front_image_path
-    }, { userId });
+    }, { userId, skipCache });
 
-    res.json({ success: true, pricing });
+    res.json({ success: true, pricing, wasRefreshed: skipCache });
 
   } catch (e) {
     console.error('[Card Pricing] Error:', e);
