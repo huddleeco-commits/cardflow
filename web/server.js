@@ -2092,21 +2092,35 @@ app.post('/api/process/identify', authenticateToken, async (req, res) => {
 
     const pendingCards = pendingResult.rows;
 
-    // If using SlabTrack, process each card with identifySingleCard (which handles SlabTrack)
+    // If using SlabTrack, process cards in parallel with concurrency limit
     if (slabTrackCheck.canUse) {
       res.json({
         success: true,
-        message: `Processing ${pendingCards.length} cards via SlabTrack...`,
+        message: `Processing ${pendingCards.length} cards via SlabTrack (parallel)...`,
         count: pendingCards.length,
         scanMode: 'slabtrack'
       });
 
-      // Process each card asynchronously
-      for (const card of pendingCards) {
-        identifySingleCard(userId, card.id).catch(e => {
-          console.error(`[Identify] SlabTrack error for ${card.id}:`, e.message);
-        });
-      }
+      // Process cards in parallel with concurrency limit of 5
+      const PARALLEL_LIMIT = 5;
+      const processInBatches = async () => {
+        for (let i = 0; i < pendingCards.length; i += PARALLEL_LIMIT) {
+          const batch = pendingCards.slice(i, i + PARALLEL_LIMIT);
+          console.log(`[Identify] Processing batch ${Math.floor(i/PARALLEL_LIMIT) + 1}: ${batch.length} cards in parallel`);
+
+          await Promise.all(
+            batch.map(card =>
+              identifySingleCard(userId, card.id).catch(e => {
+                console.error(`[Identify] SlabTrack error for ${card.id}:`, e.message);
+              })
+            )
+          );
+        }
+        console.log(`[Identify] All ${pendingCards.length} cards processed`);
+      };
+
+      // Fire and forget - don't block response
+      processInBatches().catch(e => console.error('[Identify] Batch processing error:', e));
       return;
     }
 

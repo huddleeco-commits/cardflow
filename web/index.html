@@ -3949,8 +3949,12 @@
         if (data.type === 'batch_card_identified') {
           if (batchMode) {
             updateBatchCard(data.cardId, data.cardData);
+          } else {
+            // In normal mode, refresh the cards list to show the identified card
+            loadCards();
           }
           loadStatus();
+          showToast(`Card identified: ${data.cardData?.player || 'Unknown'}`, 'success');
         }
         if (data.type === 'batch_identify_error') {
           if (batchMode) {
