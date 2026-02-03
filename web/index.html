@@ -1975,10 +1975,233 @@
       cursor: pointer;
       padding: 4px;
     }
+
+    /* ========== HERO VIEW - Large card during scan/identification ========== */
+    .hero-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(10, 14, 26, 0.97);
+      z-index: 9999;
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 40px;
+    }
+
+    .hero-overlay.show {
+      display: flex;
+      animation: heroFadeIn 0.3s ease;
+    }
+
+    @keyframes heroFadeIn {
+      from { opacity: 0; transform: scale(0.95); }
+      to { opacity: 1; transform: scale(1); }
+    }
+
+    .hero-card-container {
+      display: flex;
+      gap: 40px;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 40px;
+    }
+
+    .hero-card-image {
+      width: 320px;
+      aspect-ratio: 2.5/3.5;
+      background: var(--glass);
+      border: 4px solid var(--glass-border);
+      border-radius: 20px;
+      overflow: hidden;
+      position: relative;
+      box-shadow: 0 25px 80px rgba(0, 0, 0, 0.6);
+    }
+
+    .hero-card-image img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    .hero-card-image .hero-label {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      background: rgba(0, 0, 0, 0.85);
+      padding: 12px;
+      text-align: center;
+      font-size: 16px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 3px;
+    }
+
+    .hero-card-image.front { border-color: var(--cyan); }
+    .hero-card-image.back { border-color: var(--purple); }
+    .hero-card-image.front .hero-label { color: var(--cyan); }
+    .hero-card-image.back .hero-label { color: var(--purple); }
+
+    .hero-status {
+      text-align: center;
+      margin-bottom: 30px;
+    }
+
+    .hero-status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 16px;
+      padding: 20px 50px;
+      border-radius: 60px;
+      font-size: 24px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 4px;
+    }
+
+    .hero-status-badge.uploading {
+      background: rgba(255, 170, 0, 0.15);
+      border: 3px solid var(--warning);
+      color: var(--warning);
+    }
+
+    .hero-status-badge.identifying {
+      background: rgba(0, 246, 255, 0.1);
+      border: 3px solid var(--cyan);
+      color: var(--cyan);
+      animation: heroPulse 1.5s infinite;
+    }
+
+    @keyframes heroPulse {
+      0%, 100% { box-shadow: 0 0 30px rgba(0, 246, 255, 0.3); }
+      50% { box-shadow: 0 0 60px rgba(0, 246, 255, 0.6); }
+    }
+
+    .hero-status-badge.identified {
+      background: rgba(0, 255, 136, 0.15);
+      border: 3px solid var(--success);
+      color: var(--success);
+      animation: heroSuccess 0.6s ease;
+    }
+
+    @keyframes heroSuccess {
+      0% { transform: scale(1); }
+      50% { transform: scale(1.1); }
+      100% { transform: scale(1); }
+    }
+
+    .hero-status-badge .spinner {
+      width: 28px;
+      height: 28px;
+      border: 4px solid transparent;
+      border-top-color: currentColor;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+
+    .hero-card-info {
+      text-align: center;
+      max-width: 700px;
+    }
+
+    .hero-card-number {
+      font-size: 16px;
+      color: var(--text-muted);
+      margin-bottom: 12px;
+      text-transform: uppercase;
+      letter-spacing: 3px;
+    }
+
+    .hero-player-name {
+      font-size: 52px;
+      font-weight: 800;
+      background: linear-gradient(135deg, var(--cyan), var(--purple));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      margin-bottom: 16px;
+      line-height: 1.1;
+    }
+
+    .hero-card-details {
+      font-size: 22px;
+      color: var(--text-muted);
+      margin-bottom: 20px;
+    }
+
+    .hero-attributes {
+      display: flex;
+      gap: 16px;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+
+    .hero-attribute {
+      padding: 10px 20px;
+      background: var(--glass);
+      border: 2px solid var(--glass-border);
+      border-radius: 25px;
+      font-size: 15px;
+      font-weight: 600;
+    }
+
+    .hero-attribute.auto { border-color: #f59e0b; color: #f59e0b; }
+    .hero-attribute.relic { border-color: #ec4899; color: #ec4899; }
+    .hero-attribute.rookie { border-color: #10b981; color: #10b981; }
+    .hero-attribute.numbered { border-color: #8b5cf6; color: #8b5cf6; }
+
+    .hero-dismiss {
+      position: absolute;
+      top: 30px;
+      right: 30px;
+      padding: 14px 28px;
+      background: var(--glass);
+      border: 1px solid var(--glass-border);
+      border-radius: 10px;
+      color: var(--text);
+      cursor: pointer;
+      font-size: 15px;
+      font-weight: 600;
+    }
+
+    .hero-dismiss:hover {
+      background: rgba(255, 255, 255, 0.1);
+    }
   </style>
 </head>
 <body>
   <div class="bg-grid"></div>
+
+  <!-- HERO VIEW - Shows card BIG during scan/identification -->
+  <div class="hero-overlay" id="hero-overlay">
+    <button class="hero-dismiss" onclick="dismissHero()">✕ Close</button>
+
+    <div class="hero-status">
+      <div class="hero-status-badge identifying" id="hero-status-badge">
+        <div class="spinner"></div>
+        <span id="hero-status-text">Identifying...</span>
+      </div>
+    </div>
+
+    <div class="hero-card-container">
+      <div class="hero-card-image front" id="hero-front">
+        <div class="hero-label">Front</div>
+      </div>
+      <div class="hero-card-image back" id="hero-back">
+        <div class="hero-label">Back</div>
+      </div>
+    </div>
+
+    <div class="hero-card-info">
+      <div class="hero-card-number" id="hero-card-number">Card #1</div>
+      <div class="hero-player-name" id="hero-player-name">Scanning...</div>
+      <div class="hero-card-details" id="hero-card-details"></div>
+      <div class="hero-attributes" id="hero-attributes"></div>
+    </div>
+  </div>
 
   <!-- Header -->
   <header class="header">
@@ -3987,6 +4210,11 @@
     let batchMode = false;
     let batchCards = []; // Cards in current batch session
 
+    // Hero view state
+    let heroCardId = null;
+    let heroCardNum = 0;
+    let heroAutoDismissTimer = null;
+
     // Batch mode functions
     let batchCardData = {}; // Store card data by ID for editing
 
@@ -4361,17 +4589,26 @@
 
         // Pair uploaded (regular upload, not batch)
         if (data.type === 'pair_uploaded') {
+          // Show hero view for this card
+          heroCardNum++;
+          showHeroView(data.cardId, heroCardNum, data.front, data.back, 'identifying');
           loadCards();
           loadStatus();
         }
 
         // Batch mode events
         if (data.type === 'batch_card_uploaded') {
+          // Show hero view for phone scanner uploads
+          heroCardNum++;
+          showHeroView(data.cardId, heroCardNum, data.front, data.back, 'identifying');
           if (batchMode) {
             addCardToBatchView(data.cardId, data.front, data.back);
           }
         }
         if (data.type === 'batch_card_identified') {
+          // Update hero view with identification result
+          const cardData = data.cardData || {};
+          updateHeroIdentified(data.cardId, cardData);
           if (batchMode) {
             updateBatchCard(data.cardId, data.cardData);
           } else {
@@ -7595,6 +7832,114 @@
       document.getElementById('price-links-modal').classList.remove('open');
       priceLinksCard = null;
     }
+
+    // ========== HERO VIEW FUNCTIONS ==========
+
+    function showHeroView(cardId, cardNum, frontImage, backImage, status) {
+      // Clear any existing auto-dismiss timer
+      if (heroAutoDismissTimer) {
+        clearTimeout(heroAutoDismissTimer);
+        heroAutoDismissTimer = null;
+      }
+
+      heroCardId = cardId;
+
+      const overlay = document.getElementById('hero-overlay');
+      const badge = document.getElementById('hero-status-badge');
+      const frontContainer = document.getElementById('hero-front');
+      const backContainer = document.getElementById('hero-back');
+      const cardNumEl = document.getElementById('hero-card-number');
+      const playerName = document.getElementById('hero-player-name');
+      const details = document.getElementById('hero-card-details');
+      const attributes = document.getElementById('hero-attributes');
+
+      // Set status badge
+      if (status === 'uploading') {
+        badge.className = 'hero-status-badge uploading';
+        badge.innerHTML = '<div class="spinner"></div><span>Uploading...</span>';
+        playerName.textContent = 'Uploading...';
+      } else {
+        badge.className = 'hero-status-badge identifying';
+        badge.innerHTML = '<div class="spinner"></div><span>Identifying...</span>';
+        playerName.textContent = 'Analyzing card...';
+      }
+
+      // Set images
+      if (frontImage) {
+        const frontUrl = frontImage.startsWith('http') ? frontImage : `/uploads/${frontImage}`;
+        frontContainer.innerHTML = `<img src="${frontUrl}" alt="Front"><div class="hero-label">Front</div>`;
+      } else {
+        frontContainer.innerHTML = '<div class="hero-label">Front</div>';
+      }
+
+      if (backImage) {
+        const backUrl = backImage.startsWith('http') ? backImage : `/uploads/${backImage}`;
+        backContainer.innerHTML = `<img src="${backUrl}" alt="Back"><div class="hero-label">Back</div>`;
+      } else {
+        backContainer.innerHTML = '<div class="hero-label">Back</div>';
+      }
+
+      cardNumEl.textContent = `Card #${cardNum}`;
+      details.textContent = 'AI is identifying this card...';
+      attributes.innerHTML = '';
+
+      // Show the overlay
+      overlay.classList.add('show');
+    }
+
+    function updateHeroIdentified(cardId, cardData) {
+      // Only update if this is the card currently shown in hero
+      if (heroCardId !== cardId) return;
+
+      const badge = document.getElementById('hero-status-badge');
+      const playerName = document.getElementById('hero-player-name');
+      const details = document.getElementById('hero-card-details');
+      const attributes = document.getElementById('hero-attributes');
+
+      // Update to identified status
+      badge.className = 'hero-status-badge identified';
+      badge.innerHTML = '<span>✓ IDENTIFIED</span>';
+
+      // Set player name
+      playerName.textContent = cardData.player || cardData.name || 'Unknown Card';
+
+      // Set details
+      const detailParts = [];
+      if (cardData.year) detailParts.push(cardData.year);
+      if (cardData.set_name || cardData.set) detailParts.push(cardData.set_name || cardData.set);
+      if (cardData.card_number) detailParts.push(`#${cardData.card_number}`);
+      if (cardData.parallel && cardData.parallel !== 'Base') detailParts.push(cardData.parallel);
+      details.textContent = detailParts.join(' • ') || 'Card details';
+
+      // Set attributes
+      let attrHtml = '';
+      if (cardData.is_autograph) attrHtml += '<span class="hero-attribute auto">Autograph</span>';
+      if (cardData.is_relic) attrHtml += '<span class="hero-attribute relic">Relic</span>';
+      if (cardData.is_rookie) attrHtml += '<span class="hero-attribute rookie">Rookie</span>';
+      if (cardData.serial_number) attrHtml += `<span class="hero-attribute numbered">${cardData.serial_number}</span>`;
+      attributes.innerHTML = attrHtml;
+
+      // Auto-dismiss after 5 seconds
+      heroAutoDismissTimer = setTimeout(() => {
+        dismissHero();
+      }, 5000);
+    }
+
+    function dismissHero() {
+      if (heroAutoDismissTimer) {
+        clearTimeout(heroAutoDismissTimer);
+        heroAutoDismissTimer = null;
+      }
+      document.getElementById('hero-overlay').classList.remove('show');
+      heroCardId = null;
+    }
+
+    // Escape key to dismiss hero
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        dismissHero();
+      }
+    });
 
     // Initialize
     loadStatus();
