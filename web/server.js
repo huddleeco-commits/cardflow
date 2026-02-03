@@ -7061,6 +7061,11 @@ async function trackApiCost({
 }
 
 // Search SportsCardsPro API for card pricing
+// API Docs: https://www.sportscardspro.com/api-documentation
+// Base URL: https://www.sportscardspro.com/api/product
+// Auth: t parameter with 40-char token
+// Search: q parameter for full text search
+// Prices returned in PENNIES (divide by 100)
 async function searchSportsCardsPro(card, context = {}) {
   if (!SPORTSCARDSPRO_API_KEY) {
     console.log('[SportsCardsPro] No API key configured');
@@ -7070,31 +7075,35 @@ async function searchSportsCardsPro(card, context = {}) {
   const startTime = Date.now();
 
   try {
-    // Build search payload from card data
-    const payload = {
-      year: parseInt(card.year) || null,
-      sport: card.sport || detectSport(card) || 'basketball',
-      brand: card.brand || extractBrand(card.set_name || card.set) || 'Unknown',
-      set: card.set_name || card.set || '',
-      subset: card.subset || null,
-      number: card.card_number || '',
-      player: card.player || card.subject || '',
-      parallel: card.parallel || 'base',
-      variation: card.variation || null,
-      graded: card.is_graded || false,
-      grade: card.grade || null,
-      grading_company: card.grading_company || null
-    };
+    // Build search query from card data
+    // Format: "player name card_number year set_name"
+    const player = card.player || card.subject || '';
+    const year = card.year || '';
+    const setName = card.set_name || card.set || '';
+    const cardNumber = card.card_number || '';
+    const parallel = card.parallel && card.parallel.toLowerCase() !== 'base' ? card.parallel : '';
 
-    console.log(`[SportsCardsPro] Looking up: ${payload.year} ${payload.set} ${payload.player}`);
+    // Build search terms - order matters for relevance
+    const searchTerms = [
+      player,
+      cardNumber ? `#${cardNumber}` : '',
+      year,
+      setName,
+      parallel
+    ].filter(Boolean).join(' ');
 
-    const response = await fetch('https://api.sportscardspro.com/v1/card/price', {
-      method: 'POST',
+    console.log(`[SportsCardsPro] Looking up: "${searchTerms}"`);
+
+    // Build URL with query params (GET request)
+    const url = new URL('https://www.sportscardspro.com/api/product');
+    url.searchParams.set('t', SPORTSCARDSPRO_API_KEY);
+    url.searchParams.set('q', searchTerms);
+
+    const response = await fetch(url.toString(), {
+      method: 'GET',
       headers: {
-        'Authorization': `Bearer ${SPORTSCARDSPRO_API_KEY}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(payload)
+        'Accept': 'application/json'
+      }
     });
 
     const responseTime = Date.now() - startTime;
@@ -7103,7 +7112,6 @@ async function searchSportsCardsPro(card, context = {}) {
       const errorText = await response.text();
       console.error('[SportsCardsPro] API error:', response.status, errorText);
 
-      // Track failed request
       await trackApiCost({
         userId: context.userId,
         provider: 'sportscardspro',
@@ -7119,6 +7127,13 @@ async function searchSportsCardsPro(card, context = {}) {
     }
 
     const data = await response.json();
+
+    // Check for API error status
+    if (data.status === 'error' || !data.id) {
+      console.log('[SportsCardsPro] No match found for:', searchTerms);
+      return null;
+    }
+
     const cost = calculateSportsCardsProCost(1);
 
     // Track successful request
@@ -7129,33 +7144,74 @@ async function searchSportsCardsPro(card, context = {}) {
       operation: 'card-price',
       feature: 'individual-card-pricing',
       cost: cost,
-      requestSize: `${payload.year} ${payload.set} ${payload.player}`,
+      requestSize: searchTerms,
       success: true,
       metadata: {
-        player: payload.player,
-        year: payload.year,
-        set: payload.set,
+        scpId: data.id,
+        productName: data['product-name'],
+        consoleName: data['console-name'],
         responseTime: responseTime
       }
     });
 
-    console.log(`[SportsCardsPro] Success - cost: $${cost.toFixed(4)}, time: ${responseTime}ms`);
+    console.log(`[SportsCardsPro] Found: ${data['product-name']} (ID: ${data.id}) - $${(data['cib-price'] / 100).toFixed(2)}`);
 
-    // Normalize the response
+    // Parse prices - SportsCardsPro returns prices in PENNIES
+    // Different price fields for different conditions/grades
+    const prices = {
+      // Raw/ungraded prices
+      loose: data['loose-price'] ? data['loose-price'] / 100 : null,
+      cib: data['cib-price'] ? data['cib-price'] / 100 : null,  // "Complete in Box" = standard raw
+      newPrice: data['new-price'] ? data['new-price'] / 100 : null,
+
+      // Graded prices (PSA grades)
+      psa10: data['graded-price'] ? data['graded-price'] / 100 : null,  // Usually PSA 10
+      psa9: data['box-only-price'] ? data['box-only-price'] / 100 : null,  // Repurposed field
+      psa8: data['manual-only-price'] ? data['manual-only-price'] / 100 : null,  // Repurposed field
+    };
+
+    // Determine which price to use based on card condition
+    let marketValue = null;
+    let condition = 'Raw';
+
+    if (card.is_graded && card.grade) {
+      const grade = parseInt(card.grade);
+      if (grade >= 10 && prices.psa10) {
+        marketValue = prices.psa10;
+        condition = 'PSA 10';
+      } else if (grade >= 9 && prices.psa9) {
+        marketValue = prices.psa9;
+        condition = 'PSA 9';
+      } else if (grade >= 8 && prices.psa8) {
+        marketValue = prices.psa8;
+        condition = 'PSA 8';
+      }
+    }
+
+    // Default to CIB (raw) price if not graded or no graded price
+    if (!marketValue) {
+      marketValue = prices.cib || prices.loose || prices.newPrice;
+      condition = 'Raw';
+    }
+
+    // Build price range from available prices
+    const allPrices = Object.values(prices).filter(p => p !== null && p > 0);
+    const lowPrice = allPrices.length > 0 ? Math.min(...allPrices) : null;
+    const highPrice = allPrices.length > 0 ? Math.max(...allPrices) : null;
+
     return {
-      value: data.marketValue || data.price || data.average || null,
-      low: data.lowPrice || data.low || null,
-      high: data.highPrice || data.high || null,
-      recentSales: (data.recentSales || data.sales || []).map(s => ({
-        price: s.price || s.amount,
-        condition: s.condition || 'Raw',
-        date: s.date || s.soldDate || 'Recent',
-        source: s.source || 'eBay'
-      })),
-      lastUpdated: data.lastUpdated || data.updated || new Date().toISOString(),
-      confidence: data.confidence || (data.salesCount > 5 ? 'high' : data.salesCount > 2 ? 'medium' : 'low'),
-      salesCount: data.salesCount || data.recentSales?.length || 0,
+      value: marketValue,
+      low: lowPrice !== marketValue ? lowPrice : null,
+      high: highPrice !== marketValue ? highPrice : null,
+      condition: condition,
+      recentSales: [], // SportsCardsPro doesn't provide individual sales in API
+      lastUpdated: new Date().toISOString(),
+      confidence: marketValue ? 'high' : 'low',
+      salesCount: marketValue ? 1 : 0,
       source: 'SportsCardsPro',
+      scpId: data.id,
+      productName: data['product-name'],
+      consoleName: data['console-name'],
       responseTime: responseTime
     };
 
