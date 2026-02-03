@@ -1796,17 +1796,18 @@ async function identifySingleCard(userId, cardId) {
       }
 
       // Call SlabTrack scanning API (scanner/scan endpoint)
-      // Use Cloudinary URLs if available, otherwise base64 data URIs
-      const frontImageUrl = card.front_image_path.startsWith('http')
-        ? card.front_image_path
-        : `data:${frontBase64.media_type};base64,${frontBase64.data}`;
-      const backImageUrl = card.back_image_path?.startsWith('http')
-        ? card.back_image_path
-        : (backBase64 ? `data:${backBase64.media_type};base64,${backBase64.data}` : null);
+      // Always send base64 data URIs (SlabTrack expects base64, not URLs)
+      if (!frontBase64) {
+        throw new Error('Failed to load front image');
+      }
+      const frontImageData = `data:${frontBase64.media_type};base64,${frontBase64.data}`;
+      const backImageData = backBase64 ? `data:${backBase64.media_type};base64,${backBase64.data}` : null;
+
+      console.log(`[SlabTrack Scan] Sending to SlabTrack: front=${frontBase64.media_type}, back=${backBase64?.media_type || 'none'}`);
 
       const stResponse = await axios.post(`${SLABTRACK_API}/scanner/scan`, {
-        frontImage: frontImageUrl,
-        backImage: backImageUrl,
+        frontImage: frontImageData,
+        backImage: backImageData,
         source: 'cardflow'
       }, {
         headers: {
