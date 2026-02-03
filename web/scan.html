@@ -851,12 +851,16 @@
       btn.classList.toggle('active', jigSnapEnabled);
 
       if (jigSnapEnabled) {
+        // Hide card frame - JigSnap uses green mat for alignment
+        cardFrame.style.display = 'none';
         status.classList.add('show', 'searching');
         status.classList.remove('detected');
         document.getElementById('jigsnap-text').textContent = 'Looking for green mat...';
         startJigSnapDetection();
         playSound('front');
       } else {
+        // Show card frame for manual alignment
+        cardFrame.style.display = 'block';
         status.classList.remove('show');
         cardFrame.classList.remove('jigsnap-detected');
         jigSnapDetected = false;
