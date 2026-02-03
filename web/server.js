@@ -38,6 +38,9 @@ const crypto = require('crypto');
 const axios = require('axios');
 const XLSX = require('xlsx');
 
+// SlabTrack API
+const SLABTRACK_API = process.env.SLABTRACK_API_URL || 'https://slabtrack.io/api';
+
 // eBay OAuth Config
 const EBAY_APP_ID = process.env.EBAY_APP_ID;
 const EBAY_CERT_ID = process.env.EBAY_CERT_ID;
@@ -1884,13 +1887,22 @@ async function identifySingleCard(userId, cardId) {
         // Fall through to BYOK if available
       }
     } catch (e) {
-      console.error(`[Batch] SlabTrack scan failed for ${cardId}:`, e.message);
+      // Detailed error logging for SlabTrack scan failures
+      const errorDetails = {
+        message: e.message,
+        status: e.response?.status,
+        statusText: e.response?.statusText,
+        data: e.response?.data,
+        url: `${SLABTRACK_API}/scanner/scan`
+      };
+      console.error(`[SlabTrack Scan Error] Card ${cardId}:`, JSON.stringify(errorDetails, null, 2));
+
       // Fall through to BYOK if available
       if (!apiKey) {
         broadcast({
           type: 'batch_identify_error',
           cardId,
-          error: 'SlabTrack scan failed: ' + e.message,
+          error: 'SlabTrack scan failed: ' + (e.response?.data?.message || e.message),
           userId
         });
         return;
@@ -5059,8 +5071,6 @@ app.post('/api/export/slabtrack', authenticateToken, async (req, res) => {
 // ==============================
 // SLABTRACK DIRECT API INTEGRATION
 // ==============================
-
-const SLABTRACK_API = process.env.SLABTRACK_API_URL || 'https://slabtrack.io/api';
 
 // Get SlabTrack connection status (with user info from SlabTrack API)
 app.get('/api/slabtrack/status', authenticateToken, async (req, res) => {
