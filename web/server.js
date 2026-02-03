@@ -344,14 +344,33 @@ app.get('/download', (req, res) => {
   res.sendFile(path.join(__dirname, 'download.html'));
 });
 
+// Scanner download URL (use GitHub Releases or other CDN in production)
+const SCANNER_DOWNLOAD_URL = process.env.SCANNER_DOWNLOAD_URL || null;
+
 // Direct download endpoint
 app.get('/api/download/scanner', (req, res) => {
+  // If external URL is configured, redirect to it
+  if (SCANNER_DOWNLOAD_URL) {
+    return res.redirect(SCANNER_DOWNLOAD_URL);
+  }
+
+  // Otherwise serve local file (development only)
   const filePath = path.join(__dirname, 'downloads', 'CardFlowScanner-Setup.exe');
   if (fs.existsSync(filePath)) {
     res.download(filePath, 'CardFlow Scanner Setup.exe');
   } else {
-    res.status(404).json({ error: 'Installer not found' });
+    res.status(404).json({ error: 'Installer not available. Set SCANNER_DOWNLOAD_URL in environment.' });
   }
+});
+
+// API to get download info
+app.get('/api/download/info', (req, res) => {
+  res.json({
+    version: '1.0.0',
+    platform: 'windows',
+    downloadUrl: SCANNER_DOWNLOAD_URL || '/api/download/scanner',
+    available: !!SCANNER_DOWNLOAD_URL || fs.existsSync(path.join(__dirname, 'downloads', 'CardFlowScanner-Setup.exe'))
+  });
 });
 
 // Serve images from all folders
