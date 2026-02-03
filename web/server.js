@@ -1747,52 +1747,6 @@ async function canUseSlabTrackScan(userId) {
   return { canUse: false };
 }
 
-// JigSnap perspective correction endpoint - proxies to SlabTrack
-app.post('/api/jigsnap/correct', authenticateToken, async (req, res) => {
-  try {
-    const { image, profile, enhance = true, holoMode = false } = req.body;
-
-    if (!image) {
-      return res.status(400).json({ success: false, error: 'No image provided' });
-    }
-
-    console.log(`[JigSnap] Correction request from user ${req.user.id} (profile: ${profile || 'auto'})`);
-
-    // Call SlabTrack's JigSnap API
-    const response = await axios.post(`${SLABTRACK_API}/jig-scanner/correct`, {
-      image,
-      profile,
-      enhance,
-      holoMode
-    }, {
-      headers: { 'Content-Type': 'application/json' },
-      timeout: 30000
-    });
-
-    if (response.data?.success) {
-      console.log(`[JigSnap] Correction successful (profile: ${response.data.profile})`);
-      return res.json({
-        success: true,
-        image: response.data.image,
-        profile: response.data.profile,
-        enhanced: response.data.enhanced
-      });
-    } else {
-      console.log(`[JigSnap] Correction failed: ${response.data?.error}`);
-      return res.status(422).json({
-        success: false,
-        error: response.data?.error || 'JigSnap correction failed. Make sure the card is on the green mat with visible markers.'
-      });
-    }
-  } catch (error) {
-    console.error('[JigSnap] Error:', error.response?.data || error.message);
-    return res.status(500).json({
-      success: false,
-      error: error.response?.data?.error || error.message || 'JigSnap correction failed'
-    });
-  }
-});
-
 // Identify a single card (for batch mode auto-identification)
 // Supports dual-mode: SlabTrack API for Pro users, BYOK for others
 async function identifySingleCard(userId, cardId) {
