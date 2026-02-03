@@ -1299,6 +1299,60 @@
           addLogEntry(`Error: ${data.error}`, 'error');
           break;
 
+        // Phone scanner events
+        case 'batch_card_uploaded':
+        case 'pair_uploaded':
+          // Card uploaded from phone scanner
+          const phoneCardNum = cards.size + 1;
+          const phoneCard = {
+            id: data.cardId,
+            cardNum: phoneCardNum,
+            status: 'identifying',
+            player: null,
+            frontImage: data.front,
+            backImage: data.back
+          };
+          addCardToQueue(phoneCard);
+          stats.scanned++;
+          updateStats();
+          addLogEntry(`Card #${phoneCardNum} uploaded from phone`, 'success');
+          // Show hero view for phone scans
+          showHeroView(phoneCard);
+          // Update with images
+          setTimeout(() => updateHeroView(phoneCard), 100);
+          // Start checking for identification
+          checkCardIdentification(data.cardId);
+          break;
+
+        case 'batch_card_identified':
+          // Card identified from phone scanner
+          if (cards.has(data.cardId)) {
+            const card = cards.get(data.cardId);
+            const cardData = data.cardData || data;
+            card.status = 'pending';
+            card.player = cardData.player || cardData.name;
+            card.year = cardData.year;
+            card.set = cardData.set_name || cardData.set;
+            card.cardNumber = cardData.card_number || cardData.cardNumber;
+            card.parallel = cardData.parallel;
+            card.serial = cardData.serial_number || cardData.serial;
+            card.sport = cardData.sport;
+            card.isAutograph = cardData.is_autograph || cardData.isAutograph;
+            card.isRelic = cardData.is_relic || cardData.isRelic;
+            card.isRookie = cardData.is_rookie || cardData.isRookie;
+            cards.set(data.cardId, card);
+            stats.identified++;
+            stats.pending++;
+            updateStats();
+            renderCardGrid();
+            // Update hero view with identified info
+            if (heroCardId === data.cardId || heroCardId?.startsWith('temp-')) {
+              updateHeroView(card);
+            }
+            addLogEntry(`Identified: ${card.player || 'Unknown'}`, 'identified');
+          }
+          break;
+
         case 'card_identified':
           // Update card with identification data
           if (cards.has(data.cardId)) {
@@ -1925,10 +1979,10 @@
         if (card.serial) attrHtml += `<span class="hero-attribute numbered">${card.serial}</span>`;
         attributes.innerHTML = attrHtml;
 
-        // Auto-dismiss after 3 seconds
+        // Auto-dismiss after 5 seconds so user can see the result
         heroAutoDismissTimer = setTimeout(() => {
           dismissHero();
-        }, 3000);
+        }, 5000);
       }
 
       updateHeroCounters();
