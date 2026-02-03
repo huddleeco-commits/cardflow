@@ -2035,16 +2035,29 @@ Return ONLY a JSON object with these fields (no other text):
   }
 }
 
-// Identify cards endpoint
+// Identify cards endpoint (supports SlabTrack API for Power/Dealer users)
 app.post('/api/process/identify', authenticateToken, async (req, res) => {
   const userId = req.user.id;
 
   try {
-    // Get API key
+    // Check if user can use SlabTrack scanning
+    const slabTrackCheck = await canUseSlabTrackScan(userId);
+
+    // Get BYOK API key as fallback
     const apiKey = await getUserApiKey(userId);
-    if (!apiKey) {
-      return res.status(400).json({ error: 'No API key configured. Add your Anthropic API key in Settings.' });
+
+    // Need at least one method
+    if (!slabTrackCheck.canUse && !apiKey) {
+      return res.status(400).json({
+        error: 'No scanning method available.',
+        message: slabTrackCheck.token
+          ? 'Your SlabTrack account is Free tier. Upgrade to Power for SlabTrack scanning, or add your own Anthropic API key.'
+          : 'Add your Anthropic API key in Settings, or connect a SlabTrack Power/Dealer account.'
+      });
     }
+
+    const scanMode = slabTrackCheck.canUse ? 'slabtrack' : 'byok';
+    console.log(`[Identify] User ${userId} using ${scanMode} mode`);
 
     // Get pending cards from database
     const pendingResult = await pool.query(`
@@ -2058,15 +2071,34 @@ app.post('/api/process/identify', authenticateToken, async (req, res) => {
 
     const pendingCards = pendingResult.rows;
 
-    // Initialize Anthropic
+    // If using SlabTrack, process each card with identifySingleCard (which handles SlabTrack)
+    if (slabTrackCheck.canUse) {
+      res.json({
+        success: true,
+        message: `Processing ${pendingCards.length} cards via SlabTrack...`,
+        count: pendingCards.length,
+        scanMode: 'slabtrack'
+      });
+
+      // Process each card asynchronously
+      for (const card of pendingCards) {
+        identifySingleCard(userId, card.id).catch(e => {
+          console.error(`[Identify] SlabTrack error for ${card.id}:`, e.message);
+        });
+      }
+      return;
+    }
+
+    // BYOK path - Initialize Anthropic
     const Anthropic = require('@anthropic-ai/sdk');
     const anthropic = new Anthropic({ apiKey });
 
     // Send initial response
     res.json({
       success: true,
-      message: `Processing ${pendingCards.length} cards...`,
-      count: pendingCards.length
+      message: `Processing ${pendingCards.length} cards with your API key...`,
+      count: pendingCards.length,
+      scanMode: 'byok'
     });
 
     // Process each card
