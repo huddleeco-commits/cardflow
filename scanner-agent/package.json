@@ -1,0 +1,29 @@
+{
+  "name": "cardflow-scanner-agent",
+  "version": "1.0.0",
+  "description": "Scanner agent for CardFlow - watches folder and uploads scanned cards",
+  "main": "agent.js",
+  "bin": {
+    "cardflow-scanner": "./agent.js"
+  },
+  "scripts": {
+    "start": "node agent.js"
+  },
+  "dependencies": {
+    "axios": "^1.6.0",
+    "chokidar": "^3.5.3",
+    "form-data": "^4.0.0",
+    "ws": "^8.14.0"
+  },
+  "engines": {
+    "node": ">=16.0.0"
+  },
+  "keywords": [
+    "cardflow",
+    "scanner",
+    "trading-cards",
+    "ricoh"
+  ],
+  "author": "",
+  "license": "MIT"
+}

@@ -1,0 +1,9 @@
+{
+  "watchFolder": "C:\\Scans",
+  "serverUrl": "http://localhost:3000",
+  "token": "YOUR_CARDFLOW_TOKEN_HERE",
+  "pairingMode": "sequential",
+  "holoMode": false,
+  "brightnessBoost": 0,
+  "autoRotateBack": true
+}

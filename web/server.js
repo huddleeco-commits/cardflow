@@ -6509,9 +6509,11 @@ app.post('/api/admin/agent-analytics/export', authenticateToken, async (req, res
 // ============================================
 
 const clients = new Map(); // Map of userId -> Set of WebSocket connections
+const scannerClients = new Map(); // Map of userId -> scanner WebSocket
 
 wss.on('connection', (ws, req) => {
   let userId = null;
+  let isScanner = false;
 
   ws.on('message', (message) => {
     try {
@@ -6530,6 +6532,41 @@ wss.on('connection', (ws, req) => {
           }
         });
       }
+
+      // Handle scanner agent authentication
+      if (data.type === 'scanner_auth' && data.token) {
+        jwt.verify(data.token, JWT_SECRET, (err, user) => {
+          if (!err) {
+            userId = user.id;
+            isScanner = true;
+            scannerClients.set(userId, ws);
+            ws.send(JSON.stringify({ type: 'auth_success' }));
+            // Notify user's browser clients that scanner connected
+            broadcastToUser(userId, {
+              type: 'scanner_connected',
+              message: 'Scanner agent connected'
+            });
+            console.log(`Scanner agent connected for user ${userId}`);
+          } else {
+            ws.send(JSON.stringify({ type: 'auth_error', error: 'Invalid token' }));
+          }
+        });
+      }
+
+      // Forward scanner status events to user's browser clients
+      if (isScanner && userId) {
+        const scannerEvents = [
+          'scanner_file_detected',
+          'scanner_front_captured',
+          'scanner_back_captured',
+          'scanner_uploading',
+          'scanner_card_uploaded',
+          'scanner_upload_error'
+        ];
+        if (scannerEvents.includes(data.type)) {
+          broadcastToUser(userId, data);
+        }
+      }
     } catch (e) {}
   });
 
@@ -6540,8 +6577,29 @@ wss.on('connection', (ws, req) => {
         clients.delete(userId);
       }
     }
+    if (isScanner && userId) {
+      scannerClients.delete(userId);
+      broadcastToUser(userId, {
+        type: 'scanner_disconnected',
+        message: 'Scanner agent disconnected'
+      });
+      console.log(`Scanner agent disconnected for user ${userId}`);
+    }
   });
 });
+
+// Broadcast to a specific user's browser clients
+function broadcastToUser(userId, message) {
+  const userClients = clients.get(userId);
+  if (userClients) {
+    const data = JSON.stringify(message);
+    userClients.forEach(client => {
+      if (client.readyState === WebSocket.OPEN) {
+        client.send(data);
+      }
+    });
+  }
+}
 
 function broadcast(message) {
   const data = JSON.stringify(message);
@@ -6612,6 +6670,11 @@ app.get('/collection', (req, res) => {
 // Serve phone scanner page
 app.get('/scan', (req, res) => {
   res.sendFile(path.join(__dirname, 'scan.html'));
+});
+
+// Serve desktop scanner mode page
+app.get('/scanner', (req, res) => {
+  res.sendFile(path.join(__dirname, 'scanner.html'));
 });
 
 // ============================================

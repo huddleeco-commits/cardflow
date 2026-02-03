@@ -1,0 +1,799 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CardFlow - Scanner Mode</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    :root {
+      --bg-deep: #0a0e1a;
+      --bg-card: rgba(255, 255, 255, 0.03);
+      --glass: rgba(255, 255, 255, 0.05);
+      --glass-border: rgba(255, 255, 255, 0.1);
+      --cyan: #00f6ff;
+      --purple: #7b2ff7;
+      --text: #e6edf3;
+      --text-muted: rgba(255, 255, 255, 0.5);
+      --success: #00ff88;
+      --error: #ff4466;
+      --warning: #ffaa00;
+    }
+
+    body {
+      font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: var(--bg-deep);
+      color: var(--text);
+      min-height: 100vh;
+    }
+
+    .header {
+      background: var(--glass);
+      border-bottom: 1px solid var(--glass-border);
+      padding: 16px 24px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .header h1 {
+      font-size: 20px;
+      background: linear-gradient(135deg, var(--cyan), var(--purple));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .header-actions {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+    }
+
+    .btn {
+      padding: 10px 20px;
+      border: none;
+      border-radius: 8px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, var(--cyan), var(--purple));
+      color: #000;
+    }
+
+    .btn-secondary {
+      background: var(--glass);
+      border: 1px solid var(--glass-border);
+      color: var(--text);
+    }
+
+    .btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(0, 246, 255, 0.2);
+    }
+
+    .main-content {
+      display: grid;
+      grid-template-columns: 300px 1fr;
+      gap: 24px;
+      padding: 24px;
+      max-width: 1600px;
+      margin: 0 auto;
+    }
+
+    .sidebar {
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    .panel {
+      background: var(--bg-card);
+      border: 1px solid var(--glass-border);
+      border-radius: 16px;
+      padding: 20px;
+    }
+
+    .panel h3 {
+      font-size: 14px;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      margin-bottom: 16px;
+    }
+
+    .status-indicator {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 16px;
+      background: var(--glass);
+      border-radius: 12px;
+      margin-bottom: 16px;
+    }
+
+    .status-dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      animation: pulse 2s infinite;
+    }
+
+    .status-dot.connected {
+      background: var(--success);
+      box-shadow: 0 0 12px var(--success);
+    }
+
+    .status-dot.disconnected {
+      background: var(--error);
+      animation: none;
+    }
+
+    .status-dot.waiting {
+      background: var(--warning);
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+
+    .status-text {
+      font-size: 14px;
+    }
+
+    .status-text strong {
+      display: block;
+      font-size: 16px;
+      margin-bottom: 2px;
+    }
+
+    .token-section {
+      margin-top: 12px;
+    }
+
+    .token-box {
+      background: rgba(0, 0, 0, 0.3);
+      border: 1px solid var(--glass-border);
+      border-radius: 8px;
+      padding: 12px;
+      font-family: 'Monaco', 'Consolas', monospace;
+      font-size: 11px;
+      word-break: break-all;
+      color: var(--cyan);
+      margin-bottom: 12px;
+      max-height: 80px;
+      overflow: auto;
+    }
+
+    .copy-btn {
+      width: 100%;
+      padding: 10px;
+      background: var(--glass);
+      border: 1px solid var(--glass-border);
+      border-radius: 8px;
+      color: var(--text);
+      cursor: pointer;
+      font-size: 13px;
+      transition: all 0.2s;
+    }
+
+    .copy-btn:hover {
+      background: rgba(0, 246, 255, 0.1);
+      border-color: var(--cyan);
+    }
+
+    .copy-btn.copied {
+      background: rgba(0, 255, 136, 0.1);
+      border-color: var(--success);
+      color: var(--success);
+    }
+
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 12px;
+    }
+
+    .stat-box {
+      background: var(--glass);
+      border-radius: 12px;
+      padding: 16px;
+      text-align: center;
+    }
+
+    .stat-value {
+      font-size: 28px;
+      font-weight: 700;
+      background: linear-gradient(135deg, var(--cyan), var(--purple));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .stat-label {
+      font-size: 11px;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      margin-top: 4px;
+    }
+
+    .card-feed {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+      gap: 20px;
+    }
+
+    .card-item {
+      background: var(--bg-card);
+      border: 1px solid var(--glass-border);
+      border-radius: 12px;
+      overflow: hidden;
+      transition: all 0.3s;
+    }
+
+    .card-item:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 8px 24px rgba(0, 246, 255, 0.1);
+    }
+
+    .card-item.uploading {
+      border-color: var(--warning);
+      animation: uploadPulse 1s infinite;
+    }
+
+    .card-item.success {
+      border-color: var(--success);
+    }
+
+    .card-item.error {
+      border-color: var(--error);
+    }
+
+    @keyframes uploadPulse {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(255, 170, 0, 0.4); }
+      50% { box-shadow: 0 0 20px 4px rgba(255, 170, 0, 0.2); }
+    }
+
+    .card-image {
+      position: relative;
+      aspect-ratio: 2.5/3.5;
+      background: var(--glass);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .card-image img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    .card-image .placeholder {
+      font-size: 48px;
+      opacity: 0.3;
+    }
+
+    .card-image .upload-spinner {
+      position: absolute;
+      width: 40px;
+      height: 40px;
+      border: 3px solid var(--glass-border);
+      border-top-color: var(--warning);
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    .card-info {
+      padding: 12px;
+    }
+
+    .card-number {
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-bottom: 4px;
+    }
+
+    .card-name {
+      font-size: 14px;
+      font-weight: 600;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .card-status {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 11px;
+      margin-top: 8px;
+      padding: 6px 10px;
+      background: var(--glass);
+      border-radius: 6px;
+    }
+
+    .card-status.identifying {
+      color: var(--warning);
+    }
+
+    .card-status.identified {
+      color: var(--success);
+    }
+
+    .card-status.error {
+      color: var(--error);
+    }
+
+    .activity-log {
+      max-height: 300px;
+      overflow-y: auto;
+    }
+
+    .log-entry {
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--glass-border);
+      font-size: 13px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .log-entry:last-child {
+      border-bottom: none;
+    }
+
+    .log-time {
+      color: var(--text-muted);
+      font-size: 11px;
+      font-family: monospace;
+    }
+
+    .log-icon {
+      font-size: 16px;
+    }
+
+    .empty-state {
+      text-align: center;
+      padding: 60px 20px;
+      color: var(--text-muted);
+    }
+
+    .empty-state .icon {
+      font-size: 64px;
+      margin-bottom: 16px;
+      opacity: 0.3;
+    }
+
+    .empty-state h3 {
+      font-size: 18px;
+      color: var(--text);
+      margin-bottom: 8px;
+    }
+
+    .instructions {
+      background: var(--glass);
+      border-radius: 12px;
+      padding: 16px;
+      margin-top: 16px;
+    }
+
+    .instructions h4 {
+      font-size: 13px;
+      margin-bottom: 12px;
+      color: var(--cyan);
+    }
+
+    .instructions ol {
+      padding-left: 20px;
+      font-size: 13px;
+      color: var(--text-muted);
+    }
+
+    .instructions li {
+      margin-bottom: 8px;
+    }
+
+    .instructions code {
+      background: rgba(0, 0, 0, 0.3);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-family: monospace;
+      font-size: 12px;
+      color: var(--cyan);
+    }
+
+    @media (max-width: 900px) {
+      .main-content {
+        grid-template-columns: 1fr;
+      }
+      .sidebar {
+        order: 2;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>Scanner Mode</h1>
+    <div class="header-actions">
+      <a href="/app" class="btn btn-secondary">Back to Dashboard</a>
+    </div>
+  </div>
+
+  <div class="main-content">
+    <div class="sidebar">
+      <!-- Scanner Status Panel -->
+      <div class="panel">
+        <h3>Scanner Agent</h3>
+        <div class="status-indicator">
+          <div class="status-dot disconnected" id="scanner-status-dot"></div>
+          <div class="status-text">
+            <strong id="scanner-status-text">Disconnected</strong>
+            <span id="scanner-status-detail">Waiting for scanner agent...</span>
+          </div>
+        </div>
+
+        <div class="token-section">
+          <div style="font-size: 12px; color: var(--text-muted); margin-bottom: 8px;">
+            Your Scanner Token:
+          </div>
+          <div class="token-box" id="token-display">Loading...</div>
+          <button class="copy-btn" id="copy-token-btn" onclick="copyToken()">
+            Copy Token
+          </button>
+        </div>
+      </div>
+
+      <!-- Stats Panel -->
+      <div class="panel">
+        <h3>Session Stats</h3>
+        <div class="stats-grid">
+          <div class="stat-box">
+            <div class="stat-value" id="stat-scanned">0</div>
+            <div class="stat-label">Scanned</div>
+          </div>
+          <div class="stat-box">
+            <div class="stat-value" id="stat-identified">0</div>
+            <div class="stat-label">Identified</div>
+          </div>
+          <div class="stat-box">
+            <div class="stat-value" id="stat-pending">0</div>
+            <div class="stat-label">Pending</div>
+          </div>
+          <div class="stat-box">
+            <div class="stat-value" id="stat-errors">0</div>
+            <div class="stat-label">Errors</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Activity Log -->
+      <div class="panel">
+        <h3>Activity Log</h3>
+        <div class="activity-log" id="activity-log">
+          <div class="log-entry">
+            <span class="log-icon">...</span>
+            <span>Waiting for activity...</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Card Feed -->
+    <div class="panel" style="min-height: 500px;">
+      <h3>Scanned Cards</h3>
+      <div id="card-feed" class="card-feed">
+        <div class="empty-state" id="empty-state">
+          <div class="icon">scanner</div>
+          <h3>No Cards Scanned Yet</h3>
+          <p>Connect your scanner agent to start scanning cards</p>
+
+          <div class="instructions">
+            <h4>Quick Setup</h4>
+            <ol>
+              <li>Open terminal in the <code>scanner-agent</code> folder</li>
+              <li>Run <code>npm install</code> to install dependencies</li>
+              <li>Edit <code>config.json</code> with your watch folder and token</li>
+              <li>Run <code>npm start</code> to start the agent</li>
+              <li>Scan cards - they'll appear here automatically!</li>
+            </ol>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const API_URL = '/api';
+    let token = localStorage.getItem('token');
+    let ws = null;
+    let stats = { scanned: 0, identified: 0, pending: 0, errors: 0 };
+    let scannedCards = [];
+
+    // Check auth
+    if (!token) {
+      window.location.href = '/login';
+    }
+
+    // Display token for scanner agent
+    document.getElementById('token-display').textContent = token || 'Not logged in';
+
+    // Copy token function
+    function copyToken() {
+      const tokenText = document.getElementById('token-display').textContent;
+      navigator.clipboard.writeText(tokenText).then(() => {
+        const btn = document.getElementById('copy-token-btn');
+        btn.textContent = 'Copied!';
+        btn.classList.add('copied');
+        setTimeout(() => {
+          btn.textContent = 'Copy Token';
+          btn.classList.remove('copied');
+        }, 2000);
+      });
+    }
+
+    // Connect WebSocket
+    function connectWebSocket() {
+      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      ws = new WebSocket(`${protocol}//${window.location.host}`);
+
+      ws.onopen = () => {
+        console.log('WebSocket connected');
+        ws.send(JSON.stringify({ type: 'auth', token }));
+      };
+
+      ws.onmessage = (event) => {
+        const data = JSON.parse(event.data);
+        handleWebSocketMessage(data);
+      };
+
+      ws.onclose = () => {
+        console.log('WebSocket disconnected, reconnecting...');
+        setTimeout(connectWebSocket, 3000);
+      };
+    }
+
+    function handleWebSocketMessage(data) {
+      switch (data.type) {
+        case 'authenticated':
+          console.log('WebSocket authenticated');
+          break;
+
+        case 'scanner_connected':
+          updateScannerStatus('connected', 'Connected', 'Scanner agent is ready');
+          addLogEntry('Scanner agent connected', 'check');
+          break;
+
+        case 'scanner_disconnected':
+          updateScannerStatus('disconnected', 'Disconnected', 'Scanner agent disconnected');
+          addLogEntry('Scanner agent disconnected', 'warning');
+          break;
+
+        case 'scanner_file_detected':
+          addLogEntry(`File detected: ${data.fileName}`, 'file');
+          break;
+
+        case 'scanner_front_captured':
+          addLogEntry(`Front captured: ${data.fileName}`, 'front');
+          stats.pending++;
+          updateStats();
+          break;
+
+        case 'scanner_back_captured':
+          addLogEntry(`Back captured: ${data.fileName}`, 'back');
+          break;
+
+        case 'scanner_uploading':
+          addCardToFeed(data.cardNum, 'uploading');
+          addLogEntry(`Uploading card #${data.cardNum}...`, 'upload');
+          break;
+
+        case 'scanner_card_uploaded':
+          stats.scanned++;
+          stats.pending = Math.max(0, stats.pending - 1);
+          updateStats();
+          updateCardInFeed(data.cardNum, 'uploaded', data);
+          addLogEntry(`Card #${data.cardNum} uploaded (ID: ${data.cardId})`, 'success');
+          // Start identification check
+          checkCardIdentification(data.cardId, data.cardNum);
+          break;
+
+        case 'scanner_upload_error':
+          stats.errors++;
+          stats.pending = Math.max(0, stats.pending - 1);
+          updateStats();
+          updateCardInFeed(data.cardNum, 'error', data);
+          addLogEntry(`Error uploading card #${data.cardNum}: ${data.error}`, 'error');
+          break;
+
+        case 'card_identified':
+          stats.identified++;
+          updateStats();
+          // Update the card in feed if we can match it
+          addLogEntry(`Card identified: ${data.player || 'Unknown'}`, 'identified');
+          break;
+      }
+    }
+
+    function updateScannerStatus(status, text, detail) {
+      const dot = document.getElementById('scanner-status-dot');
+      const textEl = document.getElementById('scanner-status-text');
+      const detailEl = document.getElementById('scanner-status-detail');
+
+      dot.className = 'status-dot ' + status;
+      textEl.textContent = text;
+      detailEl.textContent = detail;
+    }
+
+    function updateStats() {
+      document.getElementById('stat-scanned').textContent = stats.scanned;
+      document.getElementById('stat-identified').textContent = stats.identified;
+      document.getElementById('stat-pending').textContent = stats.pending;
+      document.getElementById('stat-errors').textContent = stats.errors;
+    }
+
+    function addLogEntry(message, type) {
+      const log = document.getElementById('activity-log');
+      const icons = {
+        check: 'check_circle',
+        warning: 'warning',
+        file: 'description',
+        front: 'photo_camera',
+        back: 'flip_camera_android',
+        upload: 'cloud_upload',
+        success: 'check_circle',
+        error: 'error',
+        identified: 'stars'
+      };
+
+      const colors = {
+        check: 'var(--success)',
+        warning: 'var(--warning)',
+        success: 'var(--success)',
+        error: 'var(--error)',
+        identified: 'var(--cyan)'
+      };
+
+      const time = new Date().toLocaleTimeString();
+      const entry = document.createElement('div');
+      entry.className = 'log-entry';
+      entry.innerHTML = `
+        <span class="log-time">${time}</span>
+        <span class="log-icon" style="color: ${colors[type] || 'inherit'}">${icons[type] || 'circle'}</span>
+        <span>${message}</span>
+      `;
+
+      // Remove "waiting" message if present
+      if (log.querySelector('.log-entry span')?.textContent === 'Waiting for activity...') {
+        log.innerHTML = '';
+      }
+
+      log.insertBefore(entry, log.firstChild);
+
+      // Keep only last 50 entries
+      while (log.children.length > 50) {
+        log.removeChild(log.lastChild);
+      }
+    }
+
+    function addCardToFeed(cardNum, status) {
+      const feed = document.getElementById('card-feed');
+      const emptyState = document.getElementById('empty-state');
+      if (emptyState) emptyState.style.display = 'none';
+
+      const cardEl = document.createElement('div');
+      cardEl.className = 'card-item uploading';
+      cardEl.id = `card-${cardNum}`;
+      cardEl.innerHTML = `
+        <div class="card-image">
+          <div class="upload-spinner"></div>
+        </div>
+        <div class="card-info">
+          <div class="card-number">Card #${cardNum}</div>
+          <div class="card-name">Uploading...</div>
+          <div class="card-status identifying">
+            <span>Uploading</span>
+          </div>
+        </div>
+      `;
+
+      feed.insertBefore(cardEl, feed.firstChild);
+      scannedCards.unshift({ cardNum, status });
+    }
+
+    function updateCardInFeed(cardNum, status, data) {
+      const cardEl = document.getElementById(`card-${cardNum}`);
+      if (!cardEl) return;
+
+      cardEl.className = 'card-item ' + (status === 'error' ? 'error' : 'success');
+
+      if (status === 'uploaded' && data.cardId) {
+        // Load the card image
+        loadCardImage(data.cardId, cardEl, data);
+      } else if (status === 'error') {
+        cardEl.querySelector('.card-name').textContent = 'Upload Failed';
+        cardEl.querySelector('.card-status').className = 'card-status error';
+        cardEl.querySelector('.card-status').innerHTML = `<span>${data.error || 'Error'}</span>`;
+        cardEl.querySelector('.upload-spinner')?.remove();
+      }
+    }
+
+    async function loadCardImage(cardId, cardEl, data) {
+      try {
+        const response = await fetch(`${API_URL}/cards/${cardId}`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const card = await response.json();
+
+        cardEl.querySelector('.card-image').innerHTML = card.front_image
+          ? `<img src="/uploads/${card.front_image}" alt="Card front">`
+          : `<span class="placeholder">card</span>`;
+
+        cardEl.querySelector('.card-name').textContent = card.player || 'Identifying...';
+
+        if (card.player) {
+          cardEl.querySelector('.card-status').className = 'card-status identified';
+          cardEl.querySelector('.card-status').innerHTML = `<span>Identified</span>`;
+        } else {
+          cardEl.querySelector('.card-status').className = 'card-status identifying';
+          cardEl.querySelector('.card-status').innerHTML = `<span>Identifying...</span>`;
+        }
+      } catch (err) {
+        console.error('Failed to load card:', err);
+      }
+    }
+
+    async function checkCardIdentification(cardId, cardNum) {
+      // Poll for identification status
+      let attempts = 0;
+      const maxAttempts = 30;
+
+      const check = async () => {
+        try {
+          const response = await fetch(`${API_URL}/cards/${cardId}`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+          });
+          const card = await response.json();
+
+          const cardEl = document.getElementById(`card-${cardNum}`);
+          if (!cardEl) return;
+
+          if (card.player && card.player !== 'Unknown') {
+            stats.identified++;
+            updateStats();
+            cardEl.querySelector('.card-name').textContent = card.player;
+            cardEl.querySelector('.card-status').className = 'card-status identified';
+            cardEl.querySelector('.card-status').innerHTML = `<span>Identified</span>`;
+            addLogEntry(`Card #${cardNum} identified: ${card.player}`, 'identified');
+            return;
+          }
+
+          if (++attempts < maxAttempts) {
+            setTimeout(check, 2000);
+          }
+        } catch (err) {
+          console.error('Check identification error:', err);
+        }
+      };
+
+      setTimeout(check, 3000);
+    }
+
+    // Initialize
+    connectWebSocket();
+  </script>
+</body>
+</html>
