@@ -1483,7 +1483,7 @@ async function getImageBase64(imagePathOrUrl, folder = null) {
   return imageToBase64(localPath);
 }
 
-// Check if user can use SlabTrack scanning API
+// Check if user can use SlabTrack scanning API (Power/Dealer tiers)
 async function canUseSlabTrackScan(userId) {
   try {
     const result = await pool.query(
@@ -1494,15 +1494,16 @@ async function canUseSlabTrackScan(userId) {
     if (!slabtrackToken) return { canUse: false };
 
     // Verify token and check tier
-    const stResponse = await axios.get(`${SLABTRACK_API}/users/me`, {
+    const stResponse = await axios.get(`${SLABTRACK_API}/users/api-token`, {
       headers: { 'X-API-Token': slabtrackToken },
       timeout: 10000
     });
 
     if (stResponse.data?.success) {
-      const proTiers = ['pro', 'dealer', 'enterprise', 'admin'];
-      const canUse = proTiers.includes(stResponse.data.user.subscription_tier);
-      return { canUse, token: slabtrackToken };
+      // Power/Dealer tiers can use SlabTrack scanning API
+      const scanApiTiers = ['power', 'dealer'];
+      const canUse = scanApiTiers.includes(stResponse.data.user.subscription_tier);
+      return { canUse, token: slabtrackToken, tier: stResponse.data.user.subscription_tier };
     }
   } catch (e) {
     console.log('[SlabTrack] Token verification failed:', e.message);
@@ -1556,7 +1557,7 @@ async function identifySingleCard(userId, cardId) {
         backBase64 = await getImageBase64(card.back_image_path, FOLDERS.new);
       }
 
-      // Call SlabTrack scanning API (atlas/scan endpoint)
+      // Call SlabTrack scanning API (scanner/scan endpoint)
       // Use Cloudinary URLs if available, otherwise base64 data URIs
       const frontImageUrl = card.front_image_path.startsWith('http')
         ? card.front_image_path
@@ -1565,11 +1566,10 @@ async function identifySingleCard(userId, cardId) {
         ? card.back_image_path
         : (backBase64 ? `data:${backBase64.media_type};base64,${backBase64.data}` : null);
 
-      const stResponse = await axios.post(`${SLABTRACK_API}/atlas/scan`, {
-        front_image_url: frontImageUrl,
-        back_image_url: backImageUrl,
-        card_type: 'slabs', // Default to slabs, could be detected from card
-        save_to_collection: true
+      const stResponse = await axios.post(`${SLABTRACK_API}/scanner/scan`, {
+        frontImage: frontImageUrl,
+        backImage: backImageUrl,
+        source: 'cardflow'
       }, {
         headers: {
           'Content-Type': 'application/json',
@@ -1582,6 +1582,14 @@ async function identifySingleCard(userId, cardId) {
         const cardData = stResponse.data.card;
         cardData.identified_at = new Date().toISOString();
         cardData.scan_source = 'slabtrack';
+
+        // Include pricing data if available
+        if (stResponse.data.pricing) {
+          cardData.pricing = stResponse.data.pricing;
+        }
+        if (stResponse.data.sportsCardsPro) {
+          cardData.sportsCardsPro = stResponse.data.sportsCardsPro;
+        }
 
         // Update the card
         await pool.query(`
@@ -1605,6 +1613,12 @@ async function identifySingleCard(userId, cardId) {
           scanMode: 'slabtrack'
         });
         return;
+      }
+
+      // Handle TIER_REQUIRED error (user downgraded from Power/Dealer)
+      if (stResponse.data?.error === 'TIER_REQUIRED') {
+        console.log(`[Batch] SlabTrack tier downgraded for user ${userId}, falling back to BYOK`);
+        // Fall through to BYOK if available
       }
     } catch (e) {
       console.error(`[Batch] SlabTrack scan failed for ${cardId}:`, e.message);
@@ -4806,15 +4820,16 @@ app.get('/api/slabtrack/status', authenticateToken, async (req, res) => {
 
     // Verify token and get user info from SlabTrack
     try {
-      const stResponse = await axios.get(`${SLABTRACK_API}/users/me`, {
+      const stResponse = await axios.get(`${SLABTRACK_API}/users/api-token`, {
         headers: { 'X-API-Token': slabtrackToken },
         timeout: 10000
       });
 
       if (stResponse.data?.success) {
         const stUser = stResponse.data.user;
-        const proTiers = ['pro', 'dealer', 'enterprise', 'admin'];
-        const canUseScanAPI = proTiers.includes(stUser.subscription_tier);
+        // Power/Dealer tiers can use SlabTrack scanning API
+        const scanApiTiers = ['power', 'dealer'];
+        const canUseScanAPI = scanApiTiers.includes(stUser.subscription_tier);
 
         return res.json({
           connected: true,
@@ -4912,12 +4927,11 @@ app.post('/api/slabtrack/scan', authenticateToken, async (req, res) => {
 
     console.log(`[SlabTrack] Scanning card via SlabTrack API for user ${req.user.id}`);
 
-    // Call SlabTrack's atlas/scan API
-    const response = await axios.post(`${SLABTRACK_API}/atlas/scan`, {
-      front_image_url: frontImage,
-      back_image_url: backImage || null,
-      card_type: req.body.card_type || 'slabs',
-      save_to_collection: req.body.save_to_collection !== false
+    // Call SlabTrack's scanner/scan API
+    const response = await axios.post(`${SLABTRACK_API}/scanner/scan`, {
+      frontImage,
+      backImage: backImage || null,
+      source: 'cardflow'
     }, {
       headers: {
         'Content-Type': 'application/json',

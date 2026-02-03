@@ -2290,13 +2290,24 @@
                 </div>
               </div>
 
-              <!-- Scan Mode Indicator -->
+              <!-- Scan Mode Indicator - Power/Dealer -->
               <div id="slabtrack-scan-mode" style="display: none; background: linear-gradient(135deg, rgba(123, 47, 247, 0.2), rgba(0, 246, 255, 0.1)); border: 1px solid var(--purple); border-radius: 8px; padding: 16px; margin-bottom: 16px;">
                 <div style="display: flex; align-items: center; gap: 12px;">
                   <span style="font-size: 24px;">🔍</span>
                   <div>
                     <div style="font-weight: 600; color: var(--purple);">SlabTrack Scanning Enabled</div>
-                    <div style="font-size: 12px; color: var(--text-muted);">Cards will be scanned using SlabTrack's AI (uses your SlabTrack credits, no BYOK needed!)</div>
+                    <div style="font-size: 12px; color: var(--text-muted);">Cards scanned using SlabTrack's AI (uses your SlabTrack credits, no BYOK needed!)</div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- BYOK Mode Indicator - Free Tier -->
+              <div id="slabtrack-byok-mode" style="display: none; background: rgba(255, 255, 255, 0.05); border: 1px solid var(--glass-border); border-radius: 8px; padding: 16px; margin-bottom: 16px;">
+                <div style="display: flex; align-items: center; gap: 12px;">
+                  <span style="font-size: 24px;">🔑</span>
+                  <div>
+                    <div style="font-weight: 600; color: var(--text);">Using BYOK Mode</div>
+                    <div style="font-size: 12px; color: var(--text-muted);">Free tier uses your own API key for scanning. <a href="https://slabtrack.io/pricing" target="_blank" style="color: var(--cyan);">Upgrade to Power</a> for SlabTrack scanning.</div>
                   </div>
                 </div>
               </div>
@@ -4532,6 +4543,7 @@
         const userScans = document.getElementById('slabtrack-user-scans');
         const scansInfo = document.getElementById('slabtrack-scans-info');
         const scanMode = document.getElementById('slabtrack-scan-mode');
+        const byokMode = document.getElementById('slabtrack-byok-mode');
 
         if (data.connected) {
           indicator.style.background = 'var(--success)';
@@ -4545,7 +4557,17 @@
           if (data.user) {
             userName.textContent = data.user.name || 'SlabTrack Connected';
             userEmail.textContent = data.user.email || '';
-            userTier.textContent = (data.user.tier || 'free').charAt(0).toUpperCase() + (data.user.tier || 'free').slice(1);
+
+            // Format tier name nicely
+            const tierName = data.user.tier || 'free';
+            userTier.textContent = tierName.charAt(0).toUpperCase() + tierName.slice(1);
+
+            // Color tier badge based on tier
+            if (['power', 'dealer'].includes(tierName)) {
+              userTier.style.color = 'var(--purple)';
+            } else {
+              userTier.style.color = 'var(--cyan)';
+            }
 
             // Show scans info if available
             if (data.user.scansUsed !== undefined) {
@@ -4554,11 +4576,15 @@
             }
           }
 
-          // Show SlabTrack Scanning mode if Pro tier
+          // Show appropriate scan mode indicator based on tier
           if (data.canUseScanAPI) {
+            // Power/Dealer - uses SlabTrack scanning API
             scanMode.style.display = 'block';
+            byokMode.style.display = 'none';
           } else {
+            // Free tier - must use BYOK
             scanMode.style.display = 'none';
+            byokMode.style.display = 'block';
           }
         } else {
           indicator.style.background = 'var(--error)';
@@ -4568,11 +4594,13 @@
           notConnected.style.display = 'block';
           connected.style.display = 'none';
           scanMode.style.display = 'none';
+          byokMode.style.display = 'none';
 
           // Reset user info
           userName.textContent = 'SlabTrack Connected';
           userEmail.textContent = '';
           userTier.textContent = '-';
+          userTier.style.color = 'var(--cyan)';
           userScans.textContent = '0';
           scansInfo.style.display = 'none';
         }
