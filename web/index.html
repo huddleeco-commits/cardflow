@@ -6584,7 +6584,8 @@
       { id: 'ebayAuctions', name: 'eBay Auctions', icon: '🔨', desc: 'Active auctions', category: 'primary' },
       { id: 'comc', name: 'COMC', icon: '📦', desc: 'Check Out My Cards', category: 'primary' },
       { id: 'googleShopping', name: 'Google Shopping', icon: '🛍️', desc: 'Google product listings', category: 'primary' },
-      { id: 'sportscardspro', name: 'SportsCardsPro', icon: '💹', desc: 'Price guide (via Google)', category: 'research' },
+      { id: 'sportscardspro', name: 'SportsCardsPro', icon: '💹', desc: 'Direct price guide (sports)', category: 'research' },
+      { id: 'pricecharting', name: 'PriceCharting', icon: '🎮', desc: 'Pokemon/TCG prices', category: 'research' },
       { id: 'googleResearch', name: 'Google Research', icon: '🔍', desc: 'Card Ladder, Market Movers, Beckett, 130point', category: 'research' },
       { id: '130point', name: '130point', icon: '📊', desc: 'eBay price history & trends', category: 'research' },
       { id: 'psacard', name: 'PSA', icon: '🎯', desc: 'Cert lookup or auction prices', category: 'research' }
@@ -6612,22 +6613,77 @@
       const qPlus = query.replace(/\s+/g, '+');
 
       // Build Google Research filter (searches across top pricing sites)
-      // These are the authoritative pricing/research sites
       const siteFilter = RESEARCH_SITES.map(s => `site:${s}`).join(' OR ');
       const researchFilter = encodeURIComponent(siteFilter);
+
+      // Helper to create URL-safe slugs
+      const toSlug = (str) => (str || '')
+        .toLowerCase()
+        .replace(/\./g, '')
+        .replace(/\s+/g, '-')
+        .replace(/[^a-z0-9-]/g, '');
 
       // PSA URL - direct cert lookup if cert exists, otherwise auction prices
       const getPsaUrl = () => {
         if (card.cert_number) {
-          // Direct cert lookup
           return `https://www.psacard.com/cert/${card.cert_number}`;
         }
-        // Search auction prices directly on PSA
         return `https://www.psacard.com/auctionprices#!/?q=${q}`;
       };
 
+      // SportsCardsPro direct URL
+      // Format: /game/{sport}-cards-{year}-{set-slug}/{player-slug}-{parallel?}-{card-number}
+      // Example: /game/football-cards-2024-panini-prizm-emergent/jayden-daniels-green-2
+      const getSportsCardsProUrl = () => {
+        const sport = (card.sport || 'football').toLowerCase();
+        const sportPrefix = `${sport}-cards`;
+        const setSlug = toSlug(card.set_name);
+        const playerSlug = toSlug(card.player);
+        const cardNum = String(card.card_number || '').replace(/^#/, '');
+
+        // Build the card path: player-parallel-number or player-number
+        let cardPath = playerSlug;
+        if (card.parallel && card.parallel.toLowerCase() !== 'base') {
+          cardPath += '-' + toSlug(card.parallel);
+        }
+        if (cardNum) {
+          cardPath += '-' + cardNum;
+        }
+
+        // Build full URL if we have required fields
+        if (card.year && setSlug && playerSlug) {
+          return `https://www.sportscardspro.com/game/${sportPrefix}-${card.year}-${setSlug}/${cardPath}`;
+        }
+        // Fallback to console search
+        return `https://www.sportscardspro.com/console/${sportPrefix}?q=${q}`;
+      };
+
+      // PriceCharting direct URL for Pokemon/TCG
+      // Format: /game/pokemon-{set-slug}/{pokemon-name}-{card-number}?q={query}
+      // Example: /game/pokemon-paldea-evolved/meowscarada-ex-271?q=meowscarada+ex+271
+      const getPriceChartingUrl = () => {
+        const setSlug = toSlug(card.set_name);
+        const pokemonSlug = toSlug(card.player); // player field holds Pokemon name
+        const cardNum = String(card.card_number || '').replace(/^#/, '');
+
+        // Build card path
+        let cardPath = pokemonSlug;
+        if (cardNum) {
+          cardPath += '-' + cardNum;
+        }
+
+        // Build query for fallback
+        const searchQuery = [card.player, card.card_number].filter(Boolean).join(' ');
+
+        if (setSlug && pokemonSlug) {
+          return `https://www.pricecharting.com/game/pokemon-${setSlug}/${cardPath}?q=${encodeURIComponent(searchQuery)}`;
+        }
+        // Fallback to search
+        return `https://www.pricecharting.com/search-products?q=${q}&type=prices`;
+      };
+
       const urls = {
-        // eBay URLs (matching SlabTrack exactly)
+        // eBay URLs
         ebaySold: `https://www.ebay.com/sch/i.html?_nkw=${q}&LH_Complete=1&LH_Sold=1&_sop=13`,
         ebayBIN: `https://www.ebay.com/sch/i.html?_nkw=${q}&LH_BIN=1&_sop=15`,
         ebayAuctions: `https://www.ebay.com/sch/i.html?_nkw=${q}&LH_Auction=1&_sop=1`,
@@ -6641,8 +6697,11 @@
         // Google Research - combined search across top pricing sites
         googleResearch: `https://www.google.com/search?q=${qPlus}+(${researchFilter})`,
 
-        // SportsCardsPro via Google site search (their internal search is unreliable)
-        sportscardspro: `https://www.google.com/search?q=site:sportscardspro.com+${qPlus}`,
+        // SportsCardsPro - direct URL for sports cards
+        sportscardspro: getSportsCardsProUrl(),
+
+        // PriceCharting - direct URL for Pokemon/TCG
+        pricecharting: getPriceChartingUrl(),
 
         // 130point direct
         '130point': `https://130point.com/sales/?search=${q}`,
