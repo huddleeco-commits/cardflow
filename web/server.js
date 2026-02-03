@@ -233,7 +233,7 @@ async function requireAdmin(req, res, next) {
 const TIERS = {
   free: { name: 'Free Trial', price: 0, features: ['scan', 'export_csv', 'export_slabtrack', 'price_links'], limit: 10 },
   basic: { name: 'Basic', price: 2.99, features: ['scan', 'export_csv', 'export_slabtrack', 'price_links', 'unlimited_scans'] },
-  pro: { name: 'Pro', price: 6.99, features: ['scan', 'export_csv', 'export_slabtrack', 'price_links', 'unlimited_scans', 'ebay_integration'] }
+  pro: { name: 'Pro', price: 5.99, features: ['scan', 'export_csv', 'export_slabtrack', 'price_links', 'unlimited_scans', 'ebay_integration'] }
 };
 
 // Middleware to require Pro tier for eBay features
