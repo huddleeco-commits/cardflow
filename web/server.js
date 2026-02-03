@@ -1855,10 +1855,12 @@ async function identifySingleCard(userId, cardId) {
             set_name: cardData.set_name,
             card_number: cardData.card_number,
             parallel: cardData.parallel,
+            serial_number: cardData.serial_number,
             sport: cardData.sport,
             is_graded: cardData.is_graded,
             grading_company: cardData.grading_company,
-            grade: cardData.grade
+            grade: cardData.grade,
+            cert_number: cardData.cert_number
           },
           // Pricing if available
           pricing: stResponse.data.pricing || null,

@@ -721,6 +721,30 @@
       font-weight: 700;
     }
 
+    .card-cert {
+      background: rgba(0, 246, 255, 0.15);
+      color: var(--cyan);
+      padding: 3px 8px;
+      border-radius: 4px;
+      font-size: 10px;
+      font-family: 'Monaco', 'Consolas', monospace;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+
+    .card-cert:hover {
+      background: rgba(0, 246, 255, 0.25);
+    }
+
+    .card-serial {
+      background: rgba(255, 215, 0, 0.15);
+      color: #ffd700;
+      padding: 3px 8px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: 600;
+    }
+
     /* Pricing Section */
     .pricing-section {
       background: rgba(0, 0, 0, 0.3);
@@ -3171,8 +3195,8 @@
               <input type="text" id="edit-parallel" placeholder="Refractor">
             </div>
             <div class="edit-field">
-              <label>Numbered (/xxx)</label>
-              <input type="text" id="edit-numbered" placeholder="/99">
+              <label>Serial #</label>
+              <input type="text" id="edit-serial" placeholder="25/99">
             </div>
             <div class="edit-field">
               <label>Team</label>
@@ -4064,8 +4088,10 @@
       grid.innerHTML = cards.map(card => {
         const frontSrc = getImageUrl(card.front, card);
         const backSrc = card.back ? getImageUrl(card.back, card) : '';
-        const gradeInfo = card.is_graded ? `${card.grading_company} ${card.grade}` : '';
+        const gradeInfo = card.is_graded ? `${card.grading_company || ''} ${card.grade || ''}`.trim() : '';
         const parallelInfo = card.parallel && card.parallel !== 'Base' ? card.parallel : '';
+        const certNumber = card.cert_number || '';
+        const serialNumber = card.serial_number || '';
         const isSelected = selectedCards.has(card.id);
 
         const checkboxHtml = selectMode ? `
@@ -4159,6 +4185,8 @@
 
               <div class="card-meta">
                 ${gradeInfo ? `<span class="card-grade">${gradeInfo}</span>` : ''}
+                ${certNumber ? `<span class="card-cert" onclick="event.stopPropagation(); window.open('https://www.psacard.com/cert/${certNumber}', '_blank')" title="Click to verify cert">#${certNumber}</span>` : ''}
+                ${serialNumber ? `<span class="card-serial" title="Serial numbered">${serialNumber}</span>` : ''}
               </div>
             </div>
             <div class="card-actions">
@@ -5663,7 +5691,7 @@
       document.getElementById('edit-set').value = card.set_name || '';
       document.getElementById('edit-number').value = card.card_number || '';
       document.getElementById('edit-parallel').value = card.parallel || '';
-      document.getElementById('edit-numbered').value = card.numbered || '';
+      document.getElementById('edit-serial').value = card.serial_number || '';
       document.getElementById('edit-team').value = card.team || '';
       document.getElementById('edit-sport').value = card.sport || 'baseball';
 
@@ -5728,7 +5756,7 @@
         set_name: document.getElementById('edit-set').value,
         card_number: document.getElementById('edit-number').value,
         parallel: document.getElementById('edit-parallel').value,
-        numbered: document.getElementById('edit-numbered').value,
+        serial_number: document.getElementById('edit-serial').value,
         team: document.getElementById('edit-team').value,
         sport: document.getElementById('edit-sport').value,
         is_graded: isGraded,
