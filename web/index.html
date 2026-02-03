@@ -1919,6 +1919,20 @@
       to { transform: translate(-50%, -50%) rotate(360deg); }
     }
 
+    .loading-spinner {
+      width: 40px;
+      height: 40px;
+      border: 3px solid var(--glass-border);
+      border-top-color: var(--cyan);
+      border-radius: 50%;
+      animation: spinSimple 0.8s linear infinite;
+      margin: 0 auto;
+    }
+
+    @keyframes spinSimple {
+      to { transform: rotate(360deg); }
+    }
+
     /* Popup window indicator */
     .popup-indicator {
       position: fixed;
@@ -2070,6 +2084,7 @@
         <button class="btn btn-accent" onclick="bulkListSelected()">📦 List Selected</button>
         <button class="btn btn-success" onclick="bulkMarkSold()">💰 Mark Sold</button>
         <button class="btn btn-secondary" onclick="showLinkMatrix()">🔗 Link Matrix</button>
+        <button class="btn btn-accent" onclick="valuateLot()" id="valuate-lot-btn">📊 Valuate Lot</button>
         <button class="btn btn-primary" onclick="exportSelected('csv')">📄 CSV</button>
         <button class="btn btn-primary" onclick="exportSelected('excel')">📊 Excel</button>
         <button class="btn btn-primary" onclick="exportSelected('slabtrack')">📋 SlabTrack Excel</button>
@@ -3159,6 +3174,27 @@
       </div>
       <div class="modal-footer">
         <button class="btn btn-secondary" onclick="closeSalesModal()">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Lot Valuation Modal -->
+  <div class="modal" id="lot-valuation-modal">
+    <div class="modal-content" style="max-width: 800px; max-height: 90vh;">
+      <div class="modal-header">
+        <h2>📊 Bulk Lot Valuation</h2>
+        <button class="modal-close" onclick="closeLotValuationModal()">&times;</button>
+      </div>
+      <div class="modal-body" id="lot-valuation-content" style="overflow-y: auto; max-height: calc(90vh - 150px);">
+        <div style="text-align: center; padding: 60px 20px; color: var(--text-muted);">
+          <div style="font-size: 48px; margin-bottom: 16px;">📊</div>
+          <h3 style="margin-bottom: 8px;">Analyzing your collection...</h3>
+          <p>Searching market data for bulk pricing</p>
+          <div class="loading-spinner" style="margin-top: 20px;"></div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeLotValuationModal()">Close</button>
       </div>
     </div>
   </div>
@@ -6532,6 +6568,159 @@
     async function exportAll(format) {
       exportCardIds = cards.map(c => c.id);
       await exportTo(format);
+    }
+
+    // ==========================================
+    // LOT VALUATION FUNCTIONS
+    // ==========================================
+
+    async function valuateLot() {
+      const btn = document.getElementById('valuate-lot-btn');
+      const originalText = btn.innerHTML;
+      btn.disabled = true;
+      btn.innerHTML = '⏳ Analyzing...';
+
+      // Show modal with loading state
+      document.getElementById('lot-valuation-modal').classList.add('open');
+      document.getElementById('lot-valuation-content').innerHTML = `
+        <div style="text-align: center; padding: 60px 20px; color: var(--text-muted);">
+          <div style="font-size: 48px; margin-bottom: 16px;">📊</div>
+          <h3 style="margin-bottom: 8px;">Analyzing your collection...</h3>
+          <p>Searching market data for bulk pricing</p>
+          <div class="loading-spinner" style="margin-top: 20px;"></div>
+        </div>
+      `;
+
+      try {
+        const response = await api('/lot/valuate', { method: 'POST' });
+
+        if (response.error) {
+          throw new Error(response.message || response.error);
+        }
+
+        renderLotValuationResults(response);
+
+      } catch (e) {
+        document.getElementById('lot-valuation-content').innerHTML = `
+          <div style="text-align: center; padding: 60px 20px;">
+            <div style="font-size: 48px; margin-bottom: 16px;">❌</div>
+            <h3 style="color: var(--error); margin-bottom: 8px;">Valuation Failed</h3>
+            <p style="color: var(--text-muted);">${e.message}</p>
+          </div>
+        `;
+      }
+
+      btn.disabled = false;
+      btn.innerHTML = originalText;
+    }
+
+    function renderLotValuationResults(data) {
+      const { summary, setBreakdown, keyCardsToCheck, recommendations, unpricedSets } = data;
+
+      let html = `
+        <!-- Summary Card -->
+        <div style="background: linear-gradient(135deg, rgba(0, 246, 255, 0.1), rgba(123, 47, 247, 0.1)); border-radius: 16px; padding: 24px; margin-bottom: 24px;">
+          <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; text-align: center;">
+            <div>
+              <div style="font-size: 32px; font-weight: 700; color: var(--success);">$${summary.estimatedTotalValue.toFixed(2)}</div>
+              <div style="font-size: 12px; color: var(--text-muted);">ESTIMATED VALUE</div>
+            </div>
+            <div>
+              <div style="font-size: 32px; font-weight: 700; color: var(--cyan);">${summary.totalCards}</div>
+              <div style="font-size: 12px; color: var(--text-muted);">TOTAL CARDS</div>
+            </div>
+            <div>
+              <div style="font-size: 32px; font-weight: 700; color: var(--purple);">${summary.totalSets}</div>
+              <div style="font-size: 12px; color: var(--text-muted);">UNIQUE SETS</div>
+            </div>
+            <div>
+              <div style="font-size: 32px; font-weight: 700; color: var(--warning);">$${summary.averagePerCard.toFixed(3)}</div>
+              <div style="font-size: 12px; color: var(--text-muted);">PER CARD AVG</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Recommendations -->
+        ${recommendations && recommendations.length > 0 ? `
+          <div style="margin-bottom: 24px;">
+            <h4 style="margin-bottom: 12px; color: var(--text-muted);">💡 Recommendations</h4>
+            ${recommendations.map(rec => `
+              <div style="background: var(--glass); padding: 12px 16px; border-radius: 8px; margin-bottom: 8px; border-left: 3px solid ${rec.type === 'key-cards' ? 'var(--success)' : rec.type === 'low-value' ? 'var(--warning)' : 'var(--cyan)'};">
+                <div style="font-weight: 600; margin-bottom: 4px;">${rec.message}</div>
+                <div style="font-size: 12px; color: var(--text-muted);">${rec.action}</div>
+              </div>
+            `).join('')}
+          </div>
+        ` : ''}
+
+        <!-- Key Cards Alert -->
+        ${keyCardsToCheck && keyCardsToCheck.length > 0 ? `
+          <div style="background: rgba(16, 185, 129, 0.15); border: 1px solid var(--success); border-radius: 12px; padding: 16px; margin-bottom: 24px;">
+            <h4 style="color: var(--success); margin-bottom: 12px;">⚠️ Key Cards to Check For</h4>
+            <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 8px;">
+              ${keyCardsToCheck.map(card => `
+                <div style="background: var(--bg-deep); padding: 8px 12px; border-radius: 6px; display: flex; justify-content: space-between;">
+                  <span>${card.name}${card.number ? ` #${card.number}` : ''}</span>
+                  <span style="color: var(--success); font-weight: 600;">$${card.value}</span>
+                </div>
+              `).join('')}
+            </div>
+          </div>
+        ` : ''}
+
+        <!-- Set Breakdown -->
+        <div style="margin-bottom: 24px;">
+          <h4 style="margin-bottom: 12px; color: var(--text-muted);">📦 Set Breakdown</h4>
+          <div style="background: var(--bg-deep); border-radius: 12px; overflow: hidden;">
+            <table style="width: 100%; border-collapse: collapse;">
+              <thead>
+                <tr style="background: var(--glass);">
+                  <th style="padding: 12px; text-align: left; font-size: 11px; color: var(--text-muted);">SET</th>
+                  <th style="padding: 12px; text-align: center; font-size: 11px; color: var(--text-muted);">CARDS</th>
+                  <th style="padding: 12px; text-align: center; font-size: 11px; color: var(--text-muted);">$/100</th>
+                  <th style="padding: 12px; text-align: right; font-size: 11px; color: var(--text-muted);">VALUE</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${setBreakdown.map(set => `
+                  <tr style="border-bottom: 1px solid var(--glass-border);">
+                    <td style="padding: 12px;">
+                      <div style="font-weight: 600;">${set.year} ${set.setName}</div>
+                      <div style="font-size: 11px; color: var(--text-muted);">${set.sport} ${set.confidence === 'estimated' ? '(est.)' : ''}</div>
+                    </td>
+                    <td style="padding: 12px; text-align: center;">${set.cardCount}</td>
+                    <td style="padding: 12px; text-align: center; color: var(--text-muted);">$${set.pricePer100.toFixed(2)}</td>
+                    <td style="padding: 12px; text-align: right; color: var(--success); font-weight: 600;">$${set.estimatedValue.toFixed(2)}</td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Unpriced Sets -->
+        ${unpricedSets && unpricedSets.length > 0 ? `
+          <div>
+            <h4 style="margin-bottom: 12px; color: var(--text-muted);">📋 Other Sets (not priced)</h4>
+            <div style="display: flex; flex-wrap: wrap; gap: 8px;">
+              ${unpricedSets.map(set => `
+                <span style="background: var(--glass); padding: 6px 12px; border-radius: 6px; font-size: 12px;">
+                  ${set.year} ${set.setName} (${set.cardCount})
+                </span>
+              `).join('')}
+            </div>
+            <p style="font-size: 11px; color: var(--text-muted); margin-top: 8px;">
+              * Only top 5 sets are priced to manage API costs. These sets are typically lower value.
+            </p>
+          </div>
+        ` : ''}
+      `;
+
+      document.getElementById('lot-valuation-content').innerHTML = html;
+    }
+
+    function closeLotValuationModal() {
+      document.getElementById('lot-valuation-modal').classList.remove('open');
     }
 
     // ==========================================

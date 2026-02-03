@@ -648,11 +648,12 @@
 
     async function loadDashboard() {
       try {
-        const [analytics, usersData, scanHistory, aiAnalytics] = await Promise.all([
+        const [analytics, usersData, scanHistory, aiAnalytics, costOverview] = await Promise.all([
           api('/admin/analytics'),
           api('/admin/users'),
           api('/admin/scan-history?limit=50'),
-          api('/admin/agent-analytics/overview').catch(() => null)
+          api('/admin/agent-analytics/overview').catch(() => null),
+          api('/admin/costs/overview').catch(() => null)
         ]);
 
         if (!analytics || !usersData) return;
@@ -662,6 +663,7 @@
         const scans = scanHistory?.scans || [];
         const scanSummary = scanHistory?.summary || {};
         const ai = aiAnalytics || { today: {}, month: {}, allTime: {}, byProvider: [], byPlan: [] };
+        const costs = costOverview || { today: [], month: [], allTime: [], grandTotal: { cost: 0, requests: 0 } };
 
         // Render dashboard
         document.getElementById('main-content').innerHTML = `
@@ -836,6 +838,64 @@
                   <div style="font-size: 12px; color: var(--text-muted); margin-bottom: 8px;">By Plan</div>
                   <div id="ai-by-plan">${ai.byPlan?.length > 0 ? 'Loading...' : '<span style="color: var(--text-muted); font-size: 13px;">No data yet</span>'}</div>
                 </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- API COSTS BY PROVIDER PANEL -->
+          <div class="panel" style="margin-top: 24px;">
+            <div class="panel-header">
+              <div class="panel-title">💰 API Costs by Provider</div>
+              <button class="btn btn-sm btn-ghost" onclick="window.open('/api/admin/costs/export?format=csv', '_blank')">📥 Export CSV</button>
+            </div>
+            <div class="panel-body">
+              <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px;">
+                <!-- Today -->
+                <div style="background: var(--glass); padding: 16px; border-radius: 12px;">
+                  <div style="font-size: 12px; color: var(--text-muted); margin-bottom: 12px; text-transform: uppercase;">Today</div>
+                  ${costs.today?.length > 0 ? costs.today.map(p => `
+                    <div style="display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid var(--glass-border);">
+                      <span style="text-transform: capitalize;">${p.provider || 'claude'}</span>
+                      <span style="font-weight: 600; color: var(--success);">$${parseFloat(p.totalCost || 0).toFixed(4)}</span>
+                    </div>
+                  `).join('') : '<div style="color: var(--text-muted); font-size: 13px;">No costs today</div>'}
+                  <div style="margin-top: 12px; padding-top: 8px; border-top: 1px solid var(--glass-border); display: flex; justify-content: space-between;">
+                    <span style="font-weight: 600;">Total</span>
+                    <span style="color: var(--cyan); font-weight: 700;">$${costs.today?.reduce((sum, p) => sum + parseFloat(p.totalCost || 0), 0).toFixed(4) || '0.0000'}</span>
+                  </div>
+                </div>
+                <!-- Month -->
+                <div style="background: var(--glass); padding: 16px; border-radius: 12px;">
+                  <div style="font-size: 12px; color: var(--text-muted); margin-bottom: 12px; text-transform: uppercase;">This Month</div>
+                  ${costs.month?.length > 0 ? costs.month.map(p => `
+                    <div style="display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid var(--glass-border);">
+                      <span style="text-transform: capitalize;">${p.provider || 'claude'}</span>
+                      <span style="font-weight: 600; color: var(--success);">$${parseFloat(p.totalCost || 0).toFixed(2)}</span>
+                    </div>
+                  `).join('') : '<div style="color: var(--text-muted); font-size: 13px;">No costs this month</div>'}
+                  <div style="margin-top: 12px; padding-top: 8px; border-top: 1px solid var(--glass-border); display: flex; justify-content: space-between;">
+                    <span style="font-weight: 600;">Total</span>
+                    <span style="color: var(--cyan); font-weight: 700;">$${costs.month?.reduce((sum, p) => sum + parseFloat(p.totalCost || 0), 0).toFixed(2) || '0.00'}</span>
+                  </div>
+                </div>
+                <!-- All Time -->
+                <div style="background: var(--glass); padding: 16px; border-radius: 12px;">
+                  <div style="font-size: 12px; color: var(--text-muted); margin-bottom: 12px; text-transform: uppercase;">All Time</div>
+                  ${costs.allTime?.length > 0 ? costs.allTime.map(p => `
+                    <div style="display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid var(--glass-border);">
+                      <span style="text-transform: capitalize;">${p.provider || 'claude'}</span>
+                      <span style="font-weight: 600; color: var(--success);">$${parseFloat(p.totalCost || 0).toFixed(2)}</span>
+                    </div>
+                  `).join('') : '<div style="color: var(--text-muted); font-size: 13px;">No cost data</div>'}
+                  <div style="margin-top: 12px; padding-top: 8px; border-top: 1px solid var(--glass-border); display: flex; justify-content: space-between;">
+                    <span style="font-weight: 600;">Grand Total</span>
+                    <span style="color: var(--error); font-weight: 700;">$${parseFloat(costs.grandTotal?.cost || 0).toFixed(2)}</span>
+                  </div>
+                </div>
+              </div>
+              <div style="margin-top: 16px; padding: 12px 16px; background: rgba(0, 246, 255, 0.1); border-radius: 8px; font-size: 13px;">
+                <strong>Total API Requests:</strong> ${(costs.grandTotal?.requests || 0).toLocaleString()} |
+                <strong>Avg Cost/Request:</strong> $${costs.grandTotal?.requests > 0 ? (parseFloat(costs.grandTotal?.cost || 0) / costs.grandTotal.requests).toFixed(6) : '0.000000'}
               </div>
             </div>
           </div>

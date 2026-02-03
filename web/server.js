@@ -6988,6 +6988,825 @@ app.get('/api/cards/:id/social-caption', authenticateToken, async (req, res) => 
 });
 
 // ============================================
+// PERPLEXITY API SERVICE
+// ============================================
+
+const PERPLEXITY_API_KEY = process.env.PERPLEXITY_API_KEY;
+
+// Cost rates per provider
+const COST_RATES = {
+  claude: {
+    'claude-sonnet-4-20250514': { inputPer1M: 3.00, outputPer1M: 15.00 },
+    'claude-3-5-sonnet-20241022': { inputPer1M: 3.00, outputPer1M: 15.00 },
+    'claude-3-5-haiku-20241022': { inputPer1M: 0.80, outputPer1M: 4.00 },
+    'sonnet4': { inputPer1M: 3.00, outputPer1M: 15.00 }  // alias
+  },
+  perplexity: {
+    'sonar': { perRequest: 0.005 },
+    'sonar-pro': { perRequest: 0.02 },
+    'sonar-reasoning': { perRequest: 0.005 }
+  }
+};
+
+// Calculate cost for Claude
+function calculateClaudeCost(model, inputTokens, outputTokens) {
+  const rates = COST_RATES.claude[model] || COST_RATES.claude['sonnet4'];
+  const inputCost = (inputTokens / 1_000_000) * rates.inputPer1M;
+  const outputCost = (outputTokens / 1_000_000) * rates.outputPer1M;
+  return parseFloat((inputCost + outputCost).toFixed(6));
+}
+
+// Calculate cost for Perplexity
+function calculatePerplexityCost(model = 'sonar') {
+  const rates = COST_RATES.perplexity[model] || COST_RATES.perplexity['sonar'];
+  return rates.perRequest;
+}
+
+// Track API cost in database
+async function trackApiCost({
+  userId,
+  provider,
+  model,
+  operation,
+  feature,
+  cost,
+  tokensInput = 0,
+  tokensOutput = 0,
+  requestSize = null,
+  success = true,
+  errorMessage = null,
+  metadata = {}
+}) {
+  try {
+    await pool.query(`
+      INSERT INTO api_usage (user_id, operation, model_used, tokens_input, tokens_output, cost, metadata)
+      VALUES ($1, $2, $3, $4, $5, $6, $7)
+    `, [
+      userId,
+      operation,
+      `${provider}:${model}`,
+      tokensInput,
+      tokensOutput,
+      cost,
+      JSON.stringify({
+        provider,
+        feature,
+        requestSize,
+        success,
+        errorMessage,
+        ...metadata
+      })
+    ]);
+  } catch (e) {
+    console.error('[Cost Tracker] Failed to log cost:', e.message);
+    // Don't throw - cost tracking shouldn't break main flow
+  }
+}
+
+// Search Perplexity API
+async function searchPerplexity(query, context = {}) {
+  if (!PERPLEXITY_API_KEY) {
+    console.log('[Perplexity] No API key configured');
+    return null;
+  }
+
+  const model = context.model || 'sonar';
+  const startTime = Date.now();
+
+  try {
+    console.log(`[Perplexity] Searching: "${query.substring(0, 60)}..."`);
+
+    const response = await fetch('https://api.perplexity.ai/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${PERPLEXITY_API_KEY}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        model: model,
+        messages: [{
+          role: 'system',
+          content: 'You are a sports card pricing expert. Provide concise, factual pricing information based on recent eBay sold listings and market data. Always include specific dollar amounts when available.'
+        }, {
+          role: 'user',
+          content: query
+        }],
+        temperature: 0.2,
+        max_tokens: 1000
+      })
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('[Perplexity] API error:', response.status, errorText);
+
+      // Track failed request
+      await trackApiCost({
+        userId: context.userId,
+        provider: 'perplexity',
+        model: model,
+        operation: context.operation || 'search',
+        feature: context.feature || 'general-search',
+        cost: 0,
+        success: false,
+        errorMessage: `HTTP ${response.status}: ${errorText.substring(0, 100)}`
+      });
+
+      return null;
+    }
+
+    const data = await response.json();
+    const cost = calculatePerplexityCost(model);
+
+    // Track successful request
+    await trackApiCost({
+      userId: context.userId,
+      provider: 'perplexity',
+      model: model,
+      operation: context.operation || 'search',
+      feature: context.feature || 'general-search',
+      cost: cost,
+      tokensInput: data.usage?.prompt_tokens || 0,
+      tokensOutput: data.usage?.completion_tokens || 0,
+      requestSize: `Query: ${query.length} chars`,
+      success: true,
+      metadata: {
+        query: query.substring(0, 100),
+        responseTime: Date.now() - startTime
+      }
+    });
+
+    console.log(`[Perplexity] Success - cost: $${cost.toFixed(4)}, time: ${Date.now() - startTime}ms`);
+
+    return {
+      content: data.choices?.[0]?.message?.content || '',
+      citations: data.citations || [],
+      usage: data.usage
+    };
+
+  } catch (e) {
+    console.error('[Perplexity] Request failed:', e.message);
+
+    await trackApiCost({
+      userId: context.userId,
+      provider: 'perplexity',
+      model: model,
+      operation: context.operation || 'search',
+      feature: context.feature || 'general-search',
+      cost: 0,
+      success: false,
+      errorMessage: e.message
+    });
+
+    return null;
+  }
+}
+
+// ============================================
+// BULK LOT VALUATION
+// ============================================
+
+// Get bulk pricing for a set
+async function getBulkSetPricing(year, setName, sport, context = {}) {
+  const query = `${year} ${setName} ${sport} bulk commons lot value price per 100 cards eBay sold 2024 2025`;
+
+  const result = await searchPerplexity(query, {
+    ...context,
+    operation: 'bulk-pricing',
+    feature: 'set-valuation'
+  });
+
+  if (!result) return null;
+
+  // Parse the response to extract pricing info
+  const content = result.content.toLowerCase();
+
+  // Try to extract price per 100 cards
+  let pricePer100 = null;
+  const priceMatches = content.match(/\$(\d+(?:\.\d{2})?)\s*(?:per\s*)?(?:100|hundred)/i) ||
+                       content.match(/(\d+(?:\.\d{2})?)\s*(?:dollars?|usd)\s*(?:per\s*)?(?:100|hundred)/i);
+  if (priceMatches) {
+    pricePer100 = parseFloat(priceMatches[1]);
+  }
+
+  // Fallback: extract any dollar amounts and estimate
+  if (!pricePer100) {
+    const allPrices = content.match(/\$(\d+(?:\.\d{2})?)/g);
+    if (allPrices && allPrices.length > 0) {
+      const prices = allPrices.map(p => parseFloat(p.replace('$', ''))).filter(p => p < 100);
+      if (prices.length > 0) {
+        pricePer100 = prices.reduce((a, b) => a + b, 0) / prices.length;
+      }
+    }
+  }
+
+  return {
+    year,
+    setName,
+    sport,
+    pricePer100: pricePer100 || 2.50, // Default fallback
+    rawResponse: result.content,
+    citations: result.citations,
+    confidence: pricePer100 ? 'high' : 'estimated'
+  };
+}
+
+// Get key cards for a set
+async function getKeyCards(year, setName, sport, context = {}) {
+  const query = `${year} ${setName} ${sport} key cards valuable rookies most expensive cards worth`;
+
+  const result = await searchPerplexity(query, {
+    ...context,
+    operation: 'key-cards',
+    feature: 'set-valuation'
+  });
+
+  if (!result) return [];
+
+  // Parse key cards from response
+  const keyCards = [];
+  const lines = result.content.split('\n');
+
+  for (const line of lines) {
+    // Look for patterns like "Card Name - $XX" or "#123 Player Name ($XX)"
+    const cardMatch = line.match(/(?:#?(\d+))?\s*([A-Za-z\s.'-]+?)(?:\s*[-–]\s*|\s*\(?\$)(\d+(?:\.\d{2})?)/);
+    if (cardMatch) {
+      keyCards.push({
+        number: cardMatch[1] || null,
+        name: cardMatch[2].trim(),
+        value: parseFloat(cardMatch[3])
+      });
+    }
+  }
+
+  return keyCards.slice(0, 10); // Top 10 key cards
+}
+
+// Valuate a lot of cards
+app.post('/api/lot/valuate', authenticateToken, async (req, res) => {
+  const userId = req.user.id;
+
+  try {
+    // Check if Perplexity is configured
+    if (!PERPLEXITY_API_KEY) {
+      return res.status(400).json({
+        error: 'Bulk pricing not available',
+        message: 'Perplexity API key not configured. Contact admin.'
+      });
+    }
+
+    // Get user's cards grouped by set
+    const cardsResult = await pool.query(`
+      SELECT
+        card_data->>'year' as year,
+        card_data->>'set_name' as set_name,
+        card_data->>'sport' as sport,
+        COUNT(*) as card_count,
+        array_agg(id) as card_ids
+      FROM cards
+      WHERE user_id = $1
+        AND status IN ('identified', 'priced')
+        AND card_data->>'year' IS NOT NULL
+        AND card_data->>'set_name' IS NOT NULL
+      GROUP BY card_data->>'year', card_data->>'set_name', card_data->>'sport'
+      ORDER BY COUNT(*) DESC
+    `, [userId]);
+
+    if (cardsResult.rows.length === 0) {
+      return res.status(400).json({
+        error: 'No cards to valuate',
+        message: 'Identify some cards first to get bulk lot valuation.'
+      });
+    }
+
+    const setGroups = cardsResult.rows;
+    const totalCards = setGroups.reduce((sum, g) => sum + parseInt(g.card_count), 0);
+
+    console.log(`[Lot Valuation] User ${userId} has ${totalCards} cards in ${setGroups.length} sets`);
+
+    // Limit searches to top 5 sets (cost control)
+    const setsToPrice = setGroups.slice(0, 5);
+    const results = [];
+    let totalValue = 0;
+
+    for (const set of setsToPrice) {
+      const pricing = await getBulkSetPricing(
+        set.year,
+        set.set_name,
+        set.sport || 'baseball',
+        { userId }
+      );
+
+      if (pricing) {
+        const cardCount = parseInt(set.card_count);
+        const setValue = (cardCount / 100) * pricing.pricePer100;
+        totalValue += setValue;
+
+        results.push({
+          year: set.year,
+          setName: set.set_name,
+          sport: set.sport || 'baseball',
+          cardCount,
+          pricePer100: pricing.pricePer100,
+          estimatedValue: parseFloat(setValue.toFixed(2)),
+          confidence: pricing.confidence
+        });
+      }
+    }
+
+    // Get key cards for the largest set
+    let keyCards = [];
+    if (setsToPrice.length > 0) {
+      const topSet = setsToPrice[0];
+      keyCards = await getKeyCards(
+        topSet.year,
+        topSet.set_name,
+        topSet.sport || 'baseball',
+        { userId }
+      );
+    }
+
+    // Calculate remaining sets (not priced)
+    const remainingSets = setGroups.slice(5);
+    const remainingCards = remainingSets.reduce((sum, g) => sum + parseInt(g.card_count), 0);
+
+    res.json({
+      success: true,
+      summary: {
+        totalCards,
+        totalSets: setGroups.length,
+        pricedSets: results.length,
+        estimatedTotalValue: parseFloat(totalValue.toFixed(2)),
+        averagePerCard: parseFloat((totalValue / totalCards).toFixed(4))
+      },
+      setBreakdown: results,
+      keyCardsToCheck: keyCards,
+      unpricedSets: remainingSets.map(s => ({
+        year: s.year,
+        setName: s.set_name,
+        cardCount: parseInt(s.card_count)
+      })),
+      recommendations: generateLotRecommendations(results, keyCards, totalValue)
+    });
+
+  } catch (e) {
+    console.error('[Lot Valuation] Error:', e);
+    res.status(500).json({ error: 'Failed to valuate lot', message: e.message });
+  }
+});
+
+// Generate recommendations based on lot valuation
+function generateLotRecommendations(setResults, keyCards, totalValue) {
+  const recommendations = [];
+
+  // Check if lot is worth selling
+  if (totalValue < 5) {
+    recommendations.push({
+      type: 'low-value',
+      message: 'Bulk value is minimal. Consider donating or keeping for personal collection.',
+      action: 'Extract any key cards before disposing of commons.'
+    });
+  } else if (totalValue < 20) {
+    recommendations.push({
+      type: 'moderate-value',
+      message: 'Lot has some value. Best sold as complete sets or team lots.',
+      action: 'Group by team or player popularity for better sales.'
+    });
+  } else {
+    recommendations.push({
+      type: 'good-value',
+      message: 'Lot has decent value. Consider selling in smaller lots for maximum return.',
+      action: 'Sort key cards separately, sell commons in 100-card lots.'
+    });
+  }
+
+  // Key card recommendations
+  if (keyCards.length > 0) {
+    const highValueCards = keyCards.filter(c => c.value >= 5);
+    if (highValueCards.length > 0) {
+      recommendations.push({
+        type: 'key-cards',
+        message: `Found ${highValueCards.length} potentially valuable cards!`,
+        action: `Check for: ${highValueCards.map(c => c.name).join(', ')}`,
+        cards: highValueCards
+      });
+    }
+  }
+
+  // Junk wax warning
+  const junkWaxSets = setResults.filter(s =>
+    parseInt(s.year) >= 1987 && parseInt(s.year) <= 1993 &&
+    s.pricePer100 < 3
+  );
+  if (junkWaxSets.length > 0) {
+    recommendations.push({
+      type: 'junk-wax-warning',
+      message: 'Junk wax era cards detected (1987-1993). These are heavily overproduced.',
+      action: 'Focus on key rookies only. Commons have minimal value.'
+    });
+  }
+
+  return recommendations;
+}
+
+// Valuate specific sets (manual selection)
+app.post('/api/lot/valuate-sets', authenticateToken, async (req, res) => {
+  const userId = req.user.id;
+  const { sets } = req.body; // Array of { year, setName, sport, cardCount }
+
+  if (!sets || sets.length === 0) {
+    return res.status(400).json({ error: 'No sets provided' });
+  }
+
+  if (!PERPLEXITY_API_KEY) {
+    return res.status(400).json({ error: 'Perplexity API not configured' });
+  }
+
+  try {
+    const results = [];
+    let totalValue = 0;
+
+    // Limit to 10 sets per request
+    const setsToPrice = sets.slice(0, 10);
+
+    for (const set of setsToPrice) {
+      const pricing = await getBulkSetPricing(
+        set.year,
+        set.setName,
+        set.sport || 'baseball',
+        { userId }
+      );
+
+      if (pricing) {
+        const cardCount = parseInt(set.cardCount) || 100;
+        const setValue = (cardCount / 100) * pricing.pricePer100;
+        totalValue += setValue;
+
+        results.push({
+          ...set,
+          pricePer100: pricing.pricePer100,
+          estimatedValue: parseFloat(setValue.toFixed(2)),
+          confidence: pricing.confidence,
+          rawResponse: pricing.rawResponse
+        });
+      }
+    }
+
+    res.json({
+      success: true,
+      sets: results,
+      totalValue: parseFloat(totalValue.toFixed(2))
+    });
+
+  } catch (e) {
+    console.error('[Set Valuation] Error:', e);
+    res.status(500).json({ error: 'Failed to valuate sets', message: e.message });
+  }
+});
+
+// ============================================
+// ADMIN COST ANALYTICS
+// ============================================
+
+// Get cost overview (admin)
+app.get('/api/admin/costs/overview', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const now = new Date();
+    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+
+    // Today's costs by provider
+    const todayResult = await pool.query(`
+      SELECT
+        SPLIT_PART(model_used, ':', 1) as provider,
+        SUM(cost) as total_cost,
+        COUNT(*) as request_count,
+        SUM(tokens_input) as total_input,
+        SUM(tokens_output) as total_output
+      FROM api_usage
+      WHERE timestamp >= $1
+      GROUP BY SPLIT_PART(model_used, ':', 1)
+    `, [startOfToday]);
+
+    // This month's costs by provider
+    const monthResult = await pool.query(`
+      SELECT
+        SPLIT_PART(model_used, ':', 1) as provider,
+        SUM(cost) as total_cost,
+        COUNT(*) as request_count
+      FROM api_usage
+      WHERE timestamp >= $1
+      GROUP BY SPLIT_PART(model_used, ':', 1)
+    `, [startOfMonth]);
+
+    // All-time costs by provider
+    const allTimeResult = await pool.query(`
+      SELECT
+        SPLIT_PART(model_used, ':', 1) as provider,
+        SUM(cost) as total_cost,
+        COUNT(*) as request_count
+      FROM api_usage
+      GROUP BY SPLIT_PART(model_used, ':', 1)
+    `);
+
+    // Total all-time
+    const totalResult = await pool.query(`
+      SELECT SUM(cost) as total_cost, COUNT(*) as total_requests
+      FROM api_usage
+    `);
+
+    res.json({
+      today: todayResult.rows.map(r => ({
+        provider: r.provider || 'claude',
+        totalCost: parseFloat(r.total_cost || 0),
+        requestCount: parseInt(r.request_count),
+        inputTokens: parseInt(r.total_input || 0),
+        outputTokens: parseInt(r.total_output || 0)
+      })),
+      month: monthResult.rows.map(r => ({
+        provider: r.provider || 'claude',
+        totalCost: parseFloat(r.total_cost || 0),
+        requestCount: parseInt(r.request_count)
+      })),
+      allTime: allTimeResult.rows.map(r => ({
+        provider: r.provider || 'claude',
+        totalCost: parseFloat(r.total_cost || 0),
+        requestCount: parseInt(r.request_count)
+      })),
+      grandTotal: {
+        cost: parseFloat(totalResult.rows[0]?.total_cost || 0),
+        requests: parseInt(totalResult.rows[0]?.total_requests || 0)
+      }
+    });
+
+  } catch (e) {
+    console.error('[Admin Costs] Overview error:', e);
+    res.status(500).json({ error: 'Failed to get cost overview' });
+  }
+});
+
+// Get costs by provider with daily breakdown
+app.get('/api/admin/costs/by-provider', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const { provider, days = 30 } = req.query;
+    const startDate = new Date(Date.now() - parseInt(days) * 24 * 60 * 60 * 1000);
+
+    let query = `
+      SELECT
+        DATE(timestamp) as date,
+        SPLIT_PART(model_used, ':', 1) as provider,
+        model_used,
+        operation,
+        SUM(cost) as total_cost,
+        COUNT(*) as request_count,
+        SUM(tokens_input) as total_input,
+        SUM(tokens_output) as total_output
+      FROM api_usage
+      WHERE timestamp >= $1
+    `;
+    const params = [startDate];
+
+    if (provider) {
+      query += ` AND model_used LIKE $2`;
+      params.push(`${provider}%`);
+    }
+
+    query += `
+      GROUP BY DATE(timestamp), SPLIT_PART(model_used, ':', 1), model_used, operation
+      ORDER BY date DESC, total_cost DESC
+    `;
+
+    const result = await pool.query(query, params);
+
+    res.json({
+      provider: provider || 'all',
+      days: parseInt(days),
+      costs: result.rows.map(r => ({
+        date: r.date,
+        provider: r.provider || 'claude',
+        model: r.model_used,
+        operation: r.operation,
+        totalCost: parseFloat(r.total_cost || 0),
+        requestCount: parseInt(r.request_count),
+        inputTokens: parseInt(r.total_input || 0),
+        outputTokens: parseInt(r.total_output || 0)
+      }))
+    });
+
+  } catch (e) {
+    console.error('[Admin Costs] By provider error:', e);
+    res.status(500).json({ error: 'Failed to get costs by provider' });
+  }
+});
+
+// Get costs by feature
+app.get('/api/admin/costs/by-feature', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const { days = 30 } = req.query;
+    const startDate = new Date(Date.now() - parseInt(days) * 24 * 60 * 60 * 1000);
+
+    const result = await pool.query(`
+      SELECT
+        operation as feature,
+        SPLIT_PART(model_used, ':', 1) as provider,
+        SUM(cost) as total_cost,
+        COUNT(*) as request_count,
+        AVG(cost) as avg_cost
+      FROM api_usage
+      WHERE timestamp >= $1
+      GROUP BY operation, SPLIT_PART(model_used, ':', 1)
+      ORDER BY total_cost DESC
+    `, [startDate]);
+
+    res.json({
+      days: parseInt(days),
+      features: result.rows.map(r => ({
+        feature: r.feature,
+        provider: r.provider || 'claude',
+        totalCost: parseFloat(r.total_cost || 0),
+        requestCount: parseInt(r.request_count),
+        avgCostPerRequest: parseFloat(r.avg_cost || 0)
+      }))
+    });
+
+  } catch (e) {
+    console.error('[Admin Costs] By feature error:', e);
+    res.status(500).json({ error: 'Failed to get costs by feature' });
+  }
+});
+
+// Get costs by user (top spenders)
+app.get('/api/admin/costs/by-user', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const { days = 30, limit = 50 } = req.query;
+    const startDate = new Date(Date.now() - parseInt(days) * 24 * 60 * 60 * 1000);
+
+    const result = await pool.query(`
+      SELECT
+        u.id as user_id,
+        u.email,
+        u.name,
+        u.subscription_tier,
+        SUM(a.cost) as total_cost,
+        COUNT(a.id) as request_count,
+        MAX(a.timestamp) as last_activity
+      FROM api_usage a
+      JOIN users u ON a.user_id = u.id
+      WHERE a.timestamp >= $1
+      GROUP BY u.id, u.email, u.name, u.subscription_tier
+      ORDER BY total_cost DESC
+      LIMIT $2
+    `, [startDate, parseInt(limit)]);
+
+    res.json({
+      days: parseInt(days),
+      users: result.rows.map(r => ({
+        userId: r.user_id,
+        email: r.email,
+        name: r.name,
+        tier: r.subscription_tier,
+        totalCost: parseFloat(r.total_cost || 0),
+        requestCount: parseInt(r.request_count),
+        lastActivity: r.last_activity
+      }))
+    });
+
+  } catch (e) {
+    console.error('[Admin Costs] By user error:', e);
+    res.status(500).json({ error: 'Failed to get costs by user' });
+  }
+});
+
+// Get itemized cost records
+app.get('/api/admin/costs/itemized', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const { startDate, endDate, provider, limit = 500 } = req.query;
+
+    let query = `
+      SELECT
+        a.id,
+        a.timestamp,
+        a.user_id,
+        u.email as user_email,
+        a.operation,
+        a.model_used,
+        a.tokens_input,
+        a.tokens_output,
+        a.cost,
+        a.metadata
+      FROM api_usage a
+      LEFT JOIN users u ON a.user_id = u.id
+      WHERE 1=1
+    `;
+    const params = [];
+    let paramIndex = 1;
+
+    if (startDate) {
+      query += ` AND a.timestamp >= $${paramIndex++}`;
+      params.push(new Date(startDate));
+    }
+    if (endDate) {
+      query += ` AND a.timestamp <= $${paramIndex++}`;
+      params.push(new Date(endDate));
+    }
+    if (provider) {
+      query += ` AND a.model_used LIKE $${paramIndex++}`;
+      params.push(`${provider}%`);
+    }
+
+    query += ` ORDER BY a.timestamp DESC LIMIT $${paramIndex}`;
+    params.push(parseInt(limit));
+
+    const result = await pool.query(query, params);
+
+    res.json({
+      count: result.rows.length,
+      records: result.rows.map(r => ({
+        id: r.id,
+        timestamp: r.timestamp,
+        userId: r.user_id,
+        userEmail: r.user_email,
+        operation: r.operation,
+        model: r.model_used,
+        inputTokens: r.tokens_input,
+        outputTokens: r.tokens_output,
+        cost: parseFloat(r.cost || 0),
+        metadata: r.metadata
+      }))
+    });
+
+  } catch (e) {
+    console.error('[Admin Costs] Itemized error:', e);
+    res.status(500).json({ error: 'Failed to get itemized costs' });
+  }
+});
+
+// Export costs to CSV
+app.get('/api/admin/costs/export', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const { startDate, endDate, format = 'csv' } = req.query;
+
+    let query = `
+      SELECT
+        a.timestamp,
+        u.email as user_email,
+        a.operation,
+        a.model_used as provider_model,
+        a.tokens_input,
+        a.tokens_output,
+        a.cost,
+        a.metadata->>'feature' as feature,
+        a.metadata->>'success' as success
+      FROM api_usage a
+      LEFT JOIN users u ON a.user_id = u.id
+      WHERE 1=1
+    `;
+    const params = [];
+    let paramIndex = 1;
+
+    if (startDate) {
+      query += ` AND a.timestamp >= $${paramIndex++}`;
+      params.push(new Date(startDate));
+    }
+    if (endDate) {
+      query += ` AND a.timestamp <= $${paramIndex++}`;
+      params.push(new Date(endDate));
+    }
+
+    query += ` ORDER BY a.timestamp DESC`;
+
+    const result = await pool.query(query, params);
+
+    if (format === 'csv') {
+      const csv = [
+        ['Timestamp', 'User', 'Operation', 'Provider/Model', 'Input Tokens', 'Output Tokens', 'Cost', 'Feature', 'Success'].join(','),
+        ...result.rows.map(r => [
+          r.timestamp.toISOString(),
+          r.user_email || 'N/A',
+          r.operation,
+          r.provider_model,
+          r.tokens_input || 0,
+          r.tokens_output || 0,
+          r.cost || 0,
+          r.feature || 'N/A',
+          r.success || 'true'
+        ].join(','))
+      ].join('\n');
+
+      res.setHeader('Content-Type', 'text/csv');
+      res.setHeader('Content-Disposition', `attachment; filename=cardflow-costs-${new Date().toISOString().split('T')[0]}.csv`);
+      res.send(csv);
+    } else {
+      res.json({ records: result.rows });
+    }
+
+  } catch (e) {
+    console.error('[Admin Costs] Export error:', e);
+    res.status(500).json({ error: 'Failed to export costs' });
+  }
+});
+
+// ============================================
 // START SERVER
 // ============================================
 
