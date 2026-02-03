@@ -469,7 +469,7 @@
     // Check if already logged in
     const token = localStorage.getItem('token');
     if (token) {
-      window.location.href = '/';
+      window.location.href = '/app';
     }
 
     // Password strength indicator
@@ -549,7 +549,7 @@
 
         // Redirect to dashboard after short delay
         setTimeout(() => {
-          window.location.href = '/';
+          window.location.href = '/app';
         }, 1500);
 
       } catch (error) {
