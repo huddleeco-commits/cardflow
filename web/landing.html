@@ -1,0 +1,932 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CardFlow - Bulk Card Scanner</title>
+  <meta name="description" content="The fastest way to scan and identify trading cards. Bulk upload, phone scanner, AI-powered identification. Export to SlabTrack, eBay, and more.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-deep: #0a0a0f;
+      --bg-card: #12121a;
+      --glass: rgba(255, 255, 255, 0.03);
+      --glass-border: rgba(255, 255, 255, 0.08);
+      --text: #f0f0f5;
+      --text-muted: #8888aa;
+      --cyan: #00f6ff;
+      --cyan-glow: rgba(0, 246, 255, 0.3);
+      --purple: #7b2ff7;
+      --purple-glow: rgba(123, 47, 247, 0.3);
+      --pink: #f72fff;
+      --success: #00ff88;
+      --gradient-primary: linear-gradient(135deg, #00f6ff, #7b2ff7);
+      --gradient-accent: linear-gradient(135deg, #7b2ff7, #f72fff);
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: var(--bg-deep);
+      color: var(--text);
+      line-height: 1.6;
+      overflow-x: hidden;
+    }
+
+    /* Animated Background */
+    .bg-glow {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      pointer-events: none;
+      z-index: 0;
+      overflow: hidden;
+    }
+
+    .bg-glow::before {
+      content: '';
+      position: absolute;
+      top: -50%;
+      left: -50%;
+      width: 200%;
+      height: 200%;
+      background: radial-gradient(circle at 30% 30%, var(--cyan-glow) 0%, transparent 50%),
+                  radial-gradient(circle at 70% 70%, var(--purple-glow) 0%, transparent 50%);
+      animation: bgFloat 20s ease-in-out infinite;
+    }
+
+    @keyframes bgFloat {
+      0%, 100% { transform: translate(0, 0) rotate(0deg); }
+      50% { transform: translate(-5%, -5%) rotate(5deg); }
+    }
+
+    /* Navigation */
+    nav {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      z-index: 100;
+      padding: 20px 40px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: rgba(10, 10, 15, 0.8);
+      backdrop-filter: blur(20px);
+      border-bottom: 1px solid var(--glass-border);
+    }
+
+    .logo {
+      font-size: 24px;
+      font-weight: 800;
+      background: var(--gradient-primary);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .logo-icon {
+      font-size: 28px;
+    }
+
+    .nav-links {
+      display: flex;
+      gap: 32px;
+      align-items: center;
+    }
+
+    .nav-links a {
+      color: var(--text-muted);
+      text-decoration: none;
+      font-size: 14px;
+      font-weight: 500;
+      transition: color 0.3s;
+    }
+
+    .nav-links a:hover {
+      color: var(--cyan);
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 12px 24px;
+      border-radius: 12px;
+      font-weight: 600;
+      font-size: 14px;
+      text-decoration: none;
+      transition: all 0.3s ease;
+      cursor: pointer;
+      border: none;
+    }
+
+    .btn-primary {
+      background: var(--gradient-primary);
+      color: #000;
+    }
+
+    .btn-primary:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 10px 40px var(--cyan-glow);
+    }
+
+    .btn-secondary {
+      background: var(--glass);
+      color: var(--text);
+      border: 1px solid var(--glass-border);
+    }
+
+    .btn-secondary:hover {
+      border-color: var(--cyan);
+      background: rgba(0, 246, 255, 0.1);
+    }
+
+    .btn-large {
+      padding: 16px 32px;
+      font-size: 16px;
+      border-radius: 16px;
+    }
+
+    /* Hero Section */
+    .hero {
+      position: relative;
+      z-index: 1;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      text-align: center;
+      padding: 120px 20px 80px;
+    }
+
+    .hero-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: var(--glass);
+      border: 1px solid var(--glass-border);
+      padding: 8px 16px;
+      border-radius: 100px;
+      font-size: 13px;
+      color: var(--cyan);
+      margin-bottom: 24px;
+    }
+
+    .hero h1 {
+      font-size: clamp(48px, 8vw, 80px);
+      font-weight: 900;
+      line-height: 1.1;
+      margin-bottom: 24px;
+      max-width: 900px;
+    }
+
+    .hero h1 span {
+      background: var(--gradient-primary);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .hero p {
+      font-size: 20px;
+      color: var(--text-muted);
+      max-width: 600px;
+      margin-bottom: 40px;
+    }
+
+    .hero-cta {
+      display: flex;
+      gap: 16px;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+
+    .hero-stats {
+      display: flex;
+      gap: 48px;
+      margin-top: 60px;
+      padding-top: 40px;
+      border-top: 1px solid var(--glass-border);
+    }
+
+    .stat {
+      text-align: center;
+    }
+
+    .stat-value {
+      font-size: 32px;
+      font-weight: 800;
+      background: var(--gradient-primary);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .stat-label {
+      font-size: 13px;
+      color: var(--text-muted);
+      margin-top: 4px;
+    }
+
+    /* Section Styles */
+    section {
+      position: relative;
+      z-index: 1;
+      padding: 100px 20px;
+    }
+
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+
+    .section-header {
+      text-align: center;
+      margin-bottom: 60px;
+    }
+
+    .section-header h2 {
+      font-size: 40px;
+      font-weight: 800;
+      margin-bottom: 16px;
+    }
+
+    .section-header p {
+      color: var(--text-muted);
+      font-size: 18px;
+      max-width: 600px;
+      margin: 0 auto;
+    }
+
+    /* How It Works */
+    .steps {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 24px;
+    }
+
+    .step {
+      background: var(--bg-card);
+      border: 1px solid var(--glass-border);
+      border-radius: 20px;
+      padding: 32px;
+      text-align: center;
+      transition: all 0.3s ease;
+    }
+
+    .step:hover {
+      border-color: var(--cyan);
+      transform: translateY(-4px);
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+    }
+
+    .step-number {
+      width: 48px;
+      height: 48px;
+      background: var(--gradient-primary);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 800;
+      font-size: 20px;
+      color: #000;
+      margin: 0 auto 20px;
+    }
+
+    .step-icon {
+      font-size: 48px;
+      margin-bottom: 16px;
+    }
+
+    .step h3 {
+      font-size: 20px;
+      font-weight: 700;
+      margin-bottom: 12px;
+    }
+
+    .step p {
+      color: var(--text-muted);
+      font-size: 14px;
+    }
+
+    /* Scan Modes */
+    .scan-modes {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+      gap: 32px;
+    }
+
+    .scan-mode {
+      background: var(--bg-card);
+      border: 1px solid var(--glass-border);
+      border-radius: 24px;
+      overflow: hidden;
+      transition: all 0.3s ease;
+    }
+
+    .scan-mode:hover {
+      border-color: var(--purple);
+      transform: scale(1.02);
+    }
+
+    .scan-mode-visual {
+      height: 200px;
+      background: linear-gradient(135deg, rgba(123, 47, 247, 0.2), rgba(0, 246, 255, 0.1));
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 80px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .scan-mode-visual::after {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: -100%;
+      width: 100%;
+      height: 100%;
+      background: linear-gradient(90deg, transparent, rgba(255,255,255,0.1), transparent);
+      animation: shimmer 3s infinite;
+    }
+
+    @keyframes shimmer {
+      100% { left: 100%; }
+    }
+
+    .scan-mode-content {
+      padding: 28px;
+    }
+
+    .scan-mode h3 {
+      font-size: 22px;
+      font-weight: 700;
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .scan-mode h3 .badge {
+      font-size: 11px;
+      padding: 4px 10px;
+      background: var(--gradient-accent);
+      border-radius: 100px;
+      font-weight: 600;
+    }
+
+    .scan-mode p {
+      color: var(--text-muted);
+      margin-bottom: 16px;
+    }
+
+    .scan-mode ul {
+      list-style: none;
+    }
+
+    .scan-mode li {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 0;
+      font-size: 14px;
+      color: var(--text-muted);
+    }
+
+    .scan-mode li::before {
+      content: '✓';
+      color: var(--success);
+      font-weight: bold;
+    }
+
+    /* Pricing */
+    .pricing-cards {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 24px;
+      max-width: 900px;
+      margin: 0 auto;
+    }
+
+    .pricing-card {
+      background: var(--bg-card);
+      border: 1px solid var(--glass-border);
+      border-radius: 24px;
+      padding: 36px;
+      position: relative;
+      transition: all 0.3s ease;
+    }
+
+    .pricing-card.featured {
+      border-color: var(--cyan);
+      box-shadow: 0 0 60px var(--cyan-glow);
+    }
+
+    .pricing-card.featured::before {
+      content: 'MOST POPULAR';
+      position: absolute;
+      top: -12px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: var(--gradient-primary);
+      color: #000;
+      padding: 6px 16px;
+      border-radius: 100px;
+      font-size: 11px;
+      font-weight: 700;
+    }
+
+    .pricing-card:hover {
+      transform: translateY(-4px);
+    }
+
+    .pricing-tier {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--cyan);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      margin-bottom: 8px;
+    }
+
+    .pricing-price {
+      display: flex;
+      align-items: baseline;
+      gap: 4px;
+      margin-bottom: 8px;
+    }
+
+    .pricing-price .currency {
+      font-size: 24px;
+      font-weight: 600;
+      color: var(--text-muted);
+    }
+
+    .pricing-price .amount {
+      font-size: 56px;
+      font-weight: 800;
+    }
+
+    .pricing-price .period {
+      font-size: 16px;
+      color: var(--text-muted);
+    }
+
+    .pricing-desc {
+      color: var(--text-muted);
+      margin-bottom: 24px;
+      font-size: 14px;
+    }
+
+    .pricing-features {
+      list-style: none;
+      margin-bottom: 32px;
+    }
+
+    .pricing-features li {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 0;
+      border-bottom: 1px solid var(--glass-border);
+      font-size: 14px;
+    }
+
+    .pricing-features li:last-child {
+      border-bottom: none;
+    }
+
+    .pricing-features .check {
+      color: var(--success);
+      font-size: 18px;
+    }
+
+    .pricing-features .x {
+      color: var(--text-muted);
+      font-size: 18px;
+    }
+
+    .pricing-card .btn {
+      width: 100%;
+    }
+
+    /* Integration */
+    .integration-flow {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 24px;
+      flex-wrap: wrap;
+      margin-top: 40px;
+    }
+
+    .integration-box {
+      background: var(--bg-card);
+      border: 1px solid var(--glass-border);
+      border-radius: 16px;
+      padding: 24px 32px;
+      text-align: center;
+      min-width: 180px;
+    }
+
+    .integration-box.highlight {
+      border-color: var(--cyan);
+      box-shadow: 0 0 30px var(--cyan-glow);
+    }
+
+    .integration-box .icon {
+      font-size: 40px;
+      margin-bottom: 12px;
+    }
+
+    .integration-box .name {
+      font-weight: 700;
+      font-size: 16px;
+    }
+
+    .integration-box .desc {
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-top: 4px;
+    }
+
+    .integration-arrow {
+      font-size: 32px;
+      color: var(--cyan);
+    }
+
+    /* BYOK Section */
+    .byok-section {
+      background: linear-gradient(135deg, rgba(123, 47, 247, 0.1), rgba(0, 246, 255, 0.05));
+      border-radius: 32px;
+      padding: 60px;
+      text-align: center;
+      border: 1px solid var(--glass-border);
+    }
+
+    .byok-section h3 {
+      font-size: 28px;
+      font-weight: 700;
+      margin-bottom: 16px;
+    }
+
+    .byok-section p {
+      color: var(--text-muted);
+      max-width: 600px;
+      margin: 0 auto 32px;
+    }
+
+    .byok-benefits {
+      display: flex;
+      justify-content: center;
+      gap: 40px;
+      flex-wrap: wrap;
+    }
+
+    .byok-benefit {
+      text-align: center;
+    }
+
+    .byok-benefit .value {
+      font-size: 32px;
+      font-weight: 800;
+      color: var(--success);
+    }
+
+    .byok-benefit .label {
+      font-size: 13px;
+      color: var(--text-muted);
+    }
+
+    /* Footer */
+    footer {
+      position: relative;
+      z-index: 1;
+      padding: 60px 20px;
+      border-top: 1px solid var(--glass-border);
+      text-align: center;
+    }
+
+    .footer-links {
+      display: flex;
+      justify-content: center;
+      gap: 32px;
+      margin-bottom: 24px;
+    }
+
+    .footer-links a {
+      color: var(--text-muted);
+      text-decoration: none;
+      font-size: 14px;
+    }
+
+    .footer-links a:hover {
+      color: var(--cyan);
+    }
+
+    .footer-copy {
+      color: var(--text-muted);
+      font-size: 13px;
+    }
+
+    /* Mobile */
+    @media (max-width: 768px) {
+      nav {
+        padding: 16px 20px;
+      }
+
+      .nav-links {
+        display: none;
+      }
+
+      .hero h1 {
+        font-size: 36px;
+      }
+
+      .hero p {
+        font-size: 16px;
+      }
+
+      .hero-stats {
+        flex-direction: column;
+        gap: 24px;
+      }
+
+      .scan-modes {
+        grid-template-columns: 1fr;
+      }
+
+      .pricing-cards {
+        grid-template-columns: 1fr;
+      }
+
+      .integration-flow {
+        flex-direction: column;
+      }
+
+      .integration-arrow {
+        transform: rotate(90deg);
+      }
+
+      .byok-section {
+        padding: 40px 24px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="bg-glow"></div>
+
+  <!-- Navigation -->
+  <nav>
+    <div class="logo">
+      <span class="logo-icon">🃏</span>
+      CardFlow
+    </div>
+    <div class="nav-links">
+      <a href="#features">Features</a>
+      <a href="#scan-modes">Scan Modes</a>
+      <a href="#pricing">Pricing</a>
+      <a href="/login" class="btn btn-secondary">Log In</a>
+      <a href="/register" class="btn btn-primary">Get Started</a>
+    </div>
+  </nav>
+
+  <!-- Hero -->
+  <section class="hero">
+    <div class="hero-badge">
+      <span>NEW</span> Phone Scanner Mode
+    </div>
+    <h1>Bulk Card Scanning<br><span>Made Simple</span></h1>
+    <p>The fastest way to scan, identify, and export your trading cards. AI-powered identification with your own API key. No limits, no surprises.</p>
+    <div class="hero-cta">
+      <a href="/register" class="btn btn-primary btn-large">Start Scanning Free</a>
+      <a href="#scan-modes" class="btn btn-secondary btn-large">See How It Works</a>
+    </div>
+    <div class="hero-stats">
+      <div class="stat">
+        <div class="stat-value">~$0.01</div>
+        <div class="stat-label">Per Card (AI Cost)</div>
+      </div>
+      <div class="stat">
+        <div class="stat-value">Unlimited</div>
+        <div class="stat-label">Scans with BYOK</div>
+      </div>
+      <div class="stat">
+        <div class="stat-value">&lt;3s</div>
+        <div class="stat-label">Per Card ID</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- How It Works -->
+  <section id="features">
+    <div class="container">
+      <div class="section-header">
+        <h2>How It Works</h2>
+        <p>Three simple steps to go from card pile to organized collection</p>
+      </div>
+      <div class="steps">
+        <div class="step">
+          <div class="step-number">1</div>
+          <div class="step-icon">📷</div>
+          <h3>Scan Your Cards</h3>
+          <p>Use phone scanner, drag & drop, or bulk upload. Front and back supported.</p>
+        </div>
+        <div class="step">
+          <div class="step-number">2</div>
+          <div class="step-icon">🤖</div>
+          <h3>AI Identifies</h3>
+          <p>Claude AI reads your cards and extracts player, year, set, parallel, and more.</p>
+        </div>
+        <div class="step">
+          <div class="step-number">3</div>
+          <div class="step-icon">🚀</div>
+          <h3>Export Anywhere</h3>
+          <p>Send to SlabTrack, list on eBay, or export to CSV/Excel.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Scan Modes -->
+  <section id="scan-modes" style="background: var(--bg-card);">
+    <div class="container">
+      <div class="section-header">
+        <h2>Multiple Scan Modes</h2>
+        <p>Scan your way. CardFlow adapts to how you work.</p>
+      </div>
+      <div class="scan-modes">
+        <div class="scan-mode">
+          <div class="scan-mode-visual">📱</div>
+          <div class="scan-mode-content">
+            <h3>Phone Scanner <span class="badge">INNOVATIVE</span></h3>
+            <p>Turn your phone into a card scanner. Snap photos directly into CardFlow.</p>
+            <ul>
+              <li>QR code connects phone to desktop</li>
+              <li>Photos upload instantly</li>
+              <li>Works with any phone camera</li>
+              <li>No app install needed</li>
+            </ul>
+          </div>
+        </div>
+        <div class="scan-mode">
+          <div class="scan-mode-visual">📁</div>
+          <div class="scan-mode-content">
+            <h3>Bulk Upload</h3>
+            <p>Drag and drop hundreds of card images at once.</p>
+            <ul>
+              <li>Drop entire folders</li>
+              <li>Auto-pair front/back images</li>
+              <li>Process in batches</li>
+              <li>Progress tracking</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- BYOK Explanation -->
+  <section>
+    <div class="container">
+      <div class="byok-section">
+        <h3>Bring Your Own API Key</h3>
+        <p>CardFlow uses Claude AI to identify cards. You provide your own API key, which keeps your subscription cheap and gives you unlimited scanning. You only pay for what you use.</p>
+        <div class="byok-benefits">
+          <div class="byok-benefit">
+            <div class="value">$0.01-0.03</div>
+            <div class="label">Per card with Claude Haiku</div>
+          </div>
+          <div class="byok-benefit">
+            <div class="value">No Limits</div>
+            <div class="label">Scan as many as you want</div>
+          </div>
+          <div class="byok-benefit">
+            <div class="value">You Control</div>
+            <div class="label">Your costs, your budget</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- SlabTrack Integration -->
+  <section style="background: var(--bg-card);">
+    <div class="container">
+      <div class="section-header">
+        <h2>Built for SlabTrack</h2>
+        <p>CardFlow is the perfect entry point to the SlabTrack ecosystem</p>
+      </div>
+      <div class="integration-flow">
+        <div class="integration-box highlight">
+          <div class="icon">🃏</div>
+          <div class="name">CardFlow</div>
+          <div class="desc">Bulk Scanning</div>
+        </div>
+        <div class="integration-arrow">→</div>
+        <div class="integration-box">
+          <div class="icon">📊</div>
+          <div class="name">SlabTrack</div>
+          <div class="desc">Collection Management</div>
+        </div>
+        <div class="integration-arrow">→</div>
+        <div class="integration-box">
+          <div class="icon">💰</div>
+          <div class="name">Sell</div>
+          <div class="desc">eBay, Whatnot, etc.</div>
+        </div>
+      </div>
+      <p style="text-align: center; color: var(--text-muted); margin-top: 40px; font-size: 14px;">
+        SlabTrack Pro ($9.99/mo) includes CardFlow Basic <strong style="color: var(--success);">FREE</strong>
+      </p>
+    </div>
+  </section>
+
+  <!-- Pricing -->
+  <section id="pricing">
+    <div class="container">
+      <div class="section-header">
+        <h2>Simple Pricing</h2>
+        <p>No hidden fees. BYOK means you control AI costs separately.</p>
+      </div>
+      <div class="pricing-cards">
+        <div class="pricing-card">
+          <div class="pricing-tier">Basic</div>
+          <div class="pricing-price">
+            <span class="currency">$</span>
+            <span class="amount">2.99</span>
+            <span class="period">/month</span>
+          </div>
+          <div class="pricing-desc">Perfect for bulk scanning and exporting</div>
+          <ul class="pricing-features">
+            <li><span class="check">✓</span> Unlimited card scanning (BYOK)</li>
+            <li><span class="check">✓</span> AI identification with your API key</li>
+            <li><span class="check">✓</span> Price research links</li>
+            <li><span class="check">✓</span> Export to SlabTrack</li>
+            <li><span class="check">✓</span> Export to CSV/Excel</li>
+            <li><span class="x">✗</span> eBay integration</li>
+          </ul>
+          <a href="/register?plan=basic" class="btn btn-secondary">Get Started</a>
+        </div>
+        <div class="pricing-card featured">
+          <div class="pricing-tier">Pro</div>
+          <div class="pricing-price">
+            <span class="currency">$</span>
+            <span class="amount">6.99</span>
+            <span class="period">/month</span>
+          </div>
+          <div class="pricing-desc">Everything in Basic + eBay direct listing</div>
+          <ul class="pricing-features">
+            <li><span class="check">✓</span> Unlimited card scanning (BYOK)</li>
+            <li><span class="check">✓</span> AI identification with your API key</li>
+            <li><span class="check">✓</span> Price research links</li>
+            <li><span class="check">✓</span> Export to SlabTrack</li>
+            <li><span class="check">✓</span> Export to CSV/Excel</li>
+            <li><span class="check">✓</span> <strong>eBay Integration</strong></li>
+          </ul>
+          <a href="/register?plan=pro" class="btn btn-primary">Get Pro</a>
+        </div>
+      </div>
+      <p style="text-align: center; margin-top: 40px; color: var(--text-muted); font-size: 14px;">
+        + AI costs (~$0.01-0.03 per card with Claude Haiku)
+      </p>
+    </div>
+  </section>
+
+  <!-- CTA -->
+  <section>
+    <div class="container" style="text-align: center;">
+      <h2 style="font-size: 36px; margin-bottom: 16px;">Ready to Start Scanning?</h2>
+      <p style="color: var(--text-muted); margin-bottom: 32px; font-size: 18px;">Get started in minutes. No credit card required for trial.</p>
+      <a href="/register" class="btn btn-primary btn-large">Create Free Account</a>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer>
+    <div class="footer-links">
+      <a href="/privacy">Privacy Policy</a>
+      <a href="/terms">Terms of Service</a>
+      <a href="https://slabtrack.be1st.io" target="_blank">SlabTrack</a>
+      <a href="mailto:support@cardflow.app">Contact</a>
+    </div>
+    <div class="footer-copy">
+      &copy; 2025 CardFlow. Part of the SlabTrack ecosystem.
+    </div>
+  </footer>
+</body>
+</html>

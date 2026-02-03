@@ -229,6 +229,60 @@ async function requireAdmin(req, res, next) {
   }
 }
 
+// Tier definitions
+const TIERS = {
+  free: { name: 'Free Trial', price: 0, features: ['scan', 'export_csv', 'export_slabtrack', 'price_links'], limit: 10 },
+  basic: { name: 'Basic', price: 2.99, features: ['scan', 'export_csv', 'export_slabtrack', 'price_links', 'unlimited_scans'] },
+  pro: { name: 'Pro', price: 6.99, features: ['scan', 'export_csv', 'export_slabtrack', 'price_links', 'unlimited_scans', 'ebay_integration'] }
+};
+
+// Middleware to require Pro tier for eBay features
+async function requireProTier(req, res, next) {
+  if (!req.user) {
+    return res.status(401).json({ error: 'Authentication required' });
+  }
+
+  try {
+    const result = await pool.query('SELECT subscription_tier, role FROM users WHERE id = $1', [req.user.id]);
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    const { subscription_tier, role } = result.rows[0];
+
+    // Admins always have access
+    if (role === 'admin') {
+      return next();
+    }
+
+    // Pro tier required
+    if (subscription_tier !== 'pro') {
+      return res.status(403).json({
+        error: 'Pro subscription required',
+        message: 'eBay integration requires a Pro subscription ($6.99/month)',
+        upgrade_url: '/pricing'
+      });
+    }
+
+    next();
+  } catch (e) {
+    console.error('Tier check error:', e);
+    return res.status(500).json({ error: 'Failed to verify subscription' });
+  }
+}
+
+// Get user's tier info
+function getTierInfo(subscription_tier) {
+  const tier = TIERS[subscription_tier] || TIERS.free;
+  return {
+    tier: subscription_tier || 'free',
+    name: tier.name,
+    features: tier.features,
+    hasEbay: tier.features.includes('ebay_integration'),
+    hasUnlimitedScans: tier.features.includes('unlimited_scans')
+  };
+}
+
 // ============================================
 // STATIC FILES
 // ============================================
@@ -407,12 +461,16 @@ app.get('/api/auth/me', authenticateToken, async (req, res) => {
     const cardCount = await pool.query('SELECT COUNT(*) FROM cards WHERE user_id = $1', [user.id]);
     const usageTotal = await pool.query('SELECT SUM(cost) as total FROM api_usage WHERE user_id = $1', [user.id]);
 
+    // Get tier info
+    const tierInfo = getTierInfo(user.subscription_tier);
+
     res.json({
       id: user.id,
       email: user.email,
       name: user.name,
       role: user.role,
-      subscriptionTier: user.subscription_tier,
+      subscriptionTier: user.subscription_tier || 'free',
+      tier: tierInfo,
       hasApiKey: !!user.api_key,
       apiKeyPreview: user.api_key ? user.api_key.substring(0, 15) + '...' : null,
       scansUsed: user.scans_used,
@@ -1985,8 +2043,8 @@ app.get('/api/ebay/status', authenticateToken, async (req, res) => {
   }
 });
 
-// eBay OAuth Connect - Initiate OAuth flow
-app.get('/api/ebay/connect', authenticateToken, async (req, res) => {
+// eBay OAuth Connect - Initiate OAuth flow (PRO TIER REQUIRED)
+app.get('/api/ebay/connect', authenticateToken, requireProTier, async (req, res) => {
   try {
     if (!EBAY_APP_ID || !EBAY_CERT_ID) {
       return res.status(500).json({
@@ -2538,8 +2596,8 @@ function generateListingDescription(card) {
   `.trim();
 }
 
-// List card on eBay
-app.post('/api/ebay/list/:cardId', authenticateToken, async (req, res) => {
+// List card on eBay (PRO TIER REQUIRED)
+app.post('/api/ebay/list/:cardId', authenticateToken, requireProTier, async (req, res) => {
   try {
     const { cardId } = req.params;
     const { price, quantity = 1 } = req.body;
@@ -2966,7 +3024,7 @@ app.post('/api/ebay/bulk-preview', authenticateToken, async (req, res) => {
 });
 
 // Create bulk listings (multiple individual cards)
-app.post('/api/ebay/bulk-create', authenticateToken, async (req, res) => {
+app.post('/api/ebay/bulk-create', authenticateToken, requireProTier, async (req, res) => {
   try {
     const { listings } = req.body;
 
@@ -3309,7 +3367,7 @@ app.post('/api/ebay/lot-preview', authenticateToken, async (req, res) => {
 });
 
 // Create lot listing
-app.post('/api/ebay/create-lot', authenticateToken, async (req, res) => {
+app.post('/api/ebay/create-lot', authenticateToken, requireProTier, async (req, res) => {
   try {
     const {
       cardIds,
@@ -3540,7 +3598,7 @@ function generateLotDescription(cards, collageUrl) {
 // AUCTION LISTING
 // ============================================
 
-app.post('/api/ebay/create-auction', authenticateToken, async (req, res) => {
+app.post('/api/ebay/create-auction', authenticateToken, requireProTier, async (req, res) => {
   try {
     const {
       cardId,
@@ -5919,8 +5977,27 @@ app.get('/scan', (req, res) => {
   res.sendFile(path.join(__dirname, 'scan.html'));
 });
 
-// Default route - serve main dashboard
+// Landing page - public marketing page
 app.get('/', (req, res) => {
+  res.sendFile(path.join(__dirname, 'landing.html'));
+});
+
+// Main app dashboard (requires auth via client-side check)
+app.get('/app', (req, res) => {
+  res.sendFile(path.join(__dirname, 'index.html'));
+});
+
+// Pricing page (redirects to landing with anchor)
+app.get('/pricing', (req, res) => {
+  res.redirect('/#pricing');
+});
+
+// Login/Register redirect to app (handled client-side)
+app.get('/login', (req, res) => {
+  res.sendFile(path.join(__dirname, 'index.html'));
+});
+
+app.get('/register', (req, res) => {
   res.sendFile(path.join(__dirname, 'index.html'));
 });
 
