@@ -52,3 +52,15 @@ Thumbs.db
 # Build artifacts
 dist/
 build/
+
+# Electron app builds
+scanner-electron/node_modules/
+scanner-electron/out/
+scanner-electron/package-lock.json
+
+# Large downloadable files
+web/downloads/*.exe
+web/downloads/*.nupkg
+
+# Windows artifacts
+nul

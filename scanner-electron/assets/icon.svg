@@ -1,0 +1,29 @@
+<svg width="256" height="256" viewBox="0 0 256 256" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bgGrad" x1="0" y1="0" x2="256" y2="256">
+      <stop offset="0%" stop-color="#0a0a0f"/>
+      <stop offset="100%" stop-color="#1a1a24"/>
+    </linearGradient>
+    <linearGradient id="cardGrad" x1="40" y1="48" x2="216" y2="208">
+      <stop offset="0%" stop-color="#00ffc8"/>
+      <stop offset="100%" stop-color="#a855f7"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Background -->
+  <rect width="256" height="256" rx="48" fill="url(#bgGrad)"/>
+
+  <!-- Card shape -->
+  <rect x="48" y="40" width="160" height="176" rx="16" stroke="url(#cardGrad)" stroke-width="8" fill="none"/>
+
+  <!-- Scan lines -->
+  <path d="M72 88h112" stroke="url(#cardGrad)" stroke-width="8" stroke-linecap="round"/>
+  <path d="M72 128h80" stroke="url(#cardGrad)" stroke-width="8" stroke-linecap="round"/>
+  <path d="M72 168h96" stroke="url(#cardGrad)" stroke-width="8" stroke-linecap="round"/>
+
+  <!-- Corner brackets (scanner effect) -->
+  <path d="M32 72V48a16 16 0 0116-16h24" stroke="#00ffc8" stroke-width="6" stroke-linecap="round" fill="none"/>
+  <path d="M224 72V48a16 16 0 00-16-16h-24" stroke="#00ffc8" stroke-width="6" stroke-linecap="round" fill="none"/>
+  <path d="M32 184v24a16 16 0 0016 16h24" stroke="#a855f7" stroke-width="6" stroke-linecap="round" fill="none"/>
+  <path d="M224 184v24a16 16 0 01-16 16h-24" stroke="#a855f7" stroke-width="6" stroke-linecap="round" fill="none"/>
+</svg>

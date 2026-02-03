@@ -1,0 +1,28 @@
+{
+  "name": "cardflow-scanner",
+  "productName": "CardFlow Scanner",
+  "version": "1.0.0",
+  "description": "Desktop scanner agent for CardFlow - Upload and identify trading cards",
+  "main": "src/main.js",
+  "author": "CardFlow",
+  "license": "MIT",
+  "scripts": {
+    "start": "electron-forge start",
+    "package": "electron-forge package",
+    "make": "electron-forge make"
+  },
+  "devDependencies": {
+    "@electron-forge/cli": "^7.2.0",
+    "@electron-forge/maker-squirrel": "^7.2.0",
+    "@electron-forge/plugin-auto-unpack-natives": "^7.2.0",
+    "electron": "^28.1.0"
+  },
+  "dependencies": {
+    "axios": "^1.6.5",
+    "chokidar": "^3.5.3",
+    "electron-squirrel-startup": "^1.0.0",
+    "electron-store": "^8.1.0",
+    "form-data": "^4.0.0",
+    "ws": "^8.16.0"
+  }
+}

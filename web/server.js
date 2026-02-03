@@ -336,6 +336,24 @@ app.get('/pricing', (req, res) => {
 // Serve static files (but not index.html at root - we handle that above)
 app.use(express.static(__dirname, { index: false }));
 
+// Serve downloads folder
+app.use('/downloads', express.static(path.join(__dirname, 'downloads')));
+
+// Download page
+app.get('/download', (req, res) => {
+  res.sendFile(path.join(__dirname, 'download.html'));
+});
+
+// Direct download endpoint
+app.get('/api/download/scanner', (req, res) => {
+  const filePath = path.join(__dirname, 'downloads', 'CardFlowScanner-Setup.exe');
+  if (fs.existsSync(filePath)) {
+    res.download(filePath, 'CardFlow Scanner Setup.exe');
+  } else {
+    res.status(404).json({ error: 'Installer not found' });
+  }
+});
+
 // Serve images from all folders
 app.use('/images/1-new', express.static(FOLDERS.new));
 app.use('/images/2-identified', express.static(FOLDERS.identified));
