@@ -4670,7 +4670,7 @@ app.post('/api/export/slabtrack', authenticateToken, async (req, res) => {
 
 const SLABTRACK_API = process.env.SLABTRACK_API_URL || 'https://slabtrack.be1st.io/api';
 
-// Get SlabTrack connection status
+// Get SlabTrack connection status (with user info from SlabTrack API)
 app.get('/api/slabtrack/status', authenticateToken, async (req, res) => {
   try {
     const result = await pool.query(
@@ -4678,11 +4678,51 @@ app.get('/api/slabtrack/status', authenticateToken, async (req, res) => {
       [req.user.id]
     );
 
-    const hasToken = !!(result.rows[0]?.slabtrack_api_token);
+    const slabtrackToken = result.rows[0]?.slabtrack_api_token;
+
+    if (!slabtrackToken) {
+      return res.json({
+        connected: false,
+        tokenPreview: null,
+        user: null,
+        canUseScanAPI: false
+      });
+    }
+
+    // Verify token and get user info from SlabTrack
+    try {
+      const stResponse = await axios.get(`${SLABTRACK_API}/users/me`, {
+        headers: { 'X-API-Token': slabtrackToken },
+        timeout: 10000
+      });
+
+      if (stResponse.data?.success) {
+        const stUser = stResponse.data.user;
+        const proTiers = ['pro', 'dealer', 'enterprise', 'admin'];
+        const canUseScanAPI = proTiers.includes(stUser.subscription_tier);
+
+        return res.json({
+          connected: true,
+          tokenPreview: '••••••••' + slabtrackToken.slice(-4),
+          user: {
+            email: stUser.email,
+            name: stUser.full_name,
+            tier: stUser.subscription_tier,
+            scansUsed: stUser.scansUsed || 0
+          },
+          canUseScanAPI
+        });
+      }
+    } catch (stError) {
+      console.error('SlabTrack API error:', stError.message);
+      // Token exists but couldn't verify - still show as connected
+    }
 
     res.json({
-      connected: hasToken,
-      tokenPreview: hasToken ? '••••••••' + result.rows[0].slabtrack_api_token.slice(-4) : null
+      connected: true,
+      tokenPreview: '••••••••' + slabtrackToken.slice(-4),
+      user: null,
+      canUseScanAPI: false
     });
   } catch (e) {
     console.error('SlabTrack status error:', e);
@@ -4728,6 +4768,88 @@ app.delete('/api/slabtrack/token', authenticateToken, async (req, res) => {
   } catch (e) {
     console.error('SlabTrack token remove error:', e);
     res.status(500).json({ error: 'Failed to disconnect' });
+  }
+});
+
+// Scan card via SlabTrack API (for Pro users)
+// This uses SlabTrack's AI credits instead of BYOK
+app.post('/api/slabtrack/scan', authenticateToken, async (req, res) => {
+  try {
+    const { frontImage, backImage } = req.body;
+
+    if (!frontImage) {
+      return res.status(400).json({ error: 'Front image is required' });
+    }
+
+    // Get user's SlabTrack token
+    const userResult = await pool.query(
+      'SELECT slabtrack_api_token FROM users WHERE id = $1',
+      [req.user.id]
+    );
+
+    const slabtrackToken = userResult.rows[0]?.slabtrack_api_token;
+    if (!slabtrackToken) {
+      return res.status(400).json({
+        error: 'SlabTrack not connected',
+        message: 'Connect your SlabTrack account to use SlabTrack scanning'
+      });
+    }
+
+    console.log(`[SlabTrack] Scanning card via SlabTrack API for user ${req.user.id}`);
+
+    // Call SlabTrack's scanning API
+    const response = await axios.post(`${SLABTRACK_API}/scanner/quick-price-check`, {
+      frontImage,
+      backImage: backImage || null
+    }, {
+      headers: {
+        'Content-Type': 'application/json',
+        'X-API-Token': slabtrackToken
+      },
+      timeout: 60000
+    });
+
+    if (!response.data?.success) {
+      throw new Error(response.data?.error || 'Scan failed');
+    }
+
+    console.log(`[SlabTrack] Scan successful: ${response.data.card?.player || 'Unknown'}`);
+
+    res.json({
+      success: true,
+      card: response.data.card,
+      pricing: response.data.pricing || null,
+      source: 'slabtrack'
+    });
+
+  } catch (e) {
+    console.error('SlabTrack scan error:', e.response?.data || e.message);
+
+    if (e.response?.status === 401) {
+      return res.status(401).json({
+        error: 'SlabTrack authentication failed',
+        message: 'Your SlabTrack token may be invalid. Please reconnect.'
+      });
+    }
+
+    if (e.response?.status === 402) {
+      return res.status(402).json({
+        error: 'No scan credits remaining',
+        message: 'Your SlabTrack scan credits have been exhausted. Upgrade your plan or use BYOK mode.'
+      });
+    }
+
+    if (e.response?.status === 403) {
+      return res.status(403).json({
+        error: 'SlabTrack Pro required',
+        message: 'SlabTrack scanning requires a Pro subscription. Use BYOK mode instead.'
+      });
+    }
+
+    res.status(500).json({
+      error: 'Scan failed',
+      message: e.message
+    });
   }
 });
 
