@@ -1,23 +1,32 @@
 {
   "manifest_version": 3,
   "name": "CardFlow Quick Search",
-  "version": "1.0.0",
-  "description": "Right-click to search card prices across eBay, COMC, and more. Scan images to identify cards.",
+  "version": "1.1.0",
+  "description": "Right-click to search card prices across eBay, COMC, and more. Auto-detects prices on eBay sold listings.",
   "permissions": [
     "storage",
     "contextMenus",
-    "activeTab"
+    "activeTab",
+    "clipboardWrite"
   ],
   "host_permissions": [
     "https://www.ebay.com/*",
     "https://www.comc.com/*",
     "https://www.psacard.com/*",
     "https://www.sportscardspro.com/*",
-    "https://www.pricecharting.com/*"
+    "https://www.pricecharting.com/*",
+    "https://cardflow.be1st.io/*"
   ],
   "background": {
     "service_worker": "background.js"
   },
+  "content_scripts": [
+    {
+      "matches": ["https://www.ebay.com/sch/*"],
+      "js": ["content-scripts/ebay-prices.js"],
+      "run_at": "document_end"
+    }
+  ],
   "action": {
     "default_popup": "popup/popup.html",
     "default_icon": {

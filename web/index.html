@@ -1646,6 +1646,321 @@
         grid-column: span 1;
       }
     }
+
+    /* Price Preview Panel */
+    .price-preview-panel {
+      position: fixed;
+      top: 0;
+      right: -450px;
+      width: 450px;
+      height: 100vh;
+      background: var(--bg-card);
+      border-left: 1px solid var(--glass-border);
+      z-index: 2000;
+      display: flex;
+      flex-direction: column;
+      transition: right 0.3s ease;
+      box-shadow: -10px 0 40px rgba(0, 0, 0, 0.5);
+    }
+
+    .price-preview-panel.open {
+      right: 0;
+    }
+
+    .price-preview-header {
+      padding: 16px 20px;
+      background: var(--bg-dark);
+      border-bottom: 1px solid var(--glass-border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .price-preview-title {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .price-preview-title h3 {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--cyan);
+    }
+
+    .price-preview-title .card-name {
+      font-size: 12px;
+      color: var(--text-muted);
+      max-width: 280px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .price-preview-actions {
+      display: flex;
+      gap: 8px;
+    }
+
+    .price-preview-btn {
+      padding: 6px 12px;
+      background: var(--glass);
+      border: 1px solid var(--glass-border);
+      border-radius: 6px;
+      color: var(--text);
+      font-size: 12px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .price-preview-btn:hover {
+      background: var(--glass-hover);
+      border-color: var(--cyan);
+    }
+
+    .price-preview-btn.close {
+      background: transparent;
+      border: none;
+      font-size: 20px;
+      padding: 4px 8px;
+    }
+
+    .price-preview-body {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .price-preview-status {
+      padding: 16px 20px;
+      background: var(--glass);
+      border-bottom: 1px solid var(--glass-border);
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .price-preview-status .status-icon {
+      font-size: 24px;
+    }
+
+    .price-preview-status .status-text {
+      flex: 1;
+    }
+
+    .price-preview-status .status-text h4 {
+      font-size: 13px;
+      font-weight: 500;
+      margin-bottom: 4px;
+    }
+
+    .price-preview-status .status-text p {
+      font-size: 11px;
+      color: var(--text-muted);
+    }
+
+    .price-preview-prices {
+      padding: 16px 20px;
+      background: var(--glass);
+      border-bottom: 1px solid var(--glass-border);
+    }
+
+    .price-preview-prices h4 {
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-bottom: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .price-stats-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 12px;
+    }
+
+    .price-stat {
+      text-align: center;
+      padding: 12px 8px;
+      background: var(--bg-dark);
+      border-radius: 8px;
+    }
+
+    .price-stat .value {
+      font-size: 16px;
+      font-weight: 600;
+      color: var(--success);
+    }
+
+    .price-stat .label {
+      font-size: 10px;
+      color: var(--text-muted);
+      margin-top: 4px;
+    }
+
+    .price-preview-quick-set {
+      padding: 16px 20px;
+      background: var(--bg-dark);
+      border-top: 1px solid var(--glass-border);
+    }
+
+    .price-preview-quick-set h4 {
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-bottom: 12px;
+    }
+
+    .quick-price-row {
+      display: flex;
+      gap: 8px;
+    }
+
+    .quick-price-row input {
+      flex: 1;
+      padding: 10px 12px;
+      background: var(--glass);
+      border: 1px solid var(--glass-border);
+      border-radius: 8px;
+      color: var(--text);
+      font-size: 14px;
+    }
+
+    .quick-price-row input:focus {
+      outline: none;
+      border-color: var(--cyan);
+    }
+
+    .quick-price-row button {
+      padding: 10px 16px;
+      background: linear-gradient(135deg, var(--cyan), var(--purple));
+      border: none;
+      border-radius: 8px;
+      color: #000;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    .quick-price-buttons {
+      display: flex;
+      gap: 6px;
+      margin-top: 10px;
+      flex-wrap: wrap;
+    }
+
+    .quick-price-buttons button {
+      padding: 6px 12px;
+      background: var(--glass);
+      border: 1px solid var(--glass-border);
+      border-radius: 6px;
+      color: var(--text-muted);
+      font-size: 11px;
+      cursor: pointer;
+    }
+
+    .quick-price-buttons button:hover {
+      border-color: var(--cyan);
+      color: var(--cyan);
+    }
+
+    .price-preview-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.5);
+      z-index: 1999;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.3s;
+    }
+
+    .price-preview-overlay.open {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    /* Link Matrix Button Enhancements */
+    .link-btn {
+      position: relative;
+    }
+
+    .link-btn.loading::after {
+      content: '';
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 12px;
+      height: 12px;
+      border: 2px solid transparent;
+      border-top-color: currentColor;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+
+    .link-btn.has-price {
+      box-shadow: 0 0 8px var(--success);
+    }
+
+    .link-btn.active {
+      box-shadow: 0 0 12px var(--cyan);
+      border-color: var(--cyan);
+      animation: pulse 1.5s ease infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { box-shadow: 0 0 8px var(--cyan); }
+      50% { box-shadow: 0 0 16px var(--cyan); }
+    }
+
+    @keyframes spin {
+      to { transform: translate(-50%, -50%) rotate(360deg); }
+    }
+
+    /* Popup window indicator */
+    .popup-indicator {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      padding: 12px 20px;
+      background: var(--bg-card);
+      border: 1px solid var(--cyan);
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      z-index: 1500;
+      box-shadow: 0 4px 20px rgba(0, 246, 255, 0.2);
+      animation: slideIn 0.3s ease;
+    }
+
+    @keyframes slideIn {
+      from { transform: translateY(20px); opacity: 0; }
+      to { transform: translateY(0); opacity: 1; }
+    }
+
+    .popup-indicator .spinner {
+      width: 20px;
+      height: 20px;
+      border: 2px solid var(--glass-border);
+      border-top-color: var(--cyan);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+
+    .popup-indicator .text {
+      font-size: 13px;
+    }
+
+    .popup-indicator .close-btn {
+      background: none;
+      border: none;
+      color: var(--text-muted);
+      cursor: pointer;
+      padding: 4px;
+    }
   </style>
 </head>
 <body>
@@ -2897,6 +3212,77 @@
         <button class="btn btn-secondary" onclick="closePriceLinksModal()">Close</button>
       </div>
     </div>
+  </div>
+
+  <!-- Price Preview Panel (Side Panel) -->
+  <div class="price-preview-overlay" id="price-preview-overlay" onclick="closePricePreviewPanel()"></div>
+  <div class="price-preview-panel" id="price-preview-panel">
+    <div class="price-preview-header">
+      <div class="price-preview-title">
+        <h3 id="price-preview-source">eBay Sold</h3>
+        <span class="card-name" id="price-preview-card-name">Loading...</span>
+      </div>
+      <div class="price-preview-actions">
+        <button class="price-preview-btn" onclick="openInNewTab()" title="Open in new tab">↗</button>
+        <button class="price-preview-btn close" onclick="closePricePreviewPanel()">&times;</button>
+      </div>
+    </div>
+    <div class="price-preview-body">
+      <div class="price-preview-status" id="price-preview-status">
+        <span class="status-icon">🔍</span>
+        <div class="status-text">
+          <h4>Searching for prices...</h4>
+          <p>A popup window will open. Set your price from that window.</p>
+        </div>
+      </div>
+      <div class="price-preview-prices" id="price-preview-prices" style="display: none;">
+        <h4>Detected Prices (eBay Sold)</h4>
+        <div class="price-stats-grid">
+          <div class="price-stat">
+            <div class="value" id="price-stat-low">--</div>
+            <div class="label">Low</div>
+          </div>
+          <div class="price-stat">
+            <div class="value" id="price-stat-high">--</div>
+            <div class="label">High</div>
+          </div>
+          <div class="price-stat">
+            <div class="value" id="price-stat-avg">--</div>
+            <div class="label">Average</div>
+          </div>
+          <div class="price-stat">
+            <div class="value" id="price-stat-median">--</div>
+            <div class="label">Median</div>
+          </div>
+        </div>
+      </div>
+      <div id="price-preview-list" style="flex: 1; overflow-y: auto; padding: 16px 20px;">
+        <div style="text-align: center; padding: 40px 20px; color: var(--text-muted);">
+          <div style="font-size: 32px; margin-bottom: 12px;">🪟</div>
+          <p>Click prices in the popup window</p>
+          <p style="font-size: 11px; margin-top: 8px;">Or use the Chrome extension for automatic price detection</p>
+        </div>
+      </div>
+    </div>
+    <div class="price-preview-quick-set">
+      <h4>Quick Set Price</h4>
+      <div class="quick-price-row">
+        <input type="number" id="quick-price-input" placeholder="Enter price..." step="0.01" min="0" onkeypress="if(event.key==='Enter')applyQuickPrice()">
+        <button onclick="applyQuickPrice()">Set</button>
+      </div>
+      <div class="quick-price-buttons" id="quick-price-suggestions">
+        <!-- Price suggestion buttons will be added here -->
+      </div>
+    </div>
+  </div>
+
+  <!-- Popup Indicator (shows when popup is open) -->
+  <div class="popup-indicator" id="popup-indicator" style="display: none;">
+    <div class="spinner"></div>
+    <div class="text">
+      <strong id="popup-indicator-source">eBay</strong> popup open
+    </div>
+    <button class="close-btn" onclick="closeActivePopup()" title="Close popup">✕</button>
   </div>
 
   <style>
@@ -6241,12 +6627,12 @@
               <div class="link-matrix-details">${details}${gradeInfo}</div>
             </div>
             <div class="link-matrix-links">
-              <a href="${links.ebaySold}" target="_blank" class="link-btn ebay-sold" title="eBay Sold">$</a>
-              <a href="${links.ebayBin}" target="_blank" class="link-btn ebay-bin" title="eBay BIN">B</a>
-              <a href="${links.comc}" target="_blank" class="link-btn comc" title="COMC">C</a>
-              <a href="${links.psa || '#'}" target="_blank" class="link-btn psa ${!links.psa ? 'disabled' : ''}" title="PSA Cert">P</a>
-              <a href="${links.scp}" target="_blank" class="link-btn scp" title="SportsCardPro">S</a>
-              <a href="${links.google}" target="_blank" class="link-btn google" title="Google">G</a>
+              <a href="${links.ebaySold}" onclick="openPricePopup(event, '${card.id}', 'ebay-sold', '${links.ebaySold}')" class="link-btn ebay-sold" title="eBay Sold">$</a>
+              <a href="${links.ebayBin}" onclick="openPricePopup(event, '${card.id}', 'ebay-bin', '${links.ebayBin}')" class="link-btn ebay-bin" title="eBay BIN">B</a>
+              <a href="${links.comc}" onclick="openPricePopup(event, '${card.id}', 'comc', '${links.comc}')" class="link-btn comc" title="COMC">C</a>
+              <a href="${links.psa || '#'}" onclick="${links.psa ? `openPricePopup(event, '${card.id}', 'psa', '${links.psa}')` : 'event.preventDefault()'}" class="link-btn psa ${!links.psa ? 'disabled' : ''}" title="PSA Cert">P</a>
+              <a href="${links.scp}" onclick="openPricePopup(event, '${card.id}', 'scp', '${links.scp}')" class="link-btn scp" title="SportsCardPro">S</a>
+              <a href="${links.google}" onclick="openPricePopup(event, '${card.id}', 'google', '${links.google}')" class="link-btn google" title="Google">G</a>
             </div>
             <div class="link-matrix-pricing" id="pricing-${card.id}" style="display: flex; gap: 8px; font-size: 11px;">
               <span class="price-badge raw" title="Raw/Ungraded">--</span>
@@ -6477,6 +6863,264 @@
           window.open(url, '_blank');
         }, index * 200);
       });
+    }
+
+    // ==========================================
+    // PRICE PREVIEW PANEL & POPUP MANAGEMENT
+    // ==========================================
+
+    let activePopup = null;
+    let activePopupCardId = null;
+    let activePopupUrl = null;
+    let activePopupSource = null;
+    let popupCheckInterval = null;
+    let detectedPrices = [];
+
+    // Source display names
+    const sourceNames = {
+      'ebay-sold': 'eBay Sold',
+      'ebay-bin': 'eBay BIN',
+      'comc': 'COMC',
+      'psa': 'PSA Cert',
+      'scp': 'SportsCardPro',
+      'google': 'Google'
+    };
+
+    // Open price link in popup with tracking
+    function openPricePopup(event, cardId, source, url) {
+      event.preventDefault();
+      event.stopPropagation();
+
+      // Close existing popup if any
+      if (activePopup && !activePopup.closed) {
+        activePopup.close();
+      }
+
+      // Get card info
+      const card = cards.find(c => c.id === cardId);
+      if (!card) return;
+
+      const cardName = buildSearchQuery(card);
+
+      // Store active popup info
+      activePopupCardId = cardId;
+      activePopupUrl = url;
+      activePopupSource = source;
+      detectedPrices = [];
+
+      // Calculate popup size - large enough to be useful
+      const width = Math.min(1200, window.screen.width * 0.7);
+      const height = Math.min(800, window.screen.height * 0.8);
+      const left = (window.screen.width - width) / 2;
+      const top = (window.screen.height - height) / 2;
+
+      // Open popup
+      activePopup = window.open(
+        url,
+        'pricePopup',
+        `width=${width},height=${height},left=${left},top=${top},resizable=yes,scrollbars=yes`
+      );
+
+      // Show panel and indicator
+      showPricePreviewPanel(source, cardName, cardId);
+      showPopupIndicator(source);
+
+      // Mark the button as active
+      const btn = event.target.closest('.link-btn');
+      if (btn) btn.classList.add('active');
+
+      // Monitor popup
+      startPopupMonitor();
+    }
+
+    function showPricePreviewPanel(source, cardName, cardId) {
+      document.getElementById('price-preview-source').textContent = sourceNames[source] || source;
+      document.getElementById('price-preview-card-name').textContent = cardName;
+      document.getElementById('price-preview-panel').classList.add('open');
+      document.getElementById('price-preview-overlay').classList.add('open');
+
+      // Reset prices display
+      document.getElementById('price-preview-prices').style.display = 'none';
+      document.getElementById('price-preview-status').querySelector('h4').textContent = 'Searching for prices...';
+      document.getElementById('price-preview-status').querySelector('p').textContent = 'A popup window will open. Set your price from that window.';
+
+      // Set up quick price input
+      const quickInput = document.getElementById('quick-price-input');
+      quickInput.value = '';
+
+      // Add existing card price as suggestion
+      const card = cards.find(c => c.id === cardId);
+      const suggestions = document.getElementById('quick-price-suggestions');
+      suggestions.innerHTML = '';
+
+      if (card && card.recommended_price) {
+        addPriceSuggestion(card.recommended_price, 'Current');
+      }
+    }
+
+    function closePricePreviewPanel() {
+      document.getElementById('price-preview-panel').classList.remove('open');
+      document.getElementById('price-preview-overlay').classList.remove('open');
+
+      // Clear active states
+      document.querySelectorAll('.link-btn.active').forEach(btn => btn.classList.remove('active'));
+    }
+
+    function showPopupIndicator(source) {
+      const indicator = document.getElementById('popup-indicator');
+      document.getElementById('popup-indicator-source').textContent = sourceNames[source] || source;
+      indicator.style.display = 'flex';
+    }
+
+    function hidePopupIndicator() {
+      document.getElementById('popup-indicator').style.display = 'none';
+    }
+
+    function startPopupMonitor() {
+      // Clear existing interval
+      if (popupCheckInterval) clearInterval(popupCheckInterval);
+
+      // Check if popup is closed every 500ms
+      popupCheckInterval = setInterval(() => {
+        if (!activePopup || activePopup.closed) {
+          stopPopupMonitor();
+          hidePopupIndicator();
+
+          // Update status
+          const statusEl = document.getElementById('price-preview-status');
+          statusEl.querySelector('h4').textContent = 'Popup closed';
+          statusEl.querySelector('p').textContent = 'Enter a price below or click another source.';
+        }
+      }, 500);
+    }
+
+    function stopPopupMonitor() {
+      if (popupCheckInterval) {
+        clearInterval(popupCheckInterval);
+        popupCheckInterval = null;
+      }
+    }
+
+    function closeActivePopup() {
+      if (activePopup && !activePopup.closed) {
+        activePopup.close();
+      }
+      stopPopupMonitor();
+      hidePopupIndicator();
+    }
+
+    function openInNewTab() {
+      if (activePopupUrl) {
+        window.open(activePopupUrl, '_blank');
+      }
+    }
+
+    // Apply quick price from panel
+    async function applyQuickPrice() {
+      const input = document.getElementById('quick-price-input');
+      const price = parseFloat(input.value);
+
+      if (isNaN(price) || price < 0) {
+        showToast('Enter a valid price', 'error');
+        input.focus();
+        return;
+      }
+
+      if (!activePopupCardId) {
+        showToast('No card selected', 'error');
+        return;
+      }
+
+      try {
+        await api(`/cards/${activePopupCardId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ recommended_price: price })
+        });
+
+        // Update local card data
+        const card = cards.find(c => c.id === activePopupCardId);
+        if (card) card.recommended_price = price;
+
+        showToast(`Price set to $${price.toFixed(2)}`, 'success');
+
+        // Update the card display
+        refreshData();
+
+        // Clear input
+        input.value = '';
+
+      } catch (e) {
+        showToast('Failed to set price: ' + e.message, 'error');
+      }
+    }
+
+    // Add price suggestion button
+    function addPriceSuggestion(price, label) {
+      const container = document.getElementById('quick-price-suggestions');
+      const btn = document.createElement('button');
+      btn.textContent = `$${price.toFixed(2)} (${label})`;
+      btn.onclick = () => {
+        document.getElementById('quick-price-input').value = price.toFixed(2);
+      };
+      container.appendChild(btn);
+    }
+
+    // Receive price data from Chrome extension
+    window.addEventListener('message', (event) => {
+      // Only accept messages from our extension or same origin
+      if (event.data) {
+        if (event.data.type === 'CARDFLOW_PRICE_DATA') {
+          handleExtensionPriceData(event.data);
+        } else if (event.data.type === 'CARDFLOW_SELECTED_PRICE') {
+          // User clicked a price in the popup - auto-fill quick price
+          const price = event.data.price;
+          if (price && !isNaN(price)) {
+            document.getElementById('quick-price-input').value = price.toFixed(2);
+            showToast(`Price $${price.toFixed(2)} received from eBay`, 'success');
+          }
+        }
+      }
+    });
+
+    function handleExtensionPriceData(data) {
+      console.log('Received price data from extension:', data);
+
+      if (data.prices && data.prices.length > 0) {
+        detectedPrices = data.prices;
+
+        // Calculate stats
+        const prices = detectedPrices.map(p => p.price).filter(p => !isNaN(p));
+        if (prices.length > 0) {
+          const low = Math.min(...prices);
+          const high = Math.max(...prices);
+          const avg = prices.reduce((a, b) => a + b, 0) / prices.length;
+          const sorted = [...prices].sort((a, b) => a - b);
+          const median = sorted.length % 2 === 0
+            ? (sorted[sorted.length/2 - 1] + sorted[sorted.length/2]) / 2
+            : sorted[Math.floor(sorted.length/2)];
+
+          // Update display
+          document.getElementById('price-stat-low').textContent = '$' + low.toFixed(2);
+          document.getElementById('price-stat-high').textContent = '$' + high.toFixed(2);
+          document.getElementById('price-stat-avg').textContent = '$' + avg.toFixed(2);
+          document.getElementById('price-stat-median').textContent = '$' + median.toFixed(2);
+          document.getElementById('price-preview-prices').style.display = 'block';
+
+          // Add suggestion buttons
+          const suggestions = document.getElementById('quick-price-suggestions');
+          suggestions.innerHTML = '';
+          addPriceSuggestion(low, 'Low');
+          addPriceSuggestion(avg, 'Avg');
+          addPriceSuggestion(median, 'Median');
+
+          // Update status
+          const statusEl = document.getElementById('price-preview-status');
+          statusEl.querySelector('.status-icon').textContent = '✅';
+          statusEl.querySelector('h4').textContent = `Found ${prices.length} prices`;
+          statusEl.querySelector('p').textContent = 'Click a suggestion or enter custom price';
+        }
+      }
     }
 
     // ==========================================
