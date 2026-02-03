@@ -937,6 +937,21 @@ body {
   color: white;
 }
 
+/* Direct Mode (receiving files from PaperStream) */
+#btn-scan.direct-mode {
+  background: linear-gradient(135deg, #00ffc8, #3b82f6);
+  animation: directModePulse 2s infinite;
+}
+
+@keyframes directModePulse {
+  0%, 100% { box-shadow: 0 0 10px rgba(0, 255, 200, 0.4); }
+  50% { box-shadow: 0 0 25px rgba(0, 255, 200, 0.6); }
+}
+
+#btn-scan.direct-mode span {
+  color: #000;
+}
+
 /* Utilities */
 .hidden {
   display: none !important;

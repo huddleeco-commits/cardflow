@@ -119,7 +119,7 @@ function setupIPCListeners() {
 
   window.api.onScanningStatus((data) => {
     isScanning = data.scanning;
-    updateScanButton();
+    updateScanButton(data.mode);
   });
 
   window.api.onConnectionStatus((data) => {
@@ -228,12 +228,19 @@ async function handleScanToggle() {
   }
 }
 
-function updateScanButton() {
+function updateScanButton(mode) {
   if (isScanning) {
     elements.btnScan.classList.add('scanning');
-    elements.btnScan.querySelector('span').textContent = 'Stop Scanning';
+    if (mode === 'direct') {
+      elements.btnScan.querySelector('span').textContent = 'Direct Mode Active';
+      elements.btnScan.classList.add('direct-mode');
+    } else {
+      elements.btnScan.querySelector('span').textContent = 'Stop Scanning';
+      elements.btnScan.classList.remove('direct-mode');
+    }
   } else {
     elements.btnScan.classList.remove('scanning');
+    elements.btnScan.classList.remove('direct-mode');
     elements.btnScan.querySelector('span').textContent = 'Start Scanning';
   }
 }

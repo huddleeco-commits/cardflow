@@ -802,17 +802,39 @@
 
     async function startCamera() {
       try {
+        // Request highest quality camera settings
         const stream = await navigator.mediaDevices.getUserMedia({
           video: {
             facingMode: 'environment',
-            width: { ideal: 1920 },
-            height: { ideal: 1080 }
+            width: { ideal: 3840, min: 1920 },  // 4K ideal, 1080p minimum
+            height: { ideal: 2160, min: 1080 },
+            frameRate: { ideal: 30 },
+            // Advanced constraints for better quality
+            focusMode: { ideal: 'continuous' },
+            exposureMode: { ideal: 'continuous' },
+            whiteBalanceMode: { ideal: 'continuous' }
           }
         });
         video.srcObject = stream;
         await video.play();
+
+        // Log actual resolution
+        console.log(`Camera resolution: ${video.videoWidth}x${video.videoHeight}`);
       } catch (e) {
-        alert('Camera access required');
+        // Fallback to basic settings if advanced constraints fail
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({
+            video: {
+              facingMode: 'environment',
+              width: { ideal: 1920 },
+              height: { ideal: 1080 }
+            }
+          });
+          video.srcObject = stream;
+          await video.play();
+        } catch (e2) {
+          alert('Camera access required');
+        }
       }
     }
 
@@ -902,7 +924,7 @@
 
       // Capture cropped frame
       ctx.drawImage(video, frameRect.x, frameRect.y, frameRect.width, frameRect.height, 0, 0, canvas.width, canvas.height);
-      const blob = await new Promise(r => canvas.toBlob(r, 'image/jpeg', 0.92));
+      const blob = await new Promise(r => canvas.toBlob(r, 'image/jpeg', 0.95));
 
       if (scanMode === 'pair') {
         await capturePairMode(blob);

@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>CardFlow - Scanner Mode</title>
+  <title>CardFlow - Scanner Review Dashboard</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
 
@@ -19,6 +19,7 @@
       --success: #00ff88;
       --error: #ff4466;
       --warning: #ffaa00;
+      --blue: #3b82f6;
     }
 
     body {
@@ -26,15 +27,19 @@
       background: var(--bg-deep);
       color: var(--text);
       min-height: 100vh;
+      overflow-x: hidden;
     }
 
     .header {
       background: var(--glass);
       border-bottom: 1px solid var(--glass-border);
-      padding: 16px 24px;
+      padding: 12px 24px;
       display: flex;
       justify-content: space-between;
       align-items: center;
+      position: sticky;
+      top: 0;
+      z-index: 100;
     }
 
     .header h1 {
@@ -51,7 +56,7 @@
     }
 
     .btn {
-      padding: 10px 20px;
+      padding: 8px 16px;
       border: none;
       border-radius: 8px;
       font-weight: 600;
@@ -60,7 +65,8 @@
       text-decoration: none;
       display: inline-flex;
       align-items: center;
-      gap: 8px;
+      gap: 6px;
+      font-size: 13px;
     }
 
     .btn-primary {
@@ -74,143 +80,138 @@
       color: var(--text);
     }
 
+    .btn-success {
+      background: var(--success);
+      color: #000;
+    }
+
+    .btn-danger {
+      background: var(--error);
+      color: #fff;
+    }
+
+    .btn-warning {
+      background: var(--warning);
+      color: #000;
+    }
+
     .btn:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 4px 12px rgba(0, 246, 255, 0.2);
+      transform: translateY(-1px);
+      opacity: 0.9;
     }
 
-    .main-content {
+    .btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    .main-layout {
       display: grid;
-      grid-template-columns: 300px 1fr;
-      gap: 24px;
-      padding: 24px;
-      max-width: 1600px;
-      margin: 0 auto;
+      grid-template-columns: 280px 1fr 380px;
+      gap: 0;
+      height: calc(100vh - 56px);
     }
 
-    .sidebar {
+    /* Left Sidebar - Scanner Status */
+    .sidebar-left {
+      background: rgba(0, 0, 0, 0.3);
+      border-right: 1px solid var(--glass-border);
+      padding: 16px;
       display: flex;
       flex-direction: column;
-      gap: 20px;
+      gap: 16px;
+      overflow-y: auto;
     }
 
     .panel {
       background: var(--bg-card);
       border: 1px solid var(--glass-border);
-      border-radius: 16px;
-      padding: 20px;
+      border-radius: 12px;
+      padding: 16px;
     }
 
     .panel h3 {
-      font-size: 14px;
+      font-size: 12px;
       color: var(--text-muted);
       text-transform: uppercase;
       letter-spacing: 1px;
-      margin-bottom: 16px;
+      margin-bottom: 12px;
     }
 
     .status-indicator {
       display: flex;
       align-items: center;
-      gap: 12px;
-      padding: 16px;
+      gap: 10px;
+      padding: 12px;
       background: var(--glass);
-      border-radius: 12px;
-      margin-bottom: 16px;
+      border-radius: 8px;
+      margin-bottom: 12px;
     }
 
     .status-dot {
-      width: 12px;
-      height: 12px;
+      width: 10px;
+      height: 10px;
       border-radius: 50%;
       animation: pulse 2s infinite;
     }
 
-    .status-dot.connected {
-      background: var(--success);
-      box-shadow: 0 0 12px var(--success);
-    }
-
-    .status-dot.disconnected {
-      background: var(--error);
-      animation: none;
-    }
-
-    .status-dot.waiting {
-      background: var(--warning);
-    }
+    .status-dot.connected { background: var(--success); box-shadow: 0 0 10px var(--success); }
+    .status-dot.disconnected { background: var(--error); animation: none; }
+    .status-dot.waiting { background: var(--warning); }
 
     @keyframes pulse {
       0%, 100% { opacity: 1; }
       50% { opacity: 0.5; }
     }
 
-    .status-text {
-      font-size: 14px;
-    }
+    .status-text { font-size: 13px; }
+    .status-text strong { display: block; font-size: 14px; margin-bottom: 2px; }
 
-    .status-text strong {
-      display: block;
-      font-size: 16px;
-      margin-bottom: 2px;
-    }
-
-    .token-section {
-      margin-top: 12px;
-    }
-
+    .token-section { margin-top: 10px; }
     .token-box {
       background: rgba(0, 0, 0, 0.3);
       border: 1px solid var(--glass-border);
-      border-radius: 8px;
-      padding: 12px;
+      border-radius: 6px;
+      padding: 10px;
       font-family: 'Monaco', 'Consolas', monospace;
-      font-size: 11px;
+      font-size: 10px;
       word-break: break-all;
       color: var(--cyan);
-      margin-bottom: 12px;
-      max-height: 80px;
+      margin-bottom: 10px;
+      max-height: 60px;
       overflow: auto;
     }
 
     .copy-btn {
       width: 100%;
-      padding: 10px;
+      padding: 8px;
       background: var(--glass);
       border: 1px solid var(--glass-border);
-      border-radius: 8px;
+      border-radius: 6px;
       color: var(--text);
       cursor: pointer;
-      font-size: 13px;
+      font-size: 12px;
       transition: all 0.2s;
     }
-
-    .copy-btn:hover {
-      background: rgba(0, 246, 255, 0.1);
-      border-color: var(--cyan);
-    }
-
-    .copy-btn.copied {
-      background: rgba(0, 255, 136, 0.1);
-      border-color: var(--success);
-      color: var(--success);
-    }
+    .copy-btn:hover { background: rgba(0, 246, 255, 0.1); border-color: var(--cyan); }
+    .copy-btn.copied { background: rgba(0, 255, 136, 0.1); border-color: var(--success); color: var(--success); }
 
     .stats-grid {
       display: grid;
       grid-template-columns: repeat(2, 1fr);
-      gap: 12px;
+      gap: 8px;
     }
 
     .stat-box {
       background: var(--glass);
-      border-radius: 12px;
-      padding: 16px;
+      border-radius: 8px;
+      padding: 12px;
       text-align: center;
     }
 
     .stat-value {
-      font-size: 28px;
+      font-size: 24px;
       font-weight: 700;
       background: linear-gradient(135deg, var(--cyan), var(--purple));
       -webkit-background-clip: text;
@@ -218,176 +219,373 @@
     }
 
     .stat-label {
-      font-size: 11px;
+      font-size: 10px;
       color: var(--text-muted);
       text-transform: uppercase;
       letter-spacing: 1px;
-      margin-top: 4px;
+      margin-top: 2px;
     }
 
-    .card-feed {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-      gap: 20px;
+    /* Center - Card Queue */
+    .card-queue {
+      background: var(--bg-deep);
+      padding: 16px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
     }
 
-    .card-item {
-      background: var(--bg-card);
+    .queue-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 16px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid var(--glass-border);
+    }
+
+    .queue-header h2 {
+      font-size: 16px;
+      color: var(--text);
+    }
+
+    .queue-tabs {
+      display: flex;
+      gap: 8px;
+    }
+
+    .queue-tab {
+      padding: 6px 12px;
+      border-radius: 6px;
+      background: var(--glass);
       border: 1px solid var(--glass-border);
-      border-radius: 12px;
+      color: var(--text-muted);
+      cursor: pointer;
+      font-size: 12px;
+      transition: all 0.2s;
+    }
+
+    .queue-tab.active {
+      background: rgba(0, 246, 255, 0.1);
+      border-color: var(--cyan);
+      color: var(--cyan);
+    }
+
+    .queue-tab .count {
+      background: rgba(255, 255, 255, 0.1);
+      padding: 2px 6px;
+      border-radius: 10px;
+      margin-left: 6px;
+      font-size: 11px;
+    }
+
+    .queue-tab.active .count {
+      background: rgba(0, 246, 255, 0.2);
+    }
+
+    .card-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+      gap: 12px;
+      flex: 1;
+    }
+
+    .queue-card {
+      background: var(--bg-card);
+      border: 2px solid var(--glass-border);
+      border-radius: 10px;
       overflow: hidden;
-      transition: all 0.3s;
-    }
-
-    .card-item:hover {
-      transform: translateY(-4px);
-      box-shadow: 0 8px 24px rgba(0, 246, 255, 0.1);
-    }
-
-    .card-item.uploading {
-      border-color: var(--warning);
-      animation: uploadPulse 1s infinite;
-    }
-
-    .card-item.success {
-      border-color: var(--success);
-    }
-
-    .card-item.error {
-      border-color: var(--error);
-    }
-
-    @keyframes uploadPulse {
-      0%, 100% { box-shadow: 0 0 0 0 rgba(255, 170, 0, 0.4); }
-      50% { box-shadow: 0 0 20px 4px rgba(255, 170, 0, 0.2); }
-    }
-
-    .card-image {
+      cursor: pointer;
+      transition: all 0.2s;
       position: relative;
+    }
+
+    .queue-card:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 16px rgba(0, 246, 255, 0.15);
+    }
+
+    .queue-card.selected {
+      border-color: var(--cyan);
+      box-shadow: 0 0 20px rgba(0, 246, 255, 0.3);
+    }
+
+    .queue-card.status-uploading { border-color: var(--warning); }
+    .queue-card.status-identifying { border-color: var(--blue); }
+    .queue-card.status-pending { border-color: var(--purple); }
+    .queue-card.status-approved { border-color: var(--success); }
+    .queue-card.status-rejected { border-color: var(--error); }
+
+    .queue-card-image {
       aspect-ratio: 2.5/3.5;
       background: var(--glass);
       display: flex;
       align-items: center;
       justify-content: center;
+      position: relative;
+      overflow: hidden;
     }
 
-    .card-image img {
+    .queue-card-image img {
       width: 100%;
       height: 100%;
       object-fit: cover;
     }
 
-    .card-image .placeholder {
-      font-size: 48px;
-      opacity: 0.3;
-    }
-
-    .card-image .upload-spinner {
-      position: absolute;
-      width: 40px;
-      height: 40px;
+    .queue-card-spinner {
+      width: 30px;
+      height: 30px;
       border: 3px solid var(--glass-border);
       border-top-color: var(--warning);
       border-radius: 50%;
       animation: spin 1s linear infinite;
     }
 
-    @keyframes spin {
-      to { transform: rotate(360deg); }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .queue-card-status {
+      position: absolute;
+      top: 6px;
+      right: 6px;
+      padding: 3px 8px;
+      border-radius: 4px;
+      font-size: 9px;
+      font-weight: 600;
+      text-transform: uppercase;
     }
 
-    .card-info {
-      padding: 12px;
+    .queue-card-status.uploading { background: var(--warning); color: #000; }
+    .queue-card-status.identifying { background: var(--blue); color: #fff; }
+    .queue-card-status.pending { background: var(--purple); color: #fff; }
+    .queue-card-status.approved { background: var(--success); color: #000; }
+    .queue-card-status.rejected { background: var(--error); color: #fff; }
+
+    .queue-card-info {
+      padding: 10px;
     }
 
-    .card-number {
-      font-size: 12px;
+    .queue-card-num {
+      font-size: 10px;
       color: var(--text-muted);
-      margin-bottom: 4px;
+      margin-bottom: 2px;
     }
 
-    .card-name {
-      font-size: 14px;
+    .queue-card-name {
+      font-size: 12px;
       font-weight: 600;
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
     }
 
-    .card-status {
+    /* Right Sidebar - Review Panel */
+    .review-panel {
+      background: rgba(0, 0, 0, 0.3);
+      border-left: 1px solid var(--glass-border);
+      padding: 16px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .review-panel h2 {
+      font-size: 14px;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      margin-bottom: 8px;
+    }
+
+    .card-images {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+
+    .card-image-container {
+      position: relative;
+      background: var(--glass);
+      border: 1px solid var(--glass-border);
+      border-radius: 10px;
+      overflow: hidden;
+    }
+
+    .card-image-container img {
+      width: 100%;
+      aspect-ratio: 2.5/3.5;
+      object-fit: cover;
+      display: block;
+    }
+
+    .card-image-label {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      background: rgba(0, 0, 0, 0.7);
+      padding: 6px;
+      text-align: center;
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+    }
+
+    .card-image-placeholder {
+      width: 100%;
+      aspect-ratio: 2.5/3.5;
       display: flex;
       align-items: center;
-      gap: 6px;
+      justify-content: center;
+      color: var(--text-muted);
+      font-size: 12px;
+    }
+
+    .image-actions {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+
+    .image-actions .btn {
+      flex: 1;
+      justify-content: center;
+      padding: 10px;
+    }
+
+    .form-group {
+      margin-bottom: 12px;
+    }
+
+    .form-group label {
+      display: block;
       font-size: 11px;
-      margin-top: 8px;
-      padding: 6px 10px;
-      background: var(--glass);
-      border-radius: 6px;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      margin-bottom: 6px;
     }
 
-    .card-status.identifying {
-      color: var(--warning);
+    .form-group input,
+    .form-group select {
+      width: 100%;
+      padding: 10px 12px;
+      background: rgba(0, 0, 0, 0.3);
+      border: 1px solid var(--glass-border);
+      border-radius: 8px;
+      color: var(--text);
+      font-size: 14px;
+      transition: all 0.2s;
     }
 
-    .card-status.identified {
-      color: var(--success);
+    .form-group input:focus,
+    .form-group select:focus {
+      outline: none;
+      border-color: var(--cyan);
+      box-shadow: 0 0 10px rgba(0, 246, 255, 0.2);
     }
 
-    .card-status.error {
-      color: var(--error);
+    .form-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+
+    .checkbox-group {
+      display: flex;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+
+    .checkbox-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      cursor: pointer;
+    }
+
+    .checkbox-item input[type="checkbox"] {
+      width: 18px;
+      height: 18px;
+      accent-color: var(--cyan);
+    }
+
+    .checkbox-item label {
+      font-size: 13px;
+      cursor: pointer;
+    }
+
+    .review-actions {
+      display: flex;
+      gap: 10px;
+      margin-top: auto;
+      padding-top: 16px;
+      border-top: 1px solid var(--glass-border);
+    }
+
+    .review-actions .btn {
+      flex: 1;
+      justify-content: center;
+      padding: 14px;
+      font-size: 14px;
+    }
+
+    .empty-review {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      color: var(--text-muted);
+      text-align: center;
+      padding: 40px;
+    }
+
+    .empty-review .icon {
+      font-size: 48px;
+      margin-bottom: 16px;
+      opacity: 0.3;
     }
 
     .activity-log {
-      max-height: 300px;
+      max-height: 200px;
       overflow-y: auto;
     }
 
     .log-entry {
-      padding: 10px 12px;
+      padding: 8px 10px;
       border-bottom: 1px solid var(--glass-border);
-      font-size: 13px;
+      font-size: 11px;
       display: flex;
       align-items: center;
-      gap: 10px;
+      gap: 8px;
     }
 
-    .log-entry:last-child {
-      border-bottom: none;
-    }
+    .log-entry:last-child { border-bottom: none; }
+    .log-time { color: var(--text-muted); font-family: monospace; font-size: 10px; }
+    .log-icon { font-size: 14px; }
 
-    .log-time {
+    .empty-queue {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
       color: var(--text-muted);
-      font-size: 11px;
-      font-family: monospace;
-    }
-
-    .log-icon {
-      font-size: 16px;
-    }
-
-    .empty-state {
       text-align: center;
-      padding: 60px 20px;
-      color: var(--text-muted);
     }
 
-    .empty-state .icon {
+    .empty-queue .icon {
       font-size: 64px;
       margin-bottom: 16px;
       opacity: 0.3;
     }
 
-    .empty-state h3 {
-      font-size: 18px;
-      color: var(--text);
-      margin-bottom: 8px;
-    }
-
     .instructions {
       background: var(--glass);
-      border-radius: 12px;
+      border-radius: 10px;
       padding: 16px;
       margin-top: 16px;
+      max-width: 400px;
     }
 
     .instructions h4 {
@@ -398,44 +596,356 @@
 
     .instructions ol {
       padding-left: 20px;
-      font-size: 13px;
+      font-size: 12px;
       color: var(--text-muted);
     }
 
-    .instructions li {
-      margin-bottom: 8px;
+    .instructions li { margin-bottom: 8px; }
+
+    .toast {
+      position: fixed;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: var(--success);
+      color: #000;
+      padding: 12px 24px;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 600;
+      z-index: 1000;
+      animation: slideUp 0.3s ease;
     }
 
-    .instructions code {
+    @keyframes slideUp {
+      from { transform: translateX(-50%) translateY(20px); opacity: 0; }
+      to { transform: translateX(-50%) translateY(0); opacity: 1; }
+    }
+
+    /* Keyboard shortcut hints */
+    .shortcut-hint {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      background: var(--glass);
+      border: 1px solid var(--glass-border);
+      border-radius: 10px;
+      padding: 12px 16px;
+      font-size: 11px;
+      color: var(--text-muted);
+    }
+
+    .shortcut-hint kbd {
       background: rgba(0, 0, 0, 0.3);
       padding: 2px 6px;
       border-radius: 4px;
+      margin: 0 2px;
       font-family: monospace;
-      font-size: 12px;
-      color: var(--cyan);
     }
 
-    @media (max-width: 900px) {
-      .main-content {
+    @media (max-width: 1200px) {
+      .main-layout {
+        grid-template-columns: 1fr 320px;
+      }
+      .sidebar-left {
+        display: none;
+      }
+    }
+
+    @media (max-width: 800px) {
+      .main-layout {
         grid-template-columns: 1fr;
       }
-      .sidebar {
-        order: 2;
+      .review-panel {
+        display: none;
       }
+    }
+
+    /* ========== HERO VIEW - Large card during identification ========== */
+    .hero-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(10, 14, 26, 0.98);
+      z-index: 500;
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 40px;
+    }
+
+    .hero-overlay.show {
+      display: flex;
+      animation: heroFadeIn 0.3s ease;
+    }
+
+    @keyframes heroFadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+
+    .hero-card-container {
+      display: flex;
+      gap: 30px;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 30px;
+    }
+
+    .hero-card-image {
+      width: 280px;
+      aspect-ratio: 2.5/3.5;
+      background: var(--glass);
+      border: 3px solid var(--glass-border);
+      border-radius: 16px;
+      overflow: hidden;
+      position: relative;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+    }
+
+    .hero-card-image img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    .hero-card-image .hero-label {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      background: rgba(0, 0, 0, 0.8);
+      padding: 10px;
+      text-align: center;
+      font-size: 14px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 2px;
+    }
+
+    .hero-card-image.front { border-color: var(--cyan); }
+    .hero-card-image.back { border-color: var(--purple); }
+    .hero-card-image.front .hero-label { color: var(--cyan); }
+    .hero-card-image.back .hero-label { color: var(--purple); }
+
+    .hero-status {
+      text-align: center;
+      margin-bottom: 20px;
+    }
+
+    .hero-status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 12px;
+      padding: 16px 40px;
+      border-radius: 50px;
+      font-size: 20px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 3px;
+    }
+
+    .hero-status-badge.uploading {
+      background: rgba(255, 170, 0, 0.15);
+      border: 2px solid var(--warning);
+      color: var(--warning);
+    }
+
+    .hero-status-badge.identifying {
+      background: rgba(59, 130, 246, 0.15);
+      border: 2px solid var(--blue);
+      color: var(--blue);
+      animation: identifyPulse 1.5s infinite;
+    }
+
+    @keyframes identifyPulse {
+      0%, 100% { box-shadow: 0 0 20px rgba(59, 130, 246, 0.3); }
+      50% { box-shadow: 0 0 40px rgba(59, 130, 246, 0.6); }
+    }
+
+    .hero-status-badge.identified {
+      background: rgba(0, 255, 136, 0.15);
+      border: 2px solid var(--success);
+      color: var(--success);
+      animation: identifiedBurst 0.5s ease;
+    }
+
+    @keyframes identifiedBurst {
+      0% { transform: scale(1); }
+      50% { transform: scale(1.1); }
+      100% { transform: scale(1); }
+    }
+
+    .hero-status-badge .spinner {
+      width: 24px;
+      height: 24px;
+      border: 3px solid transparent;
+      border-top-color: currentColor;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+
+    .hero-card-info {
+      text-align: center;
+      max-width: 600px;
+    }
+
+    .hero-card-number {
+      font-size: 14px;
+      color: var(--text-muted);
+      margin-bottom: 8px;
+      text-transform: uppercase;
+      letter-spacing: 2px;
+    }
+
+    .hero-player-name {
+      font-size: 42px;
+      font-weight: 700;
+      background: linear-gradient(135deg, var(--cyan), var(--purple));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      margin-bottom: 12px;
+      line-height: 1.2;
+    }
+
+    .hero-card-details {
+      font-size: 18px;
+      color: var(--text-muted);
+      margin-bottom: 16px;
+    }
+
+    .hero-attributes {
+      display: flex;
+      gap: 12px;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+
+    .hero-attribute {
+      padding: 8px 16px;
+      background: var(--glass);
+      border: 1px solid var(--glass-border);
+      border-radius: 20px;
+      font-size: 13px;
+      font-weight: 600;
+    }
+
+    .hero-attribute.auto { border-color: #f59e0b; color: #f59e0b; }
+    .hero-attribute.relic { border-color: #ec4899; color: #ec4899; }
+    .hero-attribute.rookie { border-color: #10b981; color: #10b981; }
+    .hero-attribute.numbered { border-color: #8b5cf6; color: #8b5cf6; }
+
+    .hero-dismiss {
+      position: absolute;
+      top: 20px;
+      right: 20px;
+      padding: 12px 24px;
+      background: var(--glass);
+      border: 1px solid var(--glass-border);
+      border-radius: 8px;
+      color: var(--text);
+      cursor: pointer;
+      font-size: 14px;
+    }
+
+    .hero-dismiss:hover {
+      background: rgba(255, 255, 255, 0.1);
+    }
+
+    .hero-counter {
+      position: absolute;
+      bottom: 30px;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      gap: 40px;
+      padding: 20px 40px;
+      background: var(--glass);
+      border: 1px solid var(--glass-border);
+      border-radius: 16px;
+    }
+
+    .hero-counter-item {
+      text-align: center;
+    }
+
+    .hero-counter-value {
+      font-size: 32px;
+      font-weight: 700;
+      background: linear-gradient(135deg, var(--cyan), var(--purple));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .hero-counter-label {
+      font-size: 11px;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 1px;
     }
   </style>
 </head>
 <body>
+  <!-- HERO VIEW - Shows during card identification -->
+  <div class="hero-overlay" id="hero-overlay">
+    <button class="hero-dismiss" onclick="dismissHero()">View Queue</button>
+
+    <div class="hero-status">
+      <div class="hero-status-badge identifying" id="hero-status-badge">
+        <div class="spinner"></div>
+        <span id="hero-status-text">Identifying...</span>
+      </div>
+    </div>
+
+    <div class="hero-card-container">
+      <div class="hero-card-image front" id="hero-front">
+        <div class="hero-label">Front</div>
+      </div>
+      <div class="hero-card-image back" id="hero-back">
+        <div class="hero-label">Back</div>
+      </div>
+    </div>
+
+    <div class="hero-card-info">
+      <div class="hero-card-number" id="hero-card-number">Card #1</div>
+      <div class="hero-player-name" id="hero-player-name">Scanning...</div>
+      <div class="hero-card-details" id="hero-card-details"></div>
+      <div class="hero-attributes" id="hero-attributes"></div>
+    </div>
+
+    <div class="hero-counter">
+      <div class="hero-counter-item">
+        <div class="hero-counter-value" id="hero-scanned">0</div>
+        <div class="hero-counter-label">Scanned</div>
+      </div>
+      <div class="hero-counter-item">
+        <div class="hero-counter-value" id="hero-identified">0</div>
+        <div class="hero-counter-label">Identified</div>
+      </div>
+      <div class="hero-counter-item">
+        <div class="hero-counter-value" id="hero-pending">0</div>
+        <div class="hero-counter-label">Pending Review</div>
+      </div>
+    </div>
+  </div>
+
   <div class="header">
-    <h1>Scanner Mode</h1>
+    <h1>Scanner Review Dashboard</h1>
     <div class="header-actions">
+      <span id="connection-badge" style="font-size: 12px; color: var(--text-muted);">
+        <span class="status-dot disconnected" style="display: inline-block; width: 8px; height: 8px; vertical-align: middle; margin-right: 6px;"></span>
+        Disconnected
+      </span>
       <a href="/app" class="btn btn-secondary">Back to Dashboard</a>
     </div>
   </div>
 
-  <div class="main-content">
-    <div class="sidebar">
-      <!-- Scanner Status Panel -->
+  <div class="main-layout">
+    <!-- Left Sidebar -->
+    <div class="sidebar-left">
       <div class="panel">
         <h3>Scanner Agent</h3>
         <div class="status-indicator">
@@ -445,19 +955,13 @@
             <span id="scanner-status-detail">Waiting for scanner agent...</span>
           </div>
         </div>
-
         <div class="token-section">
-          <div style="font-size: 12px; color: var(--text-muted); margin-bottom: 8px;">
-            Your Scanner Token:
-          </div>
+          <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 6px;">Your Scanner Token:</div>
           <div class="token-box" id="token-display">Loading...</div>
-          <button class="copy-btn" id="copy-token-btn" onclick="copyToken()">
-            Copy Token
-          </button>
+          <button class="copy-btn" id="copy-token-btn" onclick="copyToken()">Copy Token</button>
         </div>
       </div>
 
-      <!-- Stats Panel -->
       <div class="panel">
         <h3>Session Stats</h3>
         <div class="stats-grid">
@@ -474,13 +978,12 @@
             <div class="stat-label">Pending</div>
           </div>
           <div class="stat-box">
-            <div class="stat-value" id="stat-errors">0</div>
-            <div class="stat-label">Errors</div>
+            <div class="stat-value" id="stat-approved">0</div>
+            <div class="stat-label">Approved</div>
           </div>
         </div>
       </div>
 
-      <!-- Activity Log -->
       <div class="panel">
         <h3>Activity Log</h3>
         <div class="activity-log" id="activity-log">
@@ -492,43 +995,203 @@
       </div>
     </div>
 
-    <!-- Card Feed -->
-    <div class="panel" style="min-height: 500px;">
-      <h3>Scanned Cards</h3>
-      <div id="card-feed" class="card-feed">
-        <div class="empty-state" id="empty-state">
+    <!-- Center - Card Queue -->
+    <div class="card-queue">
+      <div class="queue-header">
+        <h2>Scan Queue</h2>
+        <div class="queue-tabs">
+          <button class="queue-tab active" data-filter="all">All <span class="count" id="count-all">0</span></button>
+          <button class="queue-tab" data-filter="pending">Review <span class="count" id="count-pending">0</span></button>
+          <button class="queue-tab" data-filter="approved">Approved <span class="count" id="count-approved">0</span></button>
+        </div>
+      </div>
+      <div class="card-grid" id="card-grid">
+        <div class="empty-queue" id="empty-queue">
           <div class="icon">scanner</div>
           <h3>No Cards Scanned Yet</h3>
-          <p>Connect your scanner agent to start scanning cards</p>
-
+          <p>Connect your desktop scanner to start scanning cards</p>
           <div class="instructions">
-            <h4>Quick Setup</h4>
+            <h4>Quick Start</h4>
             <ol>
-              <li>Open terminal in the <code>scanner-agent</code> folder</li>
-              <li>Run <code>npm install</code> to install dependencies</li>
-              <li>Edit <code>config.json</code> with your watch folder and token</li>
-              <li>Run <code>npm start</code> to start the agent</li>
-              <li>Scan cards - they'll appear here automatically!</li>
+              <li>Download CardFlow Scanner from your dashboard</li>
+              <li>Install and launch the scanner app</li>
+              <li>Log in with your CardFlow credentials</li>
+              <li>Select your scan folder and click Start</li>
+              <li>Cards appear here as you scan!</li>
             </ol>
           </div>
         </div>
       </div>
     </div>
+
+    <!-- Right Sidebar - Review Panel -->
+    <div class="review-panel" id="review-panel">
+      <div class="empty-review" id="empty-review">
+        <div class="icon">touch_app</div>
+        <h3>Select a Card to Review</h3>
+        <p>Click on a card in the queue to view details and make edits</p>
+      </div>
+
+      <div id="review-content" style="display: none;">
+        <h2>Card Review</h2>
+
+        <!-- Card Images -->
+        <div class="card-images">
+          <div class="card-image-container" id="front-container">
+            <div class="card-image-placeholder">No Front Image</div>
+            <div class="card-image-label">Front</div>
+          </div>
+          <div class="card-image-container" id="back-container">
+            <div class="card-image-placeholder">No Back Image</div>
+            <div class="card-image-label">Back</div>
+          </div>
+        </div>
+
+        <!-- Image Actions -->
+        <div class="image-actions">
+          <button class="btn btn-secondary" onclick="swapImages()" title="Swap Front/Back">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M7 16V4M7 4L3 8M7 4l4 4M17 8v12M17 20l4-4M17 20l-4-4"/>
+            </svg>
+            Swap
+          </button>
+          <button class="btn btn-secondary" onclick="rotateImage('front')" title="Rotate Front">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
+              <path d="M3 3v5h5"/>
+            </svg>
+            Front
+          </button>
+          <button class="btn btn-secondary" onclick="rotateImage('back')" title="Rotate Back">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
+              <path d="M3 3v5h5"/>
+            </svg>
+            Back
+          </button>
+        </div>
+
+        <!-- Card Details Form -->
+        <div class="form-group">
+          <label>Player Name</label>
+          <input type="text" id="edit-player" placeholder="e.g., Mike Trout">
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label>Year</label>
+            <input type="text" id="edit-year" placeholder="e.g., 2020">
+          </div>
+          <div class="form-group">
+            <label>Card Number</label>
+            <input type="text" id="edit-cardNumber" placeholder="e.g., 123">
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label>Set / Brand</label>
+          <input type="text" id="edit-set" placeholder="e.g., Topps Chrome">
+        </div>
+
+        <div class="form-group">
+          <label>Parallel / Variation</label>
+          <input type="text" id="edit-parallel" placeholder="e.g., Refractor, Gold /50">
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label>Serial Number</label>
+            <input type="text" id="edit-serial" placeholder="e.g., 25/50">
+          </div>
+          <div class="form-group">
+            <label>Sport</label>
+            <select id="edit-sport">
+              <option value="">Select...</option>
+              <option value="baseball">Baseball</option>
+              <option value="football">Football</option>
+              <option value="basketball">Basketball</option>
+              <option value="hockey">Hockey</option>
+              <option value="soccer">Soccer</option>
+              <option value="other">Other</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label>Special Attributes</label>
+          <div class="checkbox-group">
+            <div class="checkbox-item">
+              <input type="checkbox" id="edit-auto">
+              <label for="edit-auto">Autograph</label>
+            </div>
+            <div class="checkbox-item">
+              <input type="checkbox" id="edit-relic">
+              <label for="edit-relic">Relic/Patch</label>
+            </div>
+            <div class="checkbox-item">
+              <input type="checkbox" id="edit-rookie">
+              <label for="edit-rookie">Rookie</label>
+            </div>
+            <div class="checkbox-item">
+              <input type="checkbox" id="edit-numbered">
+              <label for="edit-numbered">Numbered</label>
+            </div>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label>Notes</label>
+          <input type="text" id="edit-notes" placeholder="Additional notes...">
+        </div>
+
+        <!-- Review Actions -->
+        <div class="review-actions">
+          <button class="btn btn-danger" onclick="rejectCard()">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M18 6L6 18M6 6l12 12"/>
+            </svg>
+            Reject
+          </button>
+          <button class="btn btn-secondary" onclick="saveCard()">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
+              <polyline points="17 21 17 13 7 13 7 21"/>
+              <polyline points="7 3 7 8 15 8"/>
+            </svg>
+            Save
+          </button>
+          <button class="btn btn-success" onclick="approveCard()">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="20 6 9 17 4 12"/>
+            </svg>
+            Approve
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="shortcut-hint">
+    <kbd>A</kbd> Approve &nbsp; <kbd>R</kbd> Reject &nbsp; <kbd>S</kbd> Save &nbsp; <kbd>←</kbd><kbd>→</kbd> Navigate
   </div>
 
   <script>
     const API_URL = '/api';
     let token = localStorage.getItem('token');
     let ws = null;
-    let stats = { scanned: 0, identified: 0, pending: 0, errors: 0 };
-    let scannedCards = [];
+    let stats = { scanned: 0, identified: 0, pending: 0, approved: 0 };
+    let cards = new Map(); // cardId -> card data
+    let selectedCardId = null;
+    let currentFilter = 'all';
+    let heroCardId = null; // Currently displayed card in hero view
+    let heroAutoDismissTimer = null;
 
     // Check auth
     if (!token) {
       window.location.href = '/login';
     }
 
-    // Display token for scanner agent
+    // Display token
     document.getElementById('token-display').textContent = token || 'Not logged in';
 
     // Copy token function
@@ -544,6 +1207,16 @@
         }, 2000);
       });
     }
+
+    // Tab filtering
+    document.querySelectorAll('.queue-tab').forEach(tab => {
+      tab.addEventListener('click', () => {
+        document.querySelectorAll('.queue-tab').forEach(t => t.classList.remove('active'));
+        tab.classList.add('active');
+        currentFilter = tab.dataset.filter;
+        renderCardGrid();
+      });
+    });
 
     // Connect WebSocket
     function connectWebSocket() {
@@ -574,56 +1247,83 @@
 
         case 'scanner_connected':
           updateScannerStatus('connected', 'Connected', 'Scanner agent is ready');
-          addLogEntry('Scanner agent connected', 'check');
+          addLogEntry('Scanner connected', 'check');
           break;
 
         case 'scanner_disconnected':
           updateScannerStatus('disconnected', 'Disconnected', 'Scanner agent disconnected');
-          addLogEntry('Scanner agent disconnected', 'warning');
-          break;
-
-        case 'scanner_file_detected':
-          addLogEntry(`File detected: ${data.fileName}`, 'file');
-          break;
-
-        case 'scanner_front_captured':
-          addLogEntry(`Front captured: ${data.fileName}`, 'front');
-          stats.pending++;
-          updateStats();
-          break;
-
-        case 'scanner_back_captured':
-          addLogEntry(`Back captured: ${data.fileName}`, 'back');
+          addLogEntry('Scanner disconnected', 'warning');
           break;
 
         case 'scanner_uploading':
-          addCardToFeed(data.cardNum, 'uploading');
+          // Card is being uploaded
+          const uploadingCard = {
+            id: `temp-${data.cardNum}`,
+            cardNum: data.cardNum,
+            status: 'uploading',
+            player: null,
+            frontImage: null,
+            backImage: null
+          };
+          addCardToQueue(uploadingCard);
+          stats.scanned++;
+          updateStats();
           addLogEntry(`Uploading card #${data.cardNum}...`, 'upload');
+          // Show hero view
+          showHeroView(uploadingCard);
           break;
 
         case 'scanner_card_uploaded':
-          stats.scanned++;
-          stats.pending = Math.max(0, stats.pending - 1);
-          updateStats();
-          updateCardInFeed(data.cardNum, 'uploaded', data);
-          addLogEntry(`Card #${data.cardNum} uploaded (ID: ${data.cardId})`, 'success');
-          // Start identification check
-          checkCardIdentification(data.cardId, data.cardNum);
+          // Card uploaded, now identifying
+          const tempId = `temp-${data.cardNum}`;
+          if (cards.has(tempId)) {
+            cards.delete(tempId);
+          }
+          const uploadedCard = {
+            id: data.cardId,
+            cardNum: data.cardNum,
+            status: 'identifying',
+            player: null,
+            frontImage: data.frontImage,
+            backImage: data.backImage
+          };
+          addCardToQueue(uploadedCard);
+          addLogEntry(`Card #${data.cardNum} uploaded`, 'success');
+          // Update hero view with images
+          updateHeroView(uploadedCard);
+          // Start checking for identification
+          checkCardIdentification(data.cardId);
           break;
 
         case 'scanner_upload_error':
-          stats.errors++;
-          stats.pending = Math.max(0, stats.pending - 1);
-          updateStats();
-          updateCardInFeed(data.cardNum, 'error', data);
-          addLogEntry(`Error uploading card #${data.cardNum}: ${data.error}`, 'error');
+          addLogEntry(`Error: ${data.error}`, 'error');
           break;
 
         case 'card_identified':
-          stats.identified++;
-          updateStats();
-          // Update the card in feed if we can match it
-          addLogEntry(`Card identified: ${data.player || 'Unknown'}`, 'identified');
+          // Update card with identification data
+          if (cards.has(data.cardId)) {
+            const card = cards.get(data.cardId);
+            card.status = 'pending';
+            card.player = data.player;
+            card.year = data.year;
+            card.set = data.set;
+            card.cardNumber = data.cardNumber;
+            card.parallel = data.parallel;
+            card.serial = data.serial;
+            card.sport = data.sport;
+            card.isAutograph = data.isAutograph;
+            card.isRelic = data.isRelic;
+            card.isRookie = data.isRookie;
+            cards.set(data.cardId, card);
+            stats.identified++;
+            stats.pending++;
+            updateStats();
+            renderCardGrid();
+            if (selectedCardId === data.cardId) {
+              loadCardIntoReview(card);
+            }
+            addLogEntry(`Identified: ${data.player || 'Unknown'}`, 'identified');
+          }
           break;
       }
     }
@@ -632,39 +1332,43 @@
       const dot = document.getElementById('scanner-status-dot');
       const textEl = document.getElementById('scanner-status-text');
       const detailEl = document.getElementById('scanner-status-detail');
+      const badge = document.getElementById('connection-badge');
 
       dot.className = 'status-dot ' + status;
       textEl.textContent = text;
       detailEl.textContent = detail;
+
+      badge.innerHTML = `
+        <span class="status-dot ${status}" style="display: inline-block; width: 8px; height: 8px; vertical-align: middle; margin-right: 6px;"></span>
+        ${text}
+      `;
     }
 
     function updateStats() {
       document.getElementById('stat-scanned').textContent = stats.scanned;
       document.getElementById('stat-identified').textContent = stats.identified;
       document.getElementById('stat-pending').textContent = stats.pending;
-      document.getElementById('stat-errors').textContent = stats.errors;
+      document.getElementById('stat-approved').textContent = stats.approved;
+
+      // Update hero counters too
+      updateHeroCounters();
+
+      // Update tab counts
+      document.getElementById('count-all').textContent = cards.size;
+      document.getElementById('count-pending').textContent =
+        Array.from(cards.values()).filter(c => c.status === 'pending' || c.status === 'identifying').length;
+      document.getElementById('count-approved').textContent =
+        Array.from(cards.values()).filter(c => c.status === 'approved').length;
     }
 
     function addLogEntry(message, type) {
       const log = document.getElementById('activity-log');
       const icons = {
-        check: 'check_circle',
-        warning: 'warning',
-        file: 'description',
-        front: 'photo_camera',
-        back: 'flip_camera_android',
-        upload: 'cloud_upload',
-        success: 'check_circle',
-        error: 'error',
-        identified: 'stars'
+        check: '✓', warning: '⚠', upload: '↑', success: '✓', error: '✕', identified: '★'
       };
-
       const colors = {
-        check: 'var(--success)',
-        warning: 'var(--warning)',
-        success: 'var(--success)',
-        error: 'var(--error)',
-        identified: 'var(--cyan)'
+        check: 'var(--success)', warning: 'var(--warning)', success: 'var(--success)',
+        error: 'var(--error)', identified: 'var(--cyan)'
       };
 
       const time = new Date().toLocaleTimeString();
@@ -672,91 +1376,333 @@
       entry.className = 'log-entry';
       entry.innerHTML = `
         <span class="log-time">${time}</span>
-        <span class="log-icon" style="color: ${colors[type] || 'inherit'}">${icons[type] || 'circle'}</span>
+        <span class="log-icon" style="color: ${colors[type] || 'inherit'}">${icons[type] || '•'}</span>
         <span>${message}</span>
       `;
 
-      // Remove "waiting" message if present
+      // Remove "waiting" message
       if (log.querySelector('.log-entry span')?.textContent === 'Waiting for activity...') {
         log.innerHTML = '';
       }
 
       log.insertBefore(entry, log.firstChild);
-
-      // Keep only last 50 entries
       while (log.children.length > 50) {
         log.removeChild(log.lastChild);
       }
     }
 
-    function addCardToFeed(cardNum, status) {
-      const feed = document.getElementById('card-feed');
-      const emptyState = document.getElementById('empty-state');
-      if (emptyState) emptyState.style.display = 'none';
-
-      const cardEl = document.createElement('div');
-      cardEl.className = 'card-item uploading';
-      cardEl.id = `card-${cardNum}`;
-      cardEl.innerHTML = `
-        <div class="card-image">
-          <div class="upload-spinner"></div>
-        </div>
-        <div class="card-info">
-          <div class="card-number">Card #${cardNum}</div>
-          <div class="card-name">Uploading...</div>
-          <div class="card-status identifying">
-            <span>Uploading</span>
-          </div>
-        </div>
-      `;
-
-      feed.insertBefore(cardEl, feed.firstChild);
-      scannedCards.unshift({ cardNum, status });
+    function addCardToQueue(card) {
+      cards.set(card.id, card);
+      renderCardGrid();
+      updateStats();
     }
 
-    function updateCardInFeed(cardNum, status, data) {
-      const cardEl = document.getElementById(`card-${cardNum}`);
-      if (!cardEl) return;
+    function renderCardGrid() {
+      const grid = document.getElementById('card-grid');
+      const emptyState = document.getElementById('empty-queue');
 
-      cardEl.className = 'card-item ' + (status === 'error' ? 'error' : 'success');
+      // Filter cards
+      let filteredCards = Array.from(cards.values());
+      if (currentFilter === 'pending') {
+        filteredCards = filteredCards.filter(c => c.status === 'pending' || c.status === 'identifying');
+      } else if (currentFilter === 'approved') {
+        filteredCards = filteredCards.filter(c => c.status === 'approved');
+      }
 
-      if (status === 'uploaded' && data.cardId) {
-        // Load the card image
-        loadCardImage(data.cardId, cardEl, data);
-      } else if (status === 'error') {
-        cardEl.querySelector('.card-name').textContent = 'Upload Failed';
-        cardEl.querySelector('.card-status').className = 'card-status error';
-        cardEl.querySelector('.card-status').innerHTML = `<span>${data.error || 'Error'}</span>`;
-        cardEl.querySelector('.upload-spinner')?.remove();
+      // Sort by most recent first
+      filteredCards.sort((a, b) => (b.cardNum || 0) - (a.cardNum || 0));
+
+      if (filteredCards.length === 0) {
+        emptyState.style.display = 'flex';
+        // Remove all cards except empty state
+        Array.from(grid.children).forEach(child => {
+          if (child !== emptyState) child.remove();
+        });
+        return;
+      }
+
+      emptyState.style.display = 'none';
+
+      // Build new grid HTML
+      const existingIds = new Set();
+      filteredCards.forEach(card => {
+        existingIds.add(card.id);
+        let cardEl = document.getElementById(`queue-card-${card.id}`);
+
+        if (!cardEl) {
+          cardEl = document.createElement('div');
+          cardEl.id = `queue-card-${card.id}`;
+          cardEl.className = `queue-card status-${card.status}`;
+          cardEl.onclick = () => selectCard(card.id);
+          grid.insertBefore(cardEl, emptyState);
+        }
+
+        cardEl.className = `queue-card status-${card.status}${selectedCardId === card.id ? ' selected' : ''}`;
+
+        const imageHtml = card.status === 'uploading'
+          ? '<div class="queue-card-spinner"></div>'
+          : card.frontImage
+            ? `<img src="/uploads/${card.frontImage}" alt="Card">`
+            : '<div style="color: var(--text-muted);">No image</div>';
+
+        cardEl.innerHTML = `
+          <div class="queue-card-image">
+            ${imageHtml}
+            <div class="queue-card-status ${card.status}">${card.status}</div>
+          </div>
+          <div class="queue-card-info">
+            <div class="queue-card-num">Card #${card.cardNum || '?'}</div>
+            <div class="queue-card-name">${card.player || (card.status === 'uploading' ? 'Uploading...' : card.status === 'identifying' ? 'Identifying...' : 'Unknown')}</div>
+          </div>
+        `;
+      });
+
+      // Remove cards that no longer match filter
+      Array.from(grid.children).forEach(child => {
+        if (child !== emptyState && !existingIds.has(child.id.replace('queue-card-', ''))) {
+          child.remove();
+        }
+      });
+    }
+
+    function selectCard(cardId) {
+      selectedCardId = cardId;
+      renderCardGrid();
+
+      const card = cards.get(cardId);
+      if (card) {
+        loadCardIntoReview(card);
       }
     }
 
-    async function loadCardImage(cardId, cardEl, data) {
+    function loadCardIntoReview(card) {
+      document.getElementById('empty-review').style.display = 'none';
+      document.getElementById('review-content').style.display = 'block';
+
+      // Load images
+      const frontContainer = document.getElementById('front-container');
+      const backContainer = document.getElementById('back-container');
+
+      frontContainer.innerHTML = card.frontImage
+        ? `<img src="/uploads/${card.frontImage}" alt="Front" id="front-image" data-rotation="0"><div class="card-image-label">Front</div>`
+        : `<div class="card-image-placeholder">No Front Image</div><div class="card-image-label">Front</div>`;
+
+      backContainer.innerHTML = card.backImage
+        ? `<img src="/uploads/${card.backImage}" alt="Back" id="back-image" data-rotation="0"><div class="card-image-label">Back</div>`
+        : `<div class="card-image-placeholder">No Back Image</div><div class="card-image-label">Back</div>`;
+
+      // Load form data
+      document.getElementById('edit-player').value = card.player || '';
+      document.getElementById('edit-year').value = card.year || '';
+      document.getElementById('edit-cardNumber').value = card.cardNumber || '';
+      document.getElementById('edit-set').value = card.set || '';
+      document.getElementById('edit-parallel').value = card.parallel || '';
+      document.getElementById('edit-serial').value = card.serial || '';
+      document.getElementById('edit-sport').value = card.sport || '';
+      document.getElementById('edit-auto').checked = card.isAutograph || false;
+      document.getElementById('edit-relic').checked = card.isRelic || false;
+      document.getElementById('edit-rookie').checked = card.isRookie || false;
+      document.getElementById('edit-numbered').checked = card.serial ? true : false;
+      document.getElementById('edit-notes').value = card.notes || '';
+    }
+
+    async function swapImages() {
+      if (!selectedCardId || selectedCardId.startsWith('temp-')) return;
+
+      const card = cards.get(selectedCardId);
+      if (!card) return;
+
       try {
-        const response = await fetch(`${API_URL}/cards/${cardId}`, {
+        const response = await fetch(`${API_URL}/cards/${selectedCardId}/swap`, {
+          method: 'POST',
           headers: { 'Authorization': `Bearer ${token}` }
         });
-        const card = await response.json();
 
-        cardEl.querySelector('.card-image').innerHTML = card.front_image
-          ? `<img src="/uploads/${card.front_image}" alt="Card front">`
-          : `<span class="placeholder">card</span>`;
-
-        cardEl.querySelector('.card-name').textContent = card.player || 'Identifying...';
-
-        if (card.player) {
-          cardEl.querySelector('.card-status').className = 'card-status identified';
-          cardEl.querySelector('.card-status').innerHTML = `<span>Identified</span>`;
+        if (response.ok) {
+          const data = await response.json();
+          // Update local card data
+          card.frontImage = data.front_image;
+          card.backImage = data.back_image;
+          cards.set(selectedCardId, card);
+          loadCardIntoReview(card);
+          renderCardGrid();
+          showToast('Images swapped');
         } else {
-          cardEl.querySelector('.card-status').className = 'card-status identifying';
-          cardEl.querySelector('.card-status').innerHTML = `<span>Identifying...</span>`;
+          showToast('Failed to swap images', 'error');
         }
       } catch (err) {
-        console.error('Failed to load card:', err);
+        console.error('Swap error:', err);
+        // Fallback to local swap
+        const temp = card.frontImage;
+        card.frontImage = card.backImage;
+        card.backImage = temp;
+        cards.set(selectedCardId, card);
+        loadCardIntoReview(card);
+        showToast('Images swapped (local only)');
       }
     }
 
-    async function checkCardIdentification(cardId, cardNum) {
+    function rotateImage(side) {
+      const img = document.getElementById(`${side}-image`);
+      if (!img) return;
+
+      const currentRotation = parseInt(img.dataset.rotation) || 0;
+      const newRotation = (currentRotation + 90) % 360;
+      img.dataset.rotation = newRotation;
+      img.style.transform = `rotate(${newRotation}deg)`;
+
+      // Store rotation in card data
+      const card = cards.get(selectedCardId);
+      if (card) {
+        if (side === 'front') card.frontRotation = newRotation;
+        else card.backRotation = newRotation;
+      }
+    }
+
+    function getFormData() {
+      return {
+        player: document.getElementById('edit-player').value,
+        year: document.getElementById('edit-year').value,
+        cardNumber: document.getElementById('edit-cardNumber').value,
+        set: document.getElementById('edit-set').value,
+        parallel: document.getElementById('edit-parallel').value,
+        serial: document.getElementById('edit-serial').value,
+        sport: document.getElementById('edit-sport').value,
+        isAutograph: document.getElementById('edit-auto').checked,
+        isRelic: document.getElementById('edit-relic').checked,
+        isRookie: document.getElementById('edit-rookie').checked,
+        notes: document.getElementById('edit-notes').value
+      };
+    }
+
+    async function saveCard() {
+      if (!selectedCardId || selectedCardId.startsWith('temp-')) return;
+
+      const formData = getFormData();
+      const card = cards.get(selectedCardId);
+
+      try {
+        const response = await fetch(`${API_URL}/cards/${selectedCardId}`, {
+          method: 'PUT',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            player: formData.player,
+            year: formData.year,
+            card_number: formData.cardNumber,
+            set_name: formData.set,
+            parallel: formData.parallel,
+            serial_number: formData.serial,
+            sport: formData.sport,
+            is_autograph: formData.isAutograph,
+            is_relic: formData.isRelic,
+            is_rookie: formData.isRookie,
+            notes: formData.notes,
+            front_rotation: card?.frontRotation || 0,
+            back_rotation: card?.backRotation || 0
+          })
+        });
+
+        if (response.ok) {
+          // Update local card data
+          Object.assign(card, formData);
+          cards.set(selectedCardId, card);
+          renderCardGrid();
+          showToast('Card saved');
+          addLogEntry(`Saved: ${formData.player || 'Card'}`, 'success');
+        } else {
+          showToast('Failed to save', 'error');
+        }
+      } catch (err) {
+        console.error('Save error:', err);
+        showToast('Failed to save', 'error');
+      }
+    }
+
+    async function approveCard() {
+      if (!selectedCardId || selectedCardId.startsWith('temp-')) return;
+
+      // First save any changes
+      await saveCard();
+
+      const card = cards.get(selectedCardId);
+      if (!card) return;
+
+      try {
+        const response = await fetch(`${API_URL}/cards/${selectedCardId}/approve`, {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+
+        if (response.ok) {
+          card.status = 'approved';
+          cards.set(selectedCardId, card);
+          stats.pending = Math.max(0, stats.pending - 1);
+          stats.approved++;
+          updateStats();
+          renderCardGrid();
+          showToast('Card approved and added to collection');
+          addLogEntry(`Approved: ${card.player || 'Card'}`, 'check');
+
+          // Move to next pending card
+          selectNextPendingCard();
+        } else {
+          showToast('Failed to approve card', 'error');
+        }
+      } catch (err) {
+        console.error('Approve error:', err);
+        showToast('Failed to approve card', 'error');
+      }
+    }
+
+    async function rejectCard() {
+      if (!selectedCardId || selectedCardId.startsWith('temp-')) return;
+
+      const card = cards.get(selectedCardId);
+      if (!card) return;
+
+      try {
+        const response = await fetch(`${API_URL}/cards/${selectedCardId}/reject`, {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+
+        if (response.ok) {
+          card.status = 'rejected';
+          cards.set(selectedCardId, card);
+          stats.pending = Math.max(0, stats.pending - 1);
+          updateStats();
+          renderCardGrid();
+          showToast('Card rejected');
+          addLogEntry(`Rejected: ${card.player || 'Card'}`, 'warning');
+
+          // Move to next pending card
+          selectNextPendingCard();
+        } else {
+          showToast('Failed to reject card', 'error');
+        }
+      } catch (err) {
+        console.error('Reject error:', err);
+        showToast('Failed to reject card', 'error');
+      }
+    }
+
+    function selectNextPendingCard() {
+      const pendingCards = Array.from(cards.values()).filter(c => c.status === 'pending');
+      if (pendingCards.length > 0) {
+        selectCard(pendingCards[0].id);
+      } else {
+        // No more pending cards, clear review panel
+        selectedCardId = null;
+        document.getElementById('empty-review').style.display = 'flex';
+        document.getElementById('review-content').style.display = 'none';
+        renderCardGrid();
+      }
+    }
+
+    async function checkCardIdentification(cardId) {
       // Poll for identification status
       let attempts = 0;
       const maxAttempts = 30;
@@ -766,31 +1712,249 @@
           const response = await fetch(`${API_URL}/cards/${cardId}`, {
             headers: { 'Authorization': `Bearer ${token}` }
           });
-          const card = await response.json();
+          const data = await response.json();
 
-          const cardEl = document.getElementById(`card-${cardNum}`);
-          if (!cardEl) return;
+          const card = cards.get(cardId);
+          if (!card) return;
 
-          if (card.player && card.player !== 'Unknown') {
+          // Update card with fetched data (API returns 'front' and 'back')
+          card.frontImage = data.front || data.front_image;
+          card.backImage = data.back || data.back_image;
+
+          if (data.player && data.player !== 'Unknown') {
+            card.status = 'pending';
+            card.player = data.player;
+            card.year = data.year;
+            card.set = data.set_name;
+            card.cardNumber = data.card_number;
+            card.parallel = data.parallel;
+            card.serial = data.serial_number;
+            card.sport = data.sport;
+            card.isAutograph = data.is_autograph;
+            card.isRelic = data.is_relic;
+            card.isRookie = data.is_rookie;
             stats.identified++;
+            stats.pending++;
             updateStats();
-            cardEl.querySelector('.card-name').textContent = card.player;
-            cardEl.querySelector('.card-status').className = 'card-status identified';
-            cardEl.querySelector('.card-status').innerHTML = `<span>Identified</span>`;
-            addLogEntry(`Card #${cardNum} identified: ${card.player}`, 'identified');
-            return;
+            addLogEntry(`Identified: ${data.player}`, 'identified');
+
+            // Update hero view with identified card
+            if (heroCardId === cardId || heroCardId?.startsWith('temp-')) {
+              updateHeroView(card);
+            }
+          } else if (card.frontImage || card.backImage) {
+            // Update hero with images even if not fully identified yet
+            if (heroCardId === cardId || heroCardId?.startsWith('temp-')) {
+              updateHeroView(card);
+            }
           }
 
-          if (++attempts < maxAttempts) {
+          cards.set(cardId, card);
+          renderCardGrid();
+
+          if (selectedCardId === cardId) {
+            loadCardIntoReview(card);
+          }
+
+          // Continue polling if not identified yet
+          if (card.status === 'identifying' && ++attempts < maxAttempts) {
             setTimeout(check, 2000);
           }
         } catch (err) {
           console.error('Check identification error:', err);
+          if (++attempts < maxAttempts) {
+            setTimeout(check, 2000);
+          }
         }
       };
 
-      setTimeout(check, 3000);
+      setTimeout(check, 2000);
     }
+
+    function showToast(message, type = 'success') {
+      const existing = document.querySelector('.toast');
+      if (existing) existing.remove();
+
+      const toast = document.createElement('div');
+      toast.className = 'toast';
+      toast.textContent = message;
+      if (type === 'error') {
+        toast.style.background = 'var(--error)';
+        toast.style.color = '#fff';
+      }
+      document.body.appendChild(toast);
+      setTimeout(() => toast.remove(), 3000);
+    }
+
+    // Keyboard shortcuts
+    document.addEventListener('keydown', (e) => {
+      // Don't trigger shortcuts when typing in inputs
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT' || e.target.tagName === 'TEXTAREA') {
+        return;
+      }
+
+      switch (e.key.toLowerCase()) {
+        case 'escape':
+          dismissHero();
+          break;
+        case 'a':
+          approveCard();
+          break;
+        case 'r':
+          rejectCard();
+          break;
+        case 's':
+          saveCard();
+          break;
+        case 'arrowleft':
+        case 'arrowup':
+          navigateCards(-1);
+          break;
+        case 'arrowright':
+        case 'arrowdown':
+          navigateCards(1);
+          break;
+      }
+    });
+
+    function navigateCards(direction) {
+      const cardList = Array.from(cards.values());
+      if (cardList.length === 0) return;
+
+      const currentIndex = selectedCardId
+        ? cardList.findIndex(c => c.id === selectedCardId)
+        : -1;
+
+      let newIndex = currentIndex + direction;
+      if (newIndex < 0) newIndex = cardList.length - 1;
+      if (newIndex >= cardList.length) newIndex = 0;
+
+      selectCard(cardList[newIndex].id);
+    }
+
+    // ========== HERO VIEW FUNCTIONS ==========
+
+    function showHeroView(card) {
+      heroCardId = card.id;
+
+      // Clear any existing auto-dismiss timer
+      if (heroAutoDismissTimer) {
+        clearTimeout(heroAutoDismissTimer);
+        heroAutoDismissTimer = null;
+      }
+
+      const overlay = document.getElementById('hero-overlay');
+      const badge = document.getElementById('hero-status-badge');
+      const statusText = document.getElementById('hero-status-text');
+      const frontImg = document.getElementById('hero-front');
+      const backImg = document.getElementById('hero-back');
+      const cardNum = document.getElementById('hero-card-number');
+      const playerName = document.getElementById('hero-player-name');
+      const details = document.getElementById('hero-card-details');
+      const attributes = document.getElementById('hero-attributes');
+
+      // Reset to uploading state
+      badge.className = 'hero-status-badge uploading';
+      badge.innerHTML = '<div class="spinner"></div><span>Uploading...</span>';
+
+      // Clear images
+      frontImg.innerHTML = '<div class="hero-label">Front</div>';
+      backImg.innerHTML = '<div class="hero-label">Back</div>';
+
+      cardNum.textContent = `Card #${card.cardNum || '?'}`;
+      playerName.textContent = 'Uploading...';
+      details.textContent = '';
+      attributes.innerHTML = '';
+
+      updateHeroCounters();
+      overlay.classList.add('show');
+    }
+
+    function updateHeroView(card) {
+      if (heroCardId !== card.id && !heroCardId?.startsWith('temp-')) {
+        // Different card, show new hero
+        heroCardId = card.id;
+      }
+
+      const overlay = document.getElementById('hero-overlay');
+      if (!overlay.classList.contains('show')) {
+        overlay.classList.add('show');
+      }
+
+      const badge = document.getElementById('hero-status-badge');
+      const frontContainer = document.getElementById('hero-front');
+      const backContainer = document.getElementById('hero-back');
+      const cardNum = document.getElementById('hero-card-number');
+      const playerName = document.getElementById('hero-player-name');
+      const details = document.getElementById('hero-card-details');
+      const attributes = document.getElementById('hero-attributes');
+
+      // Update images
+      if (card.frontImage) {
+        frontContainer.innerHTML = `<img src="/uploads/${card.frontImage}" alt="Front"><div class="hero-label">Front</div>`;
+      }
+      if (card.backImage) {
+        backContainer.innerHTML = `<img src="/uploads/${card.backImage}" alt="Back"><div class="hero-label">Back</div>`;
+      }
+
+      cardNum.textContent = `Card #${card.cardNum || '?'}`;
+
+      if (card.status === 'identifying') {
+        badge.className = 'hero-status-badge identifying';
+        badge.innerHTML = '<div class="spinner"></div><span>Identifying...</span>';
+        playerName.textContent = 'Analyzing card...';
+        details.textContent = 'AI is identifying this card';
+      } else if (card.status === 'pending' || card.player) {
+        // Card identified!
+        badge.className = 'hero-status-badge identified';
+        badge.innerHTML = '<span>✓ IDENTIFIED</span>';
+        playerName.textContent = card.player || 'Unknown Card';
+
+        const detailParts = [];
+        if (card.year) detailParts.push(card.year);
+        if (card.set) detailParts.push(card.set);
+        if (card.cardNumber) detailParts.push(`#${card.cardNumber}`);
+        if (card.parallel) detailParts.push(card.parallel);
+        details.textContent = detailParts.join(' • ');
+
+        // Show attributes
+        let attrHtml = '';
+        if (card.isAutograph) attrHtml += '<span class="hero-attribute auto">Autograph</span>';
+        if (card.isRelic) attrHtml += '<span class="hero-attribute relic">Relic</span>';
+        if (card.isRookie) attrHtml += '<span class="hero-attribute rookie">Rookie</span>';
+        if (card.serial) attrHtml += `<span class="hero-attribute numbered">${card.serial}</span>`;
+        attributes.innerHTML = attrHtml;
+
+        // Auto-dismiss after 3 seconds
+        heroAutoDismissTimer = setTimeout(() => {
+          dismissHero();
+        }, 3000);
+      }
+
+      updateHeroCounters();
+    }
+
+    function updateHeroCounters() {
+      const heroScanned = document.getElementById('hero-scanned');
+      const heroIdentified = document.getElementById('hero-identified');
+      const heroPending = document.getElementById('hero-pending');
+
+      if (heroScanned) heroScanned.textContent = stats.scanned;
+      if (heroIdentified) heroIdentified.textContent = stats.identified;
+      if (heroPending) heroPending.textContent = stats.pending;
+    }
+
+    function dismissHero() {
+      if (heroAutoDismissTimer) {
+        clearTimeout(heroAutoDismissTimer);
+        heroAutoDismissTimer = null;
+      }
+      document.getElementById('hero-overlay').classList.remove('show');
+      heroCardId = null;
+    }
+
+    // Update the checkCardIdentification to use hero view
+    const originalCheckCardIdentification = checkCardIdentification;
 
     // Initialize
     connectWebSocket();

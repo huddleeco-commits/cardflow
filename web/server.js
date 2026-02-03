@@ -883,6 +883,58 @@ app.post('/api/cards/approve-all', authenticateToken, async (req, res) => {
   }
 });
 
+// Swap front/back images
+app.post('/api/cards/:id/swap', authenticateToken, async (req, res) => {
+  try {
+    const result = await pool.query(
+      `UPDATE cards
+       SET front_image_path = back_image_path,
+           back_image_path = front_image_path
+       WHERE id = $1 AND user_id = $2
+       RETURNING *`,
+      [req.params.id, req.user.id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Card not found' });
+    }
+
+    const card = result.rows[0];
+    broadcast({ type: 'card_updated', cardId: card.id, userId: req.user.id });
+    res.json({
+      success: true,
+      front_image: card.front_image_path,
+      back_image: card.back_image_path
+    });
+
+  } catch (e) {
+    console.error('Swap images error:', e);
+    res.status(500).json({ error: 'Failed to swap images' });
+  }
+});
+
+// Reject card (soft delete or mark as rejected)
+app.post('/api/cards/:id/reject', authenticateToken, async (req, res) => {
+  try {
+    const result = await pool.query(
+      `UPDATE cards SET status = 'rejected', card_data = card_data || '{"rejected_at": "${new Date().toISOString()}"}'::jsonb
+       WHERE id = $1 AND user_id = $2 RETURNING *`,
+      [req.params.id, req.user.id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Card not found' });
+    }
+
+    broadcast({ type: 'card_rejected', cardId: req.params.id, userId: req.user.id });
+    res.json({ success: true });
+
+  } catch (e) {
+    console.error('Reject card error:', e);
+    res.status(500).json({ error: 'Failed to reject card' });
+  }
+});
+
 // Delete card
 app.delete('/api/cards/:id', authenticateToken, async (req, res) => {
   try {

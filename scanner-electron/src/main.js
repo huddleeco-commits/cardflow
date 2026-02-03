@@ -42,9 +42,23 @@ let stats = { scanned: 0, identified: 0, errors: 0 };
 let uploadQueue = [];
 let isUploading = false;
 let reconnectTimer = null;
+let directModeEnabled = false; // True when receiving files directly from PaperStream
+let directModePendingFiles = []; // Files received via command line
 
 const API_BASE = 'https://cardflow.be1st.io';
 const WS_URL = 'wss://cardflow.be1st.io';
+
+// Parse command line arguments for file paths
+function getFilePathsFromArgs(args) {
+  return args.filter(arg => {
+    // Skip electron/app arguments
+    if (arg.startsWith('-') || arg.startsWith('--')) return false;
+    if (arg.includes('electron') || arg.includes('app.asar')) return false;
+    // Check if it's a valid image file
+    const ext = path.extname(arg).toLowerCase();
+    return ['.jpg', '.jpeg', '.png', '.tif', '.tiff', '.bmp'].includes(ext);
+  });
+}
 
 // Create main window
 function createWindow() {
@@ -699,6 +713,9 @@ app.whenReady().then(() => {
   createWindow();
   createTray();
 
+  // Process any files passed via command line (from PaperStream)
+  processStartupArgs();
+
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
       createWindow();
@@ -723,13 +740,98 @@ app.on('before-quit', () => {
 const gotTheLock = app.requestSingleInstanceLock();
 
 if (!gotTheLock) {
+  // Another instance exists - send our file paths to it and quit
   app.quit();
 } else {
-  app.on('second-instance', () => {
+  app.on('second-instance', (event, commandLine, workingDirectory) => {
+    // Another instance was launched - check for file paths
+    const filePaths = getFilePathsFromArgs(commandLine);
+
+    if (filePaths.length > 0) {
+      // Process files from PaperStream
+      console.log('Received files from second instance:', filePaths);
+      filePaths.forEach(filePath => {
+        processDirectFile(filePath);
+      });
+    }
+
+    // Show window
     if (mainWindow) {
       if (mainWindow.isMinimized()) mainWindow.restore();
       mainWindow.show();
       mainWindow.focus();
     }
   });
+}
+
+// Process files received directly from command line (PaperStream)
+function processDirectFile(filePath) {
+  if (!fs.existsSync(filePath)) {
+    console.error('File does not exist:', filePath);
+    return;
+  }
+
+  const ext = path.extname(filePath).toLowerCase();
+  if (!['.jpg', '.jpeg', '.png', '.tif', '.tiff', '.bmp'].includes(ext)) {
+    console.log('Skipping non-image file:', filePath);
+    return;
+  }
+
+  // Enable direct mode
+  if (!directModeEnabled) {
+    directModeEnabled = true;
+    sendToRenderer('log', { type: 'info', message: 'Direct mode enabled - receiving files from scanner app' });
+    sendToRenderer('scanning-status', { scanning: true, mode: 'direct' });
+    updateTrayStatus('scanning');
+  }
+
+  const fileName = path.basename(filePath);
+  sendToRenderer('log', { type: 'info', message: `Received: ${fileName}` });
+  sendScannerEvent('scanner_file_detected', { filename: fileName });
+
+  // Sequential pairing: odd = front, even = back
+  directModePendingFiles.push(filePath);
+
+  const side = directModePendingFiles.length % 2 === 1 ? 'front' : 'back';
+  sendScannerEvent(side === 'front' ? 'scanner_front_captured' : 'scanner_back_captured', {
+    filename: fileName
+  });
+  sendToRenderer('log', { type: 'info', message: `${side === 'front' ? 'Front' : 'Back'} captured: ${fileName}` });
+
+  // When we have a pair, queue upload
+  if (directModePendingFiles.length >= 2) {
+    const frontFile = directModePendingFiles.shift();
+    const backFile = directModePendingFiles.shift();
+    cardCounter++;
+
+    queueUpload(frontFile, backFile, cardCounter);
+  }
+}
+
+// Process command line arguments on startup
+function processStartupArgs() {
+  const filePaths = getFilePathsFromArgs(process.argv);
+
+  if (filePaths.length > 0) {
+    console.log('Processing startup file arguments:', filePaths);
+
+    // Wait for auth to be ready
+    const checkAuth = setInterval(() => {
+      if (authToken) {
+        clearInterval(checkAuth);
+        // Connect WebSocket first
+        connectWebSocket();
+
+        // Wait a bit for connection then process files
+        setTimeout(() => {
+          filePaths.forEach(filePath => {
+            processDirectFile(filePath);
+          });
+        }, 1000);
+      }
+    }, 500);
+
+    // Timeout after 10 seconds
+    setTimeout(() => clearInterval(checkAuth), 10000);
+  }
 }
