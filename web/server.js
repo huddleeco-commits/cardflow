@@ -4573,6 +4573,185 @@ app.post('/api/export/slabtrack', authenticateToken, async (req, res) => {
   }
 });
 
+// ==============================
+// SLABTRACK DIRECT API INTEGRATION
+// ==============================
+
+const SLABTRACK_API = process.env.SLABTRACK_API_URL || 'https://slabtrack.be1st.io/api';
+
+// Get SlabTrack connection status
+app.get('/api/slabtrack/status', authenticateToken, async (req, res) => {
+  try {
+    const result = await pool.query(
+      'SELECT slabtrack_api_token FROM users WHERE id = $1',
+      [req.user.id]
+    );
+
+    const hasToken = !!(result.rows[0]?.slabtrack_api_token);
+
+    res.json({
+      connected: hasToken,
+      tokenPreview: hasToken ? '••••••••' + result.rows[0].slabtrack_api_token.slice(-4) : null
+    });
+  } catch (e) {
+    console.error('SlabTrack status error:', e);
+    res.status(500).json({ error: 'Failed to get status' });
+  }
+});
+
+// Save SlabTrack API token
+app.post('/api/slabtrack/token', authenticateToken, async (req, res) => {
+  try {
+    const { token } = req.body;
+
+    if (!token) {
+      return res.status(400).json({ error: 'Token is required' });
+    }
+
+    // Store the token
+    await pool.query(
+      'UPDATE users SET slabtrack_api_token = $1 WHERE id = $2',
+      [token, req.user.id]
+    );
+
+    console.log(`[SlabTrack] Token saved for user ${req.user.id}`);
+    res.json({ success: true, message: 'SlabTrack token saved' });
+
+  } catch (e) {
+    console.error('SlabTrack token save error:', e);
+    res.status(500).json({ error: 'Failed to save token' });
+  }
+});
+
+// Remove SlabTrack token
+app.delete('/api/slabtrack/token', authenticateToken, async (req, res) => {
+  try {
+    await pool.query(
+      'UPDATE users SET slabtrack_api_token = NULL WHERE id = $1',
+      [req.user.id]
+    );
+
+    console.log(`[SlabTrack] Token removed for user ${req.user.id}`);
+    res.json({ success: true, message: 'SlabTrack disconnected' });
+
+  } catch (e) {
+    console.error('SlabTrack token remove error:', e);
+    res.status(500).json({ error: 'Failed to disconnect' });
+  }
+});
+
+// Send cards directly to SlabTrack
+app.post('/api/slabtrack/send', authenticateToken, async (req, res) => {
+  try {
+    const { cardIds } = req.body;
+    const userId = req.user.id;
+
+    if (!cardIds || cardIds.length === 0) {
+      return res.status(400).json({ error: 'No cards selected' });
+    }
+
+    // Get user's SlabTrack token
+    const userResult = await pool.query(
+      'SELECT slabtrack_api_token FROM users WHERE id = $1',
+      [userId]
+    );
+
+    const slabtrackToken = userResult.rows[0]?.slabtrack_api_token;
+    if (!slabtrackToken) {
+      return res.status(400).json({
+        error: 'SlabTrack not connected',
+        message: 'Please connect your SlabTrack account in Settings first'
+      });
+    }
+
+    console.log(`[SlabTrack] Sending ${cardIds.length} cards for user ${userId}`);
+
+    // Fetch the cards
+    const placeholders = cardIds.map((_, i) => `$${i + 1}`).join(',');
+    const cardsResult = await pool.query(`
+      SELECT * FROM cards
+      WHERE id IN (${placeholders}) AND user_id = $${cardIds.length + 1}
+    `, [...cardIds, userId]);
+
+    const cards = cardsResult.rows;
+
+    // Map CardFlow format to SlabTrack format
+    const mappedCards = cards.map(card => {
+      const data = typeof card.card_data === 'string' ? JSON.parse(card.card_data) : card.card_data;
+
+      // Convert booleans properly
+      const isGraded = data.is_graded === true || data.is_graded === 'Yes' || data.is_graded === 'yes';
+      const isAutographed = data.is_autograph === true || data.is_autograph === 'Yes' ||
+                            data.is_autographed === true || data.is_autographed === 'Yes';
+
+      return {
+        player: data.player || '',
+        year: data.year ? parseInt(data.year) : null,
+        set_name: data.set_name || '',
+        card_number: String(data.card_number || ''),
+        parallel: data.parallel || 'Base',
+        sport: (data.sport || '').toLowerCase(),
+        team: data.team || '',
+        is_graded: isGraded,
+        grading_company: isGraded ? (data.grading_company || '') : null,
+        grade: isGraded ? (data.grade || '') : null,
+        cert_number: isGraded ? (data.cert_number || '') : null,
+        is_autographed: isAutographed,
+        serial_number: data.serial_number || null,
+        numbered_to: data.numbered_to ? parseInt(data.numbered_to) : null,
+        asking_price: data.my_price ? parseFloat(data.my_price) : (data.asking_price ? parseFloat(data.asking_price) : null),
+        purchase_price: data.purchase_price ? parseFloat(data.purchase_price) : null,
+        condition: !isGraded ? (data.condition || '') : null,
+        notes: data.notes || '',
+        front_image_url: card.front_image_path || '',
+        back_image_url: card.back_image_path || ''
+      };
+    });
+
+    // Send to SlabTrack
+    const response = await axios.post(`${SLABTRACK_API}/atlas/bulk-import`, {
+      cards: mappedCards
+    }, {
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${slabtrackToken}`
+      },
+      timeout: 60000 // 60 second timeout for large imports
+    });
+
+    console.log(`[SlabTrack] Send complete: ${response.data?.imported || cards.length} cards imported`);
+
+    res.json({
+      success: true,
+      imported: response.data?.imported || cards.length,
+      message: `Successfully sent ${response.data?.imported || cards.length} cards to SlabTrack`
+    });
+
+  } catch (e) {
+    console.error('SlabTrack send error:', e.response?.data || e.message);
+
+    // Handle specific errors
+    if (e.response?.status === 401) {
+      return res.status(401).json({
+        error: 'SlabTrack authentication failed',
+        message: 'Your SlabTrack token may be invalid or expired. Please reconnect in Settings.'
+      });
+    }
+
+    if (e.response?.status === 400) {
+      return res.status(400).json({
+        error: 'SlabTrack rejected the data',
+        message: e.response.data?.error || 'Invalid card data format'
+      });
+    }
+
+    res.status(500).json({
+      error: 'Failed to send to SlabTrack',
+      message: e.message
+    });
+  }
+});
+
 // Export to generic CSV
 app.post('/api/export/csv', authenticateToken, async (req, res) => {
   try {

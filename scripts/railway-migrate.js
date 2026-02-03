@@ -226,6 +226,10 @@ BEGIN
     ALTER TABLE users ADD COLUMN google_api_key TEXT;
     ALTER TABLE users ADD COLUMN preferred_ai_provider VARCHAR(50) DEFAULT 'anthropic';
   END IF;
+  -- SlabTrack integration token
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'users' AND column_name = 'slabtrack_api_token') THEN
+    ALTER TABLE users ADD COLUMN slabtrack_api_token TEXT;
+  END IF;
 END $$;
 
 -- Indexes for performance

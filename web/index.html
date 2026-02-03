@@ -841,6 +841,162 @@
       min-width: 60px;
     }
 
+    /* Inline Editing Styles */
+    .card-price-inline {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      padding: 8px 16px;
+      background: rgba(0, 255, 136, 0.1);
+      border-bottom: 1px solid var(--glass-border);
+    }
+
+    .card-price-inline .price-label {
+      color: var(--success);
+      font-weight: 700;
+      font-size: 18px;
+    }
+
+    .inline-price-input {
+      background: transparent;
+      border: none;
+      border-bottom: 2px solid transparent;
+      color: var(--success);
+      font-size: 24px;
+      font-weight: 700;
+      width: 100px;
+      padding: 4px 8px;
+      transition: all 0.2s ease;
+    }
+
+    .inline-price-input:hover {
+      border-bottom-color: var(--glass-border);
+    }
+
+    .inline-price-input:focus {
+      outline: none;
+      border-bottom-color: var(--success);
+      background: rgba(0, 255, 136, 0.1);
+    }
+
+    .inline-price-input::placeholder {
+      color: rgba(255, 255, 255, 0.3);
+    }
+
+    /* Remove number input spinners */
+    .inline-price-input::-webkit-outer-spin-button,
+    .inline-price-input::-webkit-inner-spin-button {
+      -webkit-appearance: none;
+      margin: 0;
+    }
+    .inline-price-input[type=number] {
+      -moz-appearance: textfield;
+    }
+
+    .inline-edit-field {
+      background: transparent;
+      border: none;
+      border-bottom: 1px solid transparent;
+      color: var(--text);
+      padding: 4px 6px;
+      transition: all 0.2s ease;
+      width: 100%;
+    }
+
+    .inline-edit-field:hover {
+      border-bottom-color: var(--glass-border);
+      background: rgba(255, 255, 255, 0.03);
+    }
+
+    .inline-edit-field:focus {
+      outline: none;
+      border-bottom-color: var(--cyan);
+      background: rgba(0, 212, 255, 0.05);
+    }
+
+    .inline-edit-field::placeholder {
+      color: rgba(255, 255, 255, 0.3);
+      font-style: italic;
+    }
+
+    .inline-edit-player {
+      font-size: 16px;
+      font-weight: 700;
+      flex: 1;
+    }
+
+    .inline-edit-year {
+      width: 60px;
+      flex: 0 0 60px;
+      text-align: center;
+    }
+
+    .inline-edit-set {
+      flex: 1;
+    }
+
+    .inline-edit-number {
+      width: 50px;
+    }
+
+    .inline-edit-parallel {
+      flex: 1;
+      font-size: 13px;
+      color: var(--purple);
+    }
+
+    .card-set-row {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      margin-bottom: 6px;
+    }
+
+    .card-details-row {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+
+    .inline-field-group {
+      display: flex;
+      align-items: center;
+      gap: 2px;
+    }
+
+    .field-prefix {
+      color: var(--text-muted);
+      font-size: 13px;
+    }
+
+    .card-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 6px;
+    }
+
+    /* Saving indicator */
+    .inline-edit-field.saving,
+    .inline-price-input.saving {
+      opacity: 0.6;
+      pointer-events: none;
+    }
+
+    .inline-edit-field.saved {
+      animation: savedFlash 0.5s ease;
+    }
+
+    .inline-price-input.saved {
+      animation: savedFlash 0.5s ease;
+    }
+
+    @keyframes savedFlash {
+      0% { background: rgba(0, 255, 136, 0.3); }
+      100% { background: transparent; }
+    }
+
     /* Empty State */
     .empty-state {
       text-align: center;
@@ -1574,8 +1730,10 @@
         <button class="btn btn-accent" onclick="bulkListSelected()">📦 List Selected</button>
         <button class="btn btn-success" onclick="bulkMarkSold()">💰 Mark Sold</button>
         <button class="btn btn-secondary" onclick="showLinkMatrix()">🔗 Link Matrix</button>
-        <button class="btn btn-primary" onclick="exportSelected('csv')">📄 Export CSV</button>
-        <button class="btn btn-primary" onclick="exportSelected('excel')">📊 Export Excel</button>
+        <button class="btn btn-primary" onclick="exportSelected('csv')">📄 CSV</button>
+        <button class="btn btn-primary" onclick="exportSelected('excel')">📊 Excel</button>
+        <button class="btn btn-primary" onclick="exportSelected('slabtrack')">📋 SlabTrack Excel</button>
+        <button class="btn btn-accent" onclick="sendToSlabTrack()" id="send-slabtrack-btn" style="background: linear-gradient(135deg, #00d4ff, #7b2ff7);">🚀 Send to SlabTrack</button>
         <button class="btn btn-danger" onclick="bulkDeleteSelected()">🗑️ Delete</button>
       </div>
     </div>
@@ -1991,6 +2149,7 @@
         <div class="settings-tabs">
           <button class="settings-tab active" data-tab="api" onclick="switchSettingsTab('api')">API Key</button>
           <button class="settings-tab" data-tab="ebay" onclick="switchSettingsTab('ebay')">eBay</button>
+          <button class="settings-tab" data-tab="slabtrack" onclick="switchSettingsTab('slabtrack')">SlabTrack</button>
           <button class="settings-tab" data-tab="models" onclick="switchSettingsTab('models')">Models</button>
           <button class="settings-tab" data-tab="costs" onclick="switchSettingsTab('costs')">Costs</button>
           <button class="settings-tab" data-tab="account" onclick="switchSettingsTab('account')">Account</button>
@@ -2086,6 +2245,60 @@
 
               <button class="btn btn-danger" onclick="disconnectEbay()">Disconnect eBay</button>
             </div>
+          </div>
+        </div>
+
+        <div class="settings-panel" id="panel-slabtrack">
+          <h4 style="margin-bottom: 16px;">SlabTrack Connection</h4>
+          <div id="slabtrack-status" style="background: var(--glass); border-radius: 12px; padding: 20px; margin-bottom: 16px;">
+            <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 16px;">
+              <div id="slabtrack-indicator" style="width: 16px; height: 16px; border-radius: 50%; background: var(--error);"></div>
+              <div>
+                <div id="slabtrack-status-text" style="font-weight: 600; font-size: 16px;">Not Connected</div>
+                <div id="slabtrack-token-preview" style="font-size: 12px; color: var(--text-muted);"></div>
+              </div>
+            </div>
+
+            <div id="slabtrack-not-connected">
+              <p style="margin-bottom: 16px; color: var(--text-muted);">
+                Connect your SlabTrack account to send cards directly from CardFlow to your SlabTrack collection.
+              </p>
+              <div style="margin-bottom: 16px;">
+                <label style="display: block; margin-bottom: 8px; font-size: 12px; color: var(--text-muted);">SlabTrack API Token</label>
+                <input type="password" id="slabtrack-token-input" placeholder="Paste your SlabTrack API token..."
+                       style="width: 100%; padding: 12px 16px; background: rgba(0,0,0,0.3); border: 1px solid var(--glass-border); border-radius: 8px; color: var(--text); font-family: monospace; margin-bottom: 8px;">
+                <p style="font-size: 11px; color: var(--text-muted);">
+                  Get your API token from <a href="https://slabtrack.be1st.io/settings" target="_blank" style="color: var(--cyan);">SlabTrack Settings</a> → API Keys
+                </p>
+              </div>
+              <button class="btn btn-primary" onclick="connectSlabTrack()">Connect SlabTrack</button>
+            </div>
+
+            <div id="slabtrack-connected" style="display: none;">
+              <div style="background: rgba(0, 255, 136, 0.1); border: 1px solid rgba(0, 255, 136, 0.3); border-radius: 8px; padding: 16px; margin-bottom: 16px;">
+                <div style="display: flex; align-items: center; gap: 12px;">
+                  <span style="font-size: 28px;">✓</span>
+                  <div>
+                    <div style="font-weight: 600; color: var(--success);">SlabTrack Connected</div>
+                    <div style="font-size: 12px; color: var(--text-muted);">You can send cards directly to your SlabTrack collection.</div>
+                  </div>
+                </div>
+              </div>
+              <p style="margin-bottom: 16px; color: var(--text-muted);">
+                Use the "Send to SlabTrack" button when selecting cards to transfer them to your SlabTrack collection.
+              </p>
+              <button class="btn btn-danger" onclick="disconnectSlabTrack()">Disconnect SlabTrack</button>
+            </div>
+          </div>
+
+          <div style="background: var(--glass); border-radius: 8px; padding: 16px;">
+            <h5 style="margin-bottom: 12px; color: var(--cyan);">About SlabTrack Integration</h5>
+            <ul style="font-size: 13px; color: var(--text-muted); line-height: 1.8; padding-left: 20px;">
+              <li>Cards are sent directly to your SlabTrack collection via API</li>
+              <li>No file download needed - instant transfer</li>
+              <li>All card data including images are transferred</li>
+              <li>Your token is stored securely and never shared</li>
+            </ul>
           </div>
         </div>
 
@@ -3830,6 +4043,9 @@
           </div>
         ` : '';
 
+        const askingPrice = card.my_price || card.asking_price || '';
+        const cardNum = card.card_number || '';
+
         return `
           <div class="card-item ${isSelected ? 'selected' : ''}" data-id="${card.id}" style="position: relative; ${isSelected ? 'border-color: var(--cyan); box-shadow: 0 0 20px var(--cyan-glow);' : ''}">
             ${checkboxHtml}
@@ -3845,21 +4061,77 @@
               </div>
               ` : ''}
             </div>
+
+            <!-- Inline Editable Price -->
+            <div class="card-price-inline" onclick="event.stopPropagation()">
+              <span class="price-label">$</span>
+              <input type="number" step="0.01" min="0" class="inline-price-input"
+                     value="${askingPrice}"
+                     placeholder="0.00"
+                     onchange="saveInlineField('${card.id}', 'my_price', this.value)"
+                     onkeydown="if(event.key==='Enter'){this.blur()}"
+                     title="Asking Price">
+            </div>
+
             <div class="card-info" ${selectMode ? `onclick="toggleCardSelection('${card.id}')" style="cursor: pointer;"` : ''}>
+              <!-- Editable Player -->
               <div class="card-header">
-                <div class="card-player">${card.player || 'Unknown'}</div>
+                <input type="text" class="inline-edit-field inline-edit-player"
+                       value="${(card.player || '').replace(/"/g, '&quot;')}"
+                       placeholder="Player Name"
+                       onclick="event.stopPropagation()"
+                       onchange="saveInlineField('${card.id}', 'player', this.value)"
+                       onkeydown="if(event.key==='Enter'){this.blur()}"
+                       title="Click to edit player">
                 <span class="status-badge status-${card.status}">${card.status}</span>
               </div>
-              <div class="card-set">${card.year || ''} ${card.set_name || ''}</div>
-              ${parallelInfo ? `<div class="card-parallel">${parallelInfo}</div>` : ''}
+
+              <!-- Editable Year + Set -->
+              <div class="card-set-row">
+                <input type="text" class="inline-edit-field inline-edit-year"
+                       value="${card.year || ''}"
+                       placeholder="Year"
+                       onclick="event.stopPropagation()"
+                       onchange="saveInlineField('${card.id}', 'year', this.value)"
+                       onkeydown="if(event.key==='Enter'){this.blur()}"
+                       title="Click to edit year">
+                <input type="text" class="inline-edit-field inline-edit-set"
+                       value="${(card.set_name || '').replace(/"/g, '&quot;')}"
+                       placeholder="Set Name"
+                       onclick="event.stopPropagation()"
+                       onchange="saveInlineField('${card.id}', 'set_name', this.value)"
+                       onkeydown="if(event.key==='Enter'){this.blur()}"
+                       title="Click to edit set">
+              </div>
+
+              <!-- Editable Card # + Parallel -->
+              <div class="card-details-row">
+                <div class="inline-field-group">
+                  <span class="field-prefix">#</span>
+                  <input type="text" class="inline-edit-field inline-edit-number"
+                         value="${cardNum}"
+                         placeholder="Card #"
+                         onclick="event.stopPropagation()"
+                         onchange="saveInlineField('${card.id}', 'card_number', this.value)"
+                         onkeydown="if(event.key==='Enter'){this.blur()}"
+                         title="Click to edit card number">
+                </div>
+                <input type="text" class="inline-edit-field inline-edit-parallel"
+                       value="${(card.parallel || '').replace(/"/g, '&quot;')}"
+                       placeholder="Parallel"
+                       onclick="event.stopPropagation()"
+                       onchange="saveInlineField('${card.id}', 'parallel', this.value)"
+                       onkeydown="if(event.key==='Enter'){this.blur()}"
+                       title="Click to edit parallel">
+              </div>
+
               <div class="card-meta">
                 ${gradeInfo ? `<span class="card-grade">${gradeInfo}</span>` : ''}
               </div>
             </div>
             <div class="card-actions">
               <button class="btn btn-success btn-sm" onclick="showPriceLinks('${card.id}')" title="Price Research">💰</button>
-              <button class="btn btn-secondary btn-sm" onclick="setCardPrice('${card.id}')" title="Set Price">💲</button>
-              <button class="btn btn-secondary" onclick="editCard('${card.id}')">Edit</button>
+              <button class="btn btn-secondary" onclick="editCard('${card.id}')" title="Full Edit">Edit</button>
               ${card.status === 'listed' ? `
                 <button class="btn btn-accent" onclick="window.open(cards.find(c=>c.id==='${card.id}')?.ebay_listing_url || 'https://ebay.com', '_blank')">View on eBay</button>
               ` : card.status === 'sold' ? `
@@ -3925,6 +4197,50 @@
       loadStatus();
     }
 
+    // Inline field save with auto-save on change
+    async function saveInlineField(cardId, field, value) {
+      const input = event?.target;
+      if (input) {
+        input.classList.add('saving');
+      }
+
+      try {
+        // Build update payload
+        const updates = {};
+        updates[field] = value;
+
+        // For price fields, convert to number
+        if (field === 'my_price' || field === 'asking_price') {
+          updates[field] = value ? parseFloat(value) : null;
+        }
+
+        const result = await api(`/cards/${cardId}`, {
+          method: 'PUT',
+          body: JSON.stringify(updates)
+        });
+
+        if (result) {
+          // Update local cards array
+          const cardIndex = cards.findIndex(c => c.id === cardId);
+          if (cardIndex !== -1) {
+            cards[cardIndex] = { ...cards[cardIndex], ...updates };
+          }
+
+          if (input) {
+            input.classList.remove('saving');
+            input.classList.add('saved');
+            setTimeout(() => input.classList.remove('saved'), 500);
+          }
+        }
+      } catch (error) {
+        console.error('Failed to save field:', error);
+        showToast('Failed to save', 'error');
+        if (input) {
+          input.classList.remove('saving');
+        }
+      }
+    }
+
     async function approveAll() {
       const result = await api('/cards/approve-all', { method: 'POST' });
       if (result) {
@@ -3965,6 +4281,8 @@
       document.getElementById(`panel-${tab}`).classList.add('active');
       if (tab === 'ebay') {
         loadEbayStatus();
+      } else if (tab === 'slabtrack') {
+        loadSlabTrackStatus();
       }
     }
 
@@ -4166,6 +4484,125 @@
         showToast('Shipping settings saved', 'success');
       } catch (e) {
         showToast('Failed to save shipping settings: ' + e.message, 'error');
+      }
+    }
+
+    // ==========================================
+    // SLABTRACK INTEGRATION FUNCTIONS
+    // ==========================================
+
+    async function loadSlabTrackStatus() {
+      try {
+        const data = await api('/slabtrack/status');
+        if (!data) return;
+
+        const indicator = document.getElementById('slabtrack-indicator');
+        const statusText = document.getElementById('slabtrack-status-text');
+        const tokenPreview = document.getElementById('slabtrack-token-preview');
+        const notConnected = document.getElementById('slabtrack-not-connected');
+        const connected = document.getElementById('slabtrack-connected');
+
+        if (data.connected) {
+          indicator.style.background = 'var(--success)';
+          indicator.style.boxShadow = '0 0 10px var(--success-glow)';
+          statusText.textContent = 'Connected to SlabTrack';
+          tokenPreview.textContent = data.tokenPreview ? `Token: ${data.tokenPreview}` : '';
+          notConnected.style.display = 'none';
+          connected.style.display = 'block';
+        } else {
+          indicator.style.background = 'var(--error)';
+          indicator.style.boxShadow = 'none';
+          statusText.textContent = 'Not Connected';
+          tokenPreview.textContent = '';
+          notConnected.style.display = 'block';
+          connected.style.display = 'none';
+        }
+      } catch (e) {
+        console.error('Failed to load SlabTrack status:', e);
+      }
+    }
+
+    async function connectSlabTrack() {
+      const tokenInput = document.getElementById('slabtrack-token-input');
+      const token = tokenInput.value.trim();
+
+      if (!token) {
+        showToast('Please enter your SlabTrack API token', 'error');
+        return;
+      }
+
+      try {
+        const result = await api('/slabtrack/token', {
+          method: 'POST',
+          body: JSON.stringify({ token })
+        });
+
+        if (result?.success) {
+          showToast('SlabTrack connected successfully!', 'success');
+          tokenInput.value = '';
+          loadSlabTrackStatus();
+        } else {
+          showToast(result?.error || 'Failed to connect', 'error');
+        }
+      } catch (e) {
+        showToast('Failed to connect SlabTrack: ' + e.message, 'error');
+      }
+    }
+
+    async function disconnectSlabTrack() {
+      if (!confirm('Disconnect SlabTrack? You will need to re-enter your token to send cards.')) return;
+
+      try {
+        await api('/slabtrack/token', { method: 'DELETE' });
+        showToast('SlabTrack disconnected', 'success');
+        loadSlabTrackStatus();
+      } catch (e) {
+        showToast('Failed to disconnect: ' + e.message, 'error');
+      }
+    }
+
+    async function sendToSlabTrack() {
+      if (selectedCards.size === 0) {
+        showToast('No cards selected', 'error');
+        return;
+      }
+
+      // Check if connected first
+      const status = await api('/slabtrack/status');
+      if (!status?.connected) {
+        showToast('Please connect your SlabTrack account in Settings first', 'error');
+        showSettingsModal('slabtrack');
+        return;
+      }
+
+      if (!confirm(`Send ${selectedCards.size} card(s) to your SlabTrack collection?`)) return;
+
+      const btn = document.getElementById('send-slabtrack-btn');
+      const originalText = btn.innerHTML;
+      btn.disabled = true;
+      btn.innerHTML = '⏳ Sending...';
+
+      try {
+        const result = await api('/slabtrack/send', {
+          method: 'POST',
+          body: JSON.stringify({
+            cardIds: Array.from(selectedCards)
+          })
+        });
+
+        if (result?.success) {
+          showToast(`Successfully sent ${result.imported} cards to SlabTrack!`, 'success');
+          selectedCards.clear();
+          updateSelectedCount();
+          renderCards();
+        } else {
+          showToast(result?.error || 'Failed to send cards', 'error');
+        }
+      } catch (e) {
+        showToast('Failed to send to SlabTrack: ' + e.message, 'error');
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = originalText;
       }
     }
 
