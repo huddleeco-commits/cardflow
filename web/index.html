@@ -6584,10 +6584,10 @@
       { id: 'ebayAuctions', name: 'eBay Auctions', icon: '🔨', desc: 'Active auctions', category: 'primary' },
       { id: 'comc', name: 'COMC', icon: '📦', desc: 'Check Out My Cards', category: 'primary' },
       { id: 'googleShopping', name: 'Google Shopping', icon: '🛍️', desc: 'Google product listings', category: 'primary' },
-      { id: 'sportscardspro', name: 'SportsCardsPro', icon: '💹', desc: 'Direct price guide & images', category: 'research' },
-      { id: 'googleResearch', name: 'Google Research', icon: '🔍', desc: 'Card Ladder, Market Movers, Goldin, PWCC, Beckett', category: 'research' },
-      { id: '130point', name: '130point', icon: '📊', desc: 'Price history & trends', category: 'research' },
-      { id: 'psacard', name: 'PSA Auction Prices', icon: '🎯', desc: 'PSA certified sales', category: 'research' }
+      { id: 'sportscardspro', name: 'SportsCardsPro', icon: '💹', desc: 'Price guide (via Google)', category: 'research' },
+      { id: 'googleResearch', name: 'Google Research', icon: '🔍', desc: 'Card Ladder, Market Movers, Beckett, 130point', category: 'research' },
+      { id: '130point', name: '130point', icon: '📊', desc: 'eBay price history & trends', category: 'research' },
+      { id: 'psacard', name: 'PSA', icon: '🎯', desc: 'Cert lookup or auction prices', category: 'research' }
     ];
 
     // Top card pricing sites for Google Research filter
@@ -6612,53 +6612,43 @@
       const qPlus = query.replace(/\s+/g, '+');
 
       // Build Google Research filter (searches across top pricing sites)
+      // These are the authoritative pricing/research sites
       const siteFilter = RESEARCH_SITES.map(s => `site:${s}`).join(' OR ');
       const researchFilter = encodeURIComponent(siteFilter);
 
-      // Build SportsCardsPro direct URL
-      // Format: /game/{sport}-cards-{year}-{set-slug}/{player-slug}-{parallel?}-{card-number}
-      const getSportsCardsProUrl = () => {
-        const sport = (card.sport || 'football').toLowerCase();
-        const sportPrefix = sport === 'pokemon' ? 'pokemon' : `${sport}-cards`;
-
-        // Build slugs (lowercase, dashes, alphanumeric only)
-        const setSlug = (card.set_name || '')
-          .toLowerCase()
-          .replace(/\s+/g, '-')
-          .replace(/[^a-z0-9-]/g, '');
-        const playerSlug = (card.player || '')
-          .toLowerCase()
-          .replace(/\./g, '')
-          .replace(/\s+/g, '-')
-          .replace(/[^a-z0-9-]/g, '');
-        const parallelSlug = card.parallel && card.parallel.toLowerCase() !== 'base'
-          ? card.parallel.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '')
-          : '';
-        const cardNum = String(card.card_number || '').replace(/^#/, '');
-
-        // Try to build direct URL if we have all required fields
-        if (card.year && setSlug && playerSlug && cardNum) {
-          const cardPath = parallelSlug
-            ? `${playerSlug}-${parallelSlug}-${cardNum}`
-            : `${playerSlug}-${cardNum}`;
-          return `https://www.sportscardspro.com/game/${sportPrefix}-${card.year}-${setSlug}/${cardPath}`;
+      // PSA URL - direct cert lookup if cert exists, otherwise auction prices
+      const getPsaUrl = () => {
+        if (card.cert_number) {
+          // Direct cert lookup
+          return `https://www.psacard.com/cert/${card.cert_number}`;
         }
-
-        // Fallback to search
-        const searchTerms = [card.player, card.year, card.set_name, card.card_number].filter(Boolean).join(' ');
-        return `https://www.sportscardspro.com/console/${sportPrefix}?q=${encodeURIComponent(searchTerms)}`;
+        // Search auction prices directly on PSA
+        return `https://www.psacard.com/auctionprices#!/?q=${q}`;
       };
 
       const urls = {
+        // eBay URLs (matching SlabTrack exactly)
         ebaySold: `https://www.ebay.com/sch/i.html?_nkw=${q}&LH_Complete=1&LH_Sold=1&_sop=13`,
         ebayBIN: `https://www.ebay.com/sch/i.html?_nkw=${q}&LH_BIN=1&_sop=15`,
         ebayAuctions: `https://www.ebay.com/sch/i.html?_nkw=${q}&LH_Auction=1&_sop=1`,
+
+        // COMC
         comc: `https://www.comc.com/Cards,sr,=${qPlus},fb,i100`,
+
+        // Google Shopping (products)
         googleShopping: `https://www.google.com/search?q=${q}&tbm=shop`,
+
+        // Google Research - combined search across top pricing sites
         googleResearch: `https://www.google.com/search?q=${qPlus}+(${researchFilter})`,
-        sportscardspro: getSportsCardsProUrl(),
+
+        // SportsCardsPro via Google site search (their internal search is unreliable)
+        sportscardspro: `https://www.google.com/search?q=site:sportscardspro.com+${qPlus}`,
+
+        // 130point direct
         '130point': `https://130point.com/sales/?search=${q}`,
-        psacard: `https://www.google.com/search?q=site:psacard.com/auctionprices+${qPlus}`
+
+        // PSA direct (cert lookup or auction prices)
+        psacard: getPsaUrl()
       };
       return urls[sourceId];
     }
