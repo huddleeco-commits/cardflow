@@ -476,6 +476,100 @@ app.post('/api/auth/login', async (req, res) => {
   }
 });
 
+// SlabTrack Login - Verify token, create/link account
+app.post('/api/auth/slabtrack-login', async (req, res) => {
+  const { slabtrackToken } = req.body;
+
+  if (!slabtrackToken) {
+    return res.status(400).json({ error: 'SlabTrack token required' });
+  }
+
+  try {
+    // Verify token with SlabTrack API
+    console.log('[SlabTrack Auth] Verifying token...');
+    const stResponse = await axios.get(`${SLABTRACK_API}/users/me`, {
+      headers: { 'X-API-Token': slabtrackToken },
+      timeout: 15000
+    });
+
+    if (!stResponse.data?.success || !stResponse.data?.user) {
+      return res.status(401).json({ error: 'Invalid SlabTrack token' });
+    }
+
+    const stUser = stResponse.data.user;
+    console.log(`[SlabTrack Auth] Token verified for: ${stUser.email}`);
+
+    // Find or create CardFlow user by email
+    const email = stUser.email.toLowerCase().trim();
+    let user;
+
+    const existingUser = await pool.query(
+      'SELECT * FROM users WHERE email = $1',
+      [email]
+    );
+
+    if (existingUser.rows.length > 0) {
+      // Update existing user with SlabTrack link
+      user = existingUser.rows[0];
+      await pool.query(`
+        UPDATE users SET
+          slabtrack_api_token = $1,
+          slabtrack_user_id = $2,
+          slabtrack_tier = $3,
+          last_login_at = NOW()
+        WHERE id = $4
+      `, [slabtrackToken, stUser.id, stUser.subscription_tier, user.id]);
+
+      console.log(`[SlabTrack Auth] Linked existing user: ${user.id}`);
+    } else {
+      // Create new CardFlow account (no password - they use SlabTrack)
+      const result = await pool.query(`
+        INSERT INTO users (email, name, slabtrack_api_token, slabtrack_user_id, slabtrack_tier, auth_method, last_login_at)
+        VALUES ($1, $2, $3, $4, $5, 'slabtrack', NOW())
+        RETURNING *
+      `, [email, stUser.fullName || stUser.full_name || 'SlabTrack User', slabtrackToken, stUser.id, stUser.subscription_tier]);
+
+      user = result.rows[0];
+      console.log(`[SlabTrack Auth] Created new user: ${user.id}`);
+    }
+
+    // Determine if user can use SlabTrack scanning API
+    const scanApiTiers = ['power', 'dealer'];
+    const canUseScanAPI = scanApiTiers.includes(stUser.subscription_tier);
+
+    // Generate CardFlow JWT
+    const token = jwt.sign({
+      id: user.id,
+      email: user.email,
+      role: user.role || 'user',
+      subscription_tier: user.subscription_tier || 'free'
+    }, JWT_SECRET, { expiresIn: JWT_EXPIRY });
+
+    res.json({
+      success: true,
+      token,
+      user: {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        role: user.role || 'user',
+        subscriptionTier: user.subscription_tier || 'free',
+        hasApiKey: !!user.api_key
+      },
+      slabtrackLinked: true,
+      slabtrackTier: stUser.subscription_tier,
+      canUseScanAPI
+    });
+
+  } catch (e) {
+    console.error('[SlabTrack Auth] Error:', e.message);
+    if (e.response?.status === 401) {
+      return res.status(401).json({ error: 'Invalid or expired SlabTrack token' });
+    }
+    res.status(500).json({ error: 'Failed to verify SlabTrack token' });
+  }
+});
+
 // Get current user
 app.get('/api/auth/me', authenticateToken, async (req, res) => {
   try {

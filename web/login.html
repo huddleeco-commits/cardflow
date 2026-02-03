@@ -313,6 +313,65 @@
       90% { opacity: 0.3; }
       100% { transform: translateY(-100vh) rotate(720deg); opacity: 0; }
     }
+
+    /* SlabTrack button */
+    .btn-slabtrack {
+      width: 100%;
+      padding: 16px 24px;
+      background: linear-gradient(135deg, var(--purple), #5a1fd6);
+      border: 1px solid rgba(123, 47, 247, 0.5);
+      border-radius: 12px;
+      color: #fff;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .btn-slabtrack:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 10px 40px var(--purple-glow), 0 0 60px rgba(123, 47, 247, 0.2);
+    }
+
+    /* Divider */
+    .divider {
+      display: flex;
+      align-items: center;
+      margin: 24px 0;
+      color: var(--text-muted);
+      font-size: 12px;
+    }
+
+    .divider::before,
+    .divider::after {
+      content: '';
+      flex: 1;
+      height: 1px;
+      background: var(--glass-border);
+    }
+
+    .divider span {
+      padding: 0 16px;
+    }
+
+    /* Text button */
+    .btn-text {
+      background: none;
+      border: none;
+      color: var(--text-muted);
+      font-size: 13px;
+      cursor: pointer;
+      transition: color 0.3s ease;
+      width: 100%;
+      text-align: center;
+    }
+
+    .btn-text:hover {
+      color: var(--cyan);
+    }
   </style>
 </head>
 <body>
@@ -330,6 +389,35 @@
       </div>
 
       <div class="error-message" id="error-message"></div>
+
+      <!-- SlabTrack Login Section -->
+      <div id="slabtrack-login-section">
+        <button type="button" class="btn-slabtrack" onclick="openSlabtrackConnect()">
+          <span style="font-size: 20px; margin-right: 8px;">🔗</span>
+          Sign in with SlabTrack
+        </button>
+        <p style="font-size: 11px; color: var(--text-muted); text-align: center; margin-top: 8px;">
+          Power/Dealer users • Scanning included
+        </p>
+      </div>
+
+      <!-- SlabTrack Token Input (hidden until user clicks Sign in with SlabTrack) -->
+      <div id="slabtrack-token-section" style="display: none;">
+        <div class="form-group">
+          <label class="form-label">Paste Your SlabTrack Token</label>
+          <input type="password" class="form-input" id="slabtrack-token" placeholder="Paste token from SlabTrack..." autocomplete="off">
+        </div>
+        <button type="button" class="btn-primary" id="slabtrack-submit-btn" onclick="loginWithSlabtrackToken()">
+          <span id="slabtrack-btn-text">Connect & Sign In</span>
+        </button>
+        <button type="button" class="btn-text" onclick="cancelSlabtrackLogin()" style="margin-top: 12px;">
+          ← Back to login options
+        </button>
+      </div>
+
+      <div class="divider" id="login-divider">
+        <span>or sign in with email</span>
+      </div>
 
       <form id="login-form">
         <div class="form-group">
@@ -416,6 +504,92 @@
         errorEl.classList.add('show');
         submitBtn.disabled = false;
         btnText.textContent = 'Access System';
+      }
+    });
+
+    // ==========================================
+    // SLABTRACK LOGIN FLOW
+    // ==========================================
+
+    function openSlabtrackConnect() {
+      // Open SlabTrack connect page
+      window.open('https://slabtrack.io/connect/cardflow', '_blank');
+
+      // Show token input section
+      document.getElementById('slabtrack-login-section').style.display = 'none';
+      document.getElementById('slabtrack-token-section').style.display = 'block';
+      document.getElementById('login-divider').style.display = 'none';
+      document.getElementById('login-form').style.display = 'none';
+
+      // Focus on token input
+      setTimeout(() => {
+        document.getElementById('slabtrack-token').focus();
+      }, 100);
+    }
+
+    function cancelSlabtrackLogin() {
+      // Show normal login UI
+      document.getElementById('slabtrack-login-section').style.display = 'block';
+      document.getElementById('slabtrack-token-section').style.display = 'none';
+      document.getElementById('login-divider').style.display = 'flex';
+      document.getElementById('login-form').style.display = 'block';
+      document.getElementById('slabtrack-token').value = '';
+    }
+
+    async function loginWithSlabtrackToken() {
+      const token = document.getElementById('slabtrack-token').value.trim();
+      const errorEl = document.getElementById('error-message');
+      const submitBtn = document.getElementById('slabtrack-submit-btn');
+      const btnText = document.getElementById('slabtrack-btn-text');
+
+      if (!token) {
+        errorEl.textContent = 'Please paste your SlabTrack token';
+        errorEl.classList.add('show');
+        return;
+      }
+
+      errorEl.classList.remove('show');
+      submitBtn.disabled = true;
+      btnText.innerHTML = '<span class="spinner"></span>Verifying...';
+
+      try {
+        // Call CardFlow backend to verify token and login/create account
+        const response = await fetch(`${API_URL}/auth/slabtrack-login`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ slabtrackToken: token })
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error(data.error || 'Failed to verify SlabTrack token');
+        }
+
+        // Store token and user data
+        localStorage.setItem('token', data.token);
+        localStorage.setItem('user', JSON.stringify(data.user));
+
+        // Store SlabTrack-specific info
+        if (data.slabtrackTier) {
+          localStorage.setItem('slabtrack_tier', data.slabtrackTier);
+        }
+
+        // Redirect to dashboard
+        window.location.href = '/app';
+
+      } catch (error) {
+        errorEl.textContent = error.message;
+        errorEl.classList.add('show');
+        submitBtn.disabled = false;
+        btnText.textContent = 'Connect & Sign In';
+      }
+    }
+
+    // Allow Enter key to submit token
+    document.getElementById('slabtrack-token')?.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') {
+        loginWithSlabtrackToken();
       }
     });
   </script>

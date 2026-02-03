@@ -40,7 +40,7 @@ CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 CREATE TABLE IF NOT EXISTS users (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   email VARCHAR(255) UNIQUE NOT NULL,
-  password_hash VARCHAR(255) NOT NULL,
+  password_hash VARCHAR(255),
   name VARCHAR(255),
   role VARCHAR(50) DEFAULT 'user',
   api_key TEXT,
@@ -229,6 +229,18 @@ BEGIN
   -- SlabTrack integration token
   IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'users' AND column_name = 'slabtrack_api_token') THEN
     ALTER TABLE users ADD COLUMN slabtrack_api_token TEXT;
+  END IF;
+  -- SlabTrack user ID
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'users' AND column_name = 'slabtrack_user_id') THEN
+    ALTER TABLE users ADD COLUMN slabtrack_user_id VARCHAR(255);
+  END IF;
+  -- SlabTrack tier (free, power, dealer)
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'users' AND column_name = 'slabtrack_tier') THEN
+    ALTER TABLE users ADD COLUMN slabtrack_tier VARCHAR(50);
+  END IF;
+  -- Auth method (password, slabtrack)
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'users' AND column_name = 'auth_method') THEN
+    ALTER TABLE users ADD COLUMN auth_method VARCHAR(50) DEFAULT 'password';
   END IF;
 END $$;
 
