@@ -45,10 +45,57 @@
       border-radius: 12px;
       pointer-events: none;
       box-shadow: 0 0 0 9999px rgba(0,0,0,0.5);
+      transition: border-color 0.3s, box-shadow 0.3s;
     }
 
     .card-frame.back-mode {
       border-color: #7b2ff7;
+    }
+
+    .card-frame.jigsnap-detected {
+      border-color: #00ff88;
+      box-shadow: 0 0 0 9999px rgba(0,0,0,0.5), 0 0 30px rgba(0, 255, 136, 0.5);
+    }
+
+    /* JigSnap button */
+    .jigsnap-btn {
+      padding: 8px 14px;
+      background: rgba(255,255,255,0.1);
+      border: 1px solid rgba(255,255,255,0.2);
+      border-radius: 20px;
+      color: #fff;
+      font-size: 11px;
+      cursor: pointer;
+      margin-left: 8px;
+    }
+    .jigsnap-btn.active {
+      background: rgba(0, 255, 136, 0.2);
+      border-color: #00ff88;
+      color: #00ff88;
+    }
+
+    /* JigSnap status */
+    .jigsnap-status {
+      position: absolute;
+      top: 140px;
+      left: 50%;
+      transform: translateX(-50%);
+      padding: 8px 20px;
+      background: rgba(0,0,0,0.8);
+      border-radius: 20px;
+      font-size: 12px;
+      z-index: 10;
+      display: none;
+      border: 1px solid rgba(0, 255, 136, 0.3);
+    }
+    .jigsnap-status.show { display: block; }
+    .jigsnap-status.detected {
+      color: #00ff88;
+      border-color: #00ff88;
+    }
+    .jigsnap-status.searching {
+      color: #f59e0b;
+      border-color: #f59e0b;
     }
 
     .status-bar {
@@ -333,6 +380,7 @@
       </div>
       <div style="display: flex; align-items: center;">
         <button class="mode-toggle" id="mode-toggle" onclick="toggleMode()">PAIR MODE</button>
+        <button class="jigsnap-btn" id="jigsnap-btn" onclick="toggleJigSnap()">📐</button>
         <button class="voice-btn" id="voice-btn" onclick="toggleVoice()">🎤</button>
       </div>
     </div>
@@ -340,6 +388,10 @@
     <div class="voice-indicator" id="voice-indicator">Listening...</div>
 
     <div class="state-badge" id="state-badge">FRONT</div>
+
+    <div class="jigsnap-status" id="jigsnap-status">
+      <span id="jigsnap-text">Looking for green mat...</span>
+    </div>
 
     <div class="bulk-info" id="bulk-info">
       <span class="count" id="bulk-count">0</span> fronts captured
@@ -377,6 +429,13 @@
     // Voice recognition
     let recognition = null;
     let voiceEnabled = false;
+
+    // JigSnap mode
+    let jigSnapEnabled = false;
+    let jigSnapDetected = false;
+    let detectionCanvas = null;
+    let detectionCtx = null;
+    let detectionFrame = null;
 
     // Mode: 'pair' (front-back-front-back) or 'bulk' (all fronts, then all backs)
     let scanMode = 'pair';
@@ -711,6 +770,105 @@
     document.addEventListener('touchstart', e => {
       if (e.touches.length > 1) e.preventDefault();
     }, { passive: false });
+
+    // JigSnap functions
+    function toggleJigSnap() {
+      jigSnapEnabled = !jigSnapEnabled;
+      const btn = document.getElementById('jigsnap-btn');
+      const status = document.getElementById('jigsnap-status');
+      const cardFrame = document.getElementById('card-frame');
+
+      btn.classList.toggle('active', jigSnapEnabled);
+
+      if (jigSnapEnabled) {
+        status.classList.add('show', 'searching');
+        status.classList.remove('detected');
+        document.getElementById('jigsnap-text').textContent = 'Looking for green mat...';
+        startJigSnapDetection();
+        playSound('front');
+      } else {
+        status.classList.remove('show');
+        cardFrame.classList.remove('jigsnap-detected');
+        jigSnapDetected = false;
+        stopJigSnapDetection();
+      }
+    }
+
+    function startJigSnapDetection() {
+      if (!detectionCanvas) {
+        detectionCanvas = document.createElement('canvas');
+        detectionCtx = detectionCanvas.getContext('2d');
+      }
+
+      const detect = () => {
+        if (!jigSnapEnabled || !video.videoWidth) {
+          detectionFrame = requestAnimationFrame(detect);
+          return;
+        }
+
+        // Sample a smaller area for performance
+        const sampleWidth = 160;
+        const sampleHeight = 120;
+        detectionCanvas.width = sampleWidth;
+        detectionCanvas.height = sampleHeight;
+
+        detectionCtx.drawImage(video, 0, 0, sampleWidth, sampleHeight);
+        const imageData = detectionCtx.getImageData(0, 0, sampleWidth, sampleHeight);
+        const data = imageData.data;
+
+        let greenPixels = 0;
+        let totalPixels = 0;
+
+        // Check for green pixels (HSV-like check in RGB)
+        for (let i = 0; i < data.length; i += 4) {
+          const r = data[i];
+          const g = data[i + 1];
+          const b = data[i + 2];
+
+          // Green detection: G channel significantly higher than R and B
+          if (g > 80 && g > r + 25 && g > b + 25) {
+            greenPixels++;
+          }
+          totalPixels++;
+        }
+
+        const greenRatio = greenPixels / totalPixels;
+        const wasDetected = jigSnapDetected;
+        jigSnapDetected = greenRatio > 0.08; // 8% green pixels threshold
+
+        // Update UI
+        const status = document.getElementById('jigsnap-status');
+        const cardFrame = document.getElementById('card-frame');
+
+        if (jigSnapDetected) {
+          status.classList.remove('searching');
+          status.classList.add('detected');
+          document.getElementById('jigsnap-text').textContent = '✓ Green mat detected - Ready!';
+          cardFrame.classList.add('jigsnap-detected');
+
+          // Play sound when first detected
+          if (!wasDetected) {
+            playSound('complete');
+          }
+        } else {
+          status.classList.remove('detected');
+          status.classList.add('searching');
+          document.getElementById('jigsnap-text').textContent = 'Looking for green mat...';
+          cardFrame.classList.remove('jigsnap-detected');
+        }
+
+        detectionFrame = requestAnimationFrame(detect);
+      };
+
+      detectionFrame = requestAnimationFrame(detect);
+    }
+
+    function stopJigSnapDetection() {
+      if (detectionFrame) {
+        cancelAnimationFrame(detectionFrame);
+        detectionFrame = null;
+      }
+    }
 
     // Voice recognition setup
     function initVoiceRecognition() {

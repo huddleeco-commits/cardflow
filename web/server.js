@@ -300,9 +300,9 @@ app.get('/app', (req, res) => {
   res.sendFile(path.join(__dirname, 'index.html'));
 });
 
-// Live scanner (tablet/mobile)
+// Phone scanner
 app.get('/scan', (req, res) => {
-  res.sendFile(path.join(__dirname, 'live-scanner.html'));
+  res.sendFile(path.join(__dirname, 'scan.html'));
 });
 
 // Login page
