@@ -7465,6 +7465,399 @@ app.post('/api/lot/valuate-sets', authenticateToken, async (req, res) => {
 });
 
 // ============================================
+// INDIVIDUAL CARD PRICING
+// ============================================
+
+// Cache for individual card pricing (7 day TTL)
+const cardPricingCache = new Map();
+const CARD_PRICING_CACHE_TTL = 7 * 24 * 60 * 60 * 1000; // 7 days
+
+// Clean up expired cache entries periodically
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, value] of cardPricingCache.entries()) {
+    if (now - value.timestamp > CARD_PRICING_CACHE_TTL) {
+      cardPricingCache.delete(key);
+    }
+  }
+}, 60 * 60 * 1000); // Clean every hour
+
+// Build cache key from card data
+function buildCardCacheKey(card) {
+  const parts = [
+    card.year || '',
+    card.set_name || card.set || '',
+    card.card_number || '',
+    card.player || card.subject || '',
+    card.parallel || ''
+  ].map(p => String(p).toLowerCase().replace(/\s+/g, '_'));
+  return parts.join('|');
+}
+
+// Get individual card pricing from Perplexity
+async function getIndividualCardPricing(card, context = {}) {
+  const cacheKey = buildCardCacheKey(card);
+
+  // Check cache first
+  const cached = cardPricingCache.get(cacheKey);
+  if (cached && Date.now() - cached.timestamp < CARD_PRICING_CACHE_TTL) {
+    console.log('[Card Pricing] Cache hit:', card.player || card.subject);
+    return { ...cached.data, fromCache: true };
+  }
+
+  // Build search query
+  const player = card.player || card.subject || 'Unknown';
+  const year = card.year || '';
+  const setName = card.set_name || card.set || '';
+  const cardNumber = card.card_number || '';
+  const parallel = card.parallel && card.parallel !== 'Base' ? card.parallel : '';
+  const graded = card.is_graded ? `${card.grading_company || ''} ${card.grade || ''}`.trim() : '';
+
+  const queryParts = [year, setName, cardNumber ? `#${cardNumber}` : '', player, parallel, graded].filter(Boolean);
+  const query = `${queryParts.join(' ')} trading card eBay sold listings recent prices 2024 2025 - list specific sale prices with dates`;
+
+  console.log('[Card Pricing] Searching for:', player);
+
+  const result = await searchPerplexity(query, {
+    ...context,
+    operation: 'individual-card-price',
+    feature: 'card-pricing'
+  });
+
+  if (!result) {
+    return {
+      card,
+      recentSales: [],
+      average: null,
+      trend: 'unknown',
+      recommendation: { action: 'RESEARCH', reason: 'Unable to find pricing data' },
+      confidence: 'low',
+      fromCache: false
+    };
+  }
+
+  // Parse the response to extract prices
+  const sales = parseRecentSales(result.content);
+  const average = sales.length > 0
+    ? sales.reduce((sum, s) => sum + s.price, 0) / sales.length
+    : null;
+
+  const trend = determinePriceTrend(sales);
+  const recommendation = getCardRecommendation(average, trend, sales, card);
+
+  const pricingResult = {
+    card: {
+      id: card.id,
+      player: player,
+      year: year,
+      setName: setName,
+      cardNumber: cardNumber,
+      parallel: parallel,
+      isGraded: card.is_graded,
+      grade: graded
+    },
+    recentSales: sales,
+    average: average,
+    trend: trend,
+    recommendation: recommendation,
+    confidence: sales.length >= 3 ? 'high' : sales.length >= 1 ? 'medium' : 'low',
+    rawResponse: result.content.substring(0, 500),
+    citations: result.citations,
+    fromCache: false
+  };
+
+  // Cache the result
+  cardPricingCache.set(cacheKey, { data: pricingResult, timestamp: Date.now() });
+
+  return pricingResult;
+}
+
+// Parse recent sales from Perplexity response
+function parseRecentSales(text) {
+  const sales = [];
+
+  // Look for price patterns: $XX.XX or $XXX
+  const lines = text.split('\n');
+
+  for (const line of lines) {
+    // Match prices with optional context
+    const priceMatch = line.match(/\$(\d{1,4}(?:\.\d{2})?)/g);
+    if (priceMatch) {
+      for (const match of priceMatch) {
+        const price = parseFloat(match.replace('$', ''));
+        if (price > 0.50 && price < 50000) { // Sanity check
+          // Try to extract condition
+          let condition = 'NM';
+          if (/mint|MT|gem/i.test(line)) condition = 'MT';
+          else if (/EX|excellent/i.test(line)) condition = 'EX';
+          else if (/VG|very good/i.test(line)) condition = 'VG';
+          else if (/PSA\s*10/i.test(line)) condition = 'PSA 10';
+          else if (/PSA\s*9/i.test(line)) condition = 'PSA 9';
+          else if (/BGS\s*9\.5/i.test(line)) condition = 'BGS 9.5';
+          else if (/raw/i.test(line)) condition = 'Raw';
+
+          // Try to extract date
+          let date = 'Recent';
+          const dateMatch = line.match(/(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s*\d{1,2}/i) ||
+                          line.match(/\d{1,2}\/\d{1,2}\/\d{2,4}/);
+          if (dateMatch) date = dateMatch[0];
+
+          sales.push({ price, condition, date });
+        }
+      }
+    }
+  }
+
+  // Remove duplicates and limit to 8
+  const uniqueSales = [];
+  const seenPrices = new Set();
+  for (const sale of sales) {
+    const key = `${sale.price}-${sale.condition}`;
+    if (!seenPrices.has(key)) {
+      seenPrices.add(key);
+      uniqueSales.push(sale);
+    }
+  }
+
+  return uniqueSales.slice(0, 8).sort((a, b) => b.price - a.price);
+}
+
+// Determine price trend from sales
+function determinePriceTrend(sales) {
+  if (sales.length < 3) return 'unknown';
+
+  // Simple comparison: recent vs older
+  const midpoint = Math.floor(sales.length / 2);
+  const recentAvg = sales.slice(0, midpoint).reduce((sum, s) => sum + s.price, 0) / midpoint;
+  const olderAvg = sales.slice(midpoint).reduce((sum, s) => sum + s.price, 0) / (sales.length - midpoint);
+
+  const changePercent = ((recentAvg - olderAvg) / olderAvg) * 100;
+
+  if (changePercent > 10) return 'rising';
+  if (changePercent < -10) return 'falling';
+  return 'stable';
+}
+
+// Get recommendation for a card
+function getCardRecommendation(average, trend, sales, card) {
+  if (!average || sales.length < 1) {
+    return {
+      action: 'RESEARCH',
+      emoji: '🔍',
+      reason: 'Insufficient sales data - do manual research on eBay'
+    };
+  }
+
+  // Very low value cards
+  if (average < 2) {
+    return {
+      action: 'BULK/DONATE',
+      emoji: '📦',
+      reason: 'Very low value - include in bulk lots or donate'
+    };
+  }
+
+  if (average < 5) {
+    return {
+      action: 'BULK LOT',
+      emoji: '📦',
+      reason: 'Low value - better to sell in lots than individually'
+    };
+  }
+
+  // Trending analysis
+  if (trend === 'rising') {
+    if (average > 50) {
+      return {
+        action: 'HOLD',
+        emoji: '💎',
+        reason: 'High value & rising - hold for potential peak'
+      };
+    }
+    return {
+      action: 'HOLD/WATCH',
+      emoji: '👀',
+      reason: 'Prices trending up - consider waiting'
+    };
+  }
+
+  if (trend === 'falling') {
+    return {
+      action: 'SELL NOW',
+      emoji: '⚡',
+      reason: 'Prices dropping - sell before further decline'
+    };
+  }
+
+  // Stable pricing
+  if (average > 100) {
+    return {
+      action: 'SELL',
+      emoji: '💰',
+      reason: 'High value with stable pricing - good time to sell'
+    };
+  }
+
+  if (average > 20) {
+    return {
+      action: 'SELL',
+      emoji: '💰',
+      reason: 'Decent value, stable market - list when ready'
+    };
+  }
+
+  return {
+    action: 'HOLD/SELL',
+    emoji: '⚖️',
+    reason: 'Moderate value - sell or keep based on need'
+  };
+}
+
+// Price individual cards endpoint
+app.post('/api/cards/price-individual', authenticateToken, async (req, res) => {
+  const userId = req.user.id;
+  const { cardIds } = req.body;
+
+  if (!PERPLEXITY_API_KEY) {
+    return res.status(400).json({
+      error: 'Card pricing not available',
+      message: 'Perplexity API not configured'
+    });
+  }
+
+  try {
+    // Get cards from database
+    let cardsToPrice;
+
+    if (cardIds && cardIds.length > 0) {
+      // Price specific cards
+      const result = await pool.query(`
+        SELECT id, card_data, front_image_path
+        FROM cards
+        WHERE user_id = $1 AND id = ANY($2)
+      `, [userId, cardIds]);
+      cardsToPrice = result.rows;
+    } else {
+      // Price all identified cards (limit to 20)
+      const result = await pool.query(`
+        SELECT id, card_data, front_image_path
+        FROM cards
+        WHERE user_id = $1 AND status IN ('identified', 'priced')
+        ORDER BY updated_at DESC
+        LIMIT 20
+      `, [userId]);
+      cardsToPrice = result.rows;
+    }
+
+    if (cardsToPrice.length === 0) {
+      return res.status(400).json({
+        error: 'No cards to price',
+        message: 'Identify some cards first'
+      });
+    }
+
+    console.log(`[Card Pricing] Pricing ${cardsToPrice.length} cards for user ${userId}`);
+
+    // Price cards in parallel (with concurrency limit)
+    const CONCURRENCY = 3;
+    const pricings = [];
+
+    for (let i = 0; i < cardsToPrice.length; i += CONCURRENCY) {
+      const batch = cardsToPrice.slice(i, i + CONCURRENCY);
+      const batchResults = await Promise.all(
+        batch.map(row => {
+          const cardData = typeof row.card_data === 'string' ? JSON.parse(row.card_data) : row.card_data;
+          return getIndividualCardPricing({
+            id: row.id,
+            ...cardData,
+            front_image: row.front_image_path
+          }, { userId });
+        })
+      );
+      pricings.push(...batchResults);
+    }
+
+    // Calculate summary
+    const validPricings = pricings.filter(p => p.average !== null);
+    const totalValue = validPricings.reduce((sum, p) => sum + (p.average || 0), 0);
+    const highValueCards = validPricings.filter(p => p.average >= 20);
+    const sellNowCards = pricings.filter(p => p.recommendation.action === 'SELL NOW' || p.recommendation.action === 'SELL');
+    const holdCards = pricings.filter(p => p.recommendation.action.includes('HOLD'));
+    const cacheHits = pricings.filter(p => p.fromCache).length;
+
+    res.json({
+      success: true,
+      pricings,
+      summary: {
+        totalCards: cardsToPrice.length,
+        pricedCards: validPricings.length,
+        totalValue: parseFloat(totalValue.toFixed(2)),
+        averagePerCard: validPricings.length > 0 ? parseFloat((totalValue / validPricings.length).toFixed(2)) : 0,
+        highValueCount: highValueCards.length,
+        sellNowCount: sellNowCards.length,
+        holdCount: holdCards.length,
+        cacheHits
+      },
+      recommendations: {
+        sellNow: sellNowCards.map(p => ({
+          id: p.card.id,
+          player: p.card.player,
+          average: p.average,
+          reason: p.recommendation.reason
+        })),
+        hold: holdCards.map(p => ({
+          id: p.card.id,
+          player: p.card.player,
+          average: p.average,
+          reason: p.recommendation.reason
+        }))
+      }
+    });
+
+  } catch (e) {
+    console.error('[Card Pricing] Error:', e);
+    res.status(500).json({ error: 'Failed to price cards', message: e.message });
+  }
+});
+
+// Price a single card (for quick lookup)
+app.get('/api/cards/:cardId/price', authenticateToken, async (req, res) => {
+  const userId = req.user.id;
+  const { cardId } = req.params;
+
+  if (!PERPLEXITY_API_KEY) {
+    return res.status(400).json({ error: 'Card pricing not available' });
+  }
+
+  try {
+    const result = await pool.query(`
+      SELECT id, card_data, front_image_path
+      FROM cards
+      WHERE user_id = $1 AND id = $2
+    `, [userId, cardId]);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Card not found' });
+    }
+
+    const row = result.rows[0];
+    const cardData = typeof row.card_data === 'string' ? JSON.parse(row.card_data) : row.card_data;
+
+    const pricing = await getIndividualCardPricing({
+      id: row.id,
+      ...cardData,
+      front_image: row.front_image_path
+    }, { userId });
+
+    res.json({ success: true, pricing });
+
+  } catch (e) {
+    console.error('[Card Pricing] Error:', e);
+    res.status(500).json({ error: 'Failed to price card', message: e.message });
+  }
+});
+
+// ============================================
 // ADMIN COST ANALYTICS
 // ============================================
 

@@ -2084,7 +2084,8 @@
         <button class="btn btn-accent" onclick="bulkListSelected()">📦 List Selected</button>
         <button class="btn btn-success" onclick="bulkMarkSold()">💰 Mark Sold</button>
         <button class="btn btn-secondary" onclick="showLinkMatrix()">🔗 Link Matrix</button>
-        <button class="btn btn-accent" onclick="valuateLot()" id="valuate-lot-btn">📊 Valuate Lot</button>
+        <button class="btn btn-accent" onclick="valuateLot()" id="valuate-lot-btn">📊 Bulk Value</button>
+        <button class="btn btn-success" onclick="priceCardsIndividually()" id="price-cards-btn">💰 Price Cards</button>
         <button class="btn btn-primary" onclick="exportSelected('csv')">📄 CSV</button>
         <button class="btn btn-primary" onclick="exportSelected('excel')">📊 Excel</button>
         <button class="btn btn-primary" onclick="exportSelected('slabtrack')">📋 SlabTrack Excel</button>
@@ -3195,6 +3196,29 @@
       </div>
       <div class="modal-footer">
         <button class="btn btn-secondary" onclick="closeLotValuationModal()">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Card Pricing Modal -->
+  <div class="modal" id="card-pricing-modal">
+    <div class="modal-content" style="max-width: 900px; max-height: 90vh;">
+      <div class="modal-header">
+        <h2>💰 Individual Card Pricing</h2>
+        <button class="modal-close" onclick="closeCardPricingModal()">&times;</button>
+      </div>
+      <div class="modal-body" id="card-pricing-content" style="overflow-y: auto; max-height: calc(90vh - 150px); padding: 0;">
+        <div style="text-align: center; padding: 60px 20px; color: var(--text-muted);">
+          <div style="font-size: 48px; margin-bottom: 16px;">💰</div>
+          <h3 style="margin-bottom: 8px;">Looking up prices...</h3>
+          <p>Searching eBay sold listings for each card</p>
+          <div class="loading-spinner" style="margin-top: 20px;"></div>
+          <p style="margin-top: 20px; font-size: 12px;">This may take a moment for multiple cards</p>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <span id="card-pricing-status" style="color: var(--text-muted); font-size: 13px;"></span>
+        <button class="btn btn-secondary" onclick="closeCardPricingModal()">Close</button>
       </div>
     </div>
   </div>
@@ -6721,6 +6745,193 @@
 
     function closeLotValuationModal() {
       document.getElementById('lot-valuation-modal').classList.remove('open');
+    }
+
+    // ==========================================
+    // INDIVIDUAL CARD PRICING
+    // ==========================================
+
+    async function priceCardsIndividually() {
+      const btn = document.getElementById('price-cards-btn');
+      const originalText = btn.innerHTML;
+      btn.disabled = true;
+      btn.innerHTML = '⏳ Pricing...';
+
+      // Get card IDs to price
+      let cardIds;
+      if (selectedCards.size > 0) {
+        cardIds = Array.from(selectedCards);
+      } else if (document.getElementById('batch-view').style.display !== 'none') {
+        // Use batch cards if in batch view
+        cardIds = batchCards.filter(id => {
+          const card = cards.find(c => c.id === id);
+          return card && (card.player || card.subject);
+        });
+      } else {
+        // Use all identified cards
+        cardIds = cards.filter(c => c.player || c.subject).map(c => c.id).slice(0, 20);
+      }
+
+      if (cardIds.length === 0) {
+        showToast('No identified cards to price', 'error');
+        btn.disabled = false;
+        btn.innerHTML = originalText;
+        return;
+      }
+
+      // Show modal with loading state
+      document.getElementById('card-pricing-modal').classList.add('open');
+      document.getElementById('card-pricing-content').innerHTML = `
+        <div style="text-align: center; padding: 60px 20px; color: var(--text-muted);">
+          <div style="font-size: 48px; margin-bottom: 16px;">💰</div>
+          <h3 style="margin-bottom: 8px;">Looking up prices for ${cardIds.length} cards...</h3>
+          <p>Searching eBay sold listings via Perplexity AI</p>
+          <div class="loading-spinner" style="margin-top: 20px;"></div>
+          <p style="margin-top: 20px; font-size: 12px;">This may take 10-30 seconds</p>
+        </div>
+      `;
+
+      try {
+        const response = await api('/cards/price-individual', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ cardIds })
+        });
+
+        if (response.error) {
+          throw new Error(response.message || response.error);
+        }
+
+        renderCardPricingResults(response);
+        document.getElementById('card-pricing-status').textContent =
+          `${response.summary.cacheHits} cached, ${response.summary.pricedCards - response.summary.cacheHits} new lookups`;
+
+      } catch (e) {
+        document.getElementById('card-pricing-content').innerHTML = `
+          <div style="text-align: center; padding: 60px 20px;">
+            <div style="font-size: 48px; margin-bottom: 16px;">❌</div>
+            <h3 style="color: var(--error); margin-bottom: 8px;">Pricing Failed</h3>
+            <p style="color: var(--text-muted);">${e.message}</p>
+          </div>
+        `;
+      }
+
+      btn.disabled = false;
+      btn.innerHTML = originalText;
+    }
+
+    function renderCardPricingResults(data) {
+      const { pricings, summary, recommendations } = data;
+
+      const getActionColor = (action) => {
+        if (action.includes('SELL NOW')) return 'var(--error)';
+        if (action.includes('SELL')) return 'var(--success)';
+        if (action.includes('HOLD')) return 'var(--cyan)';
+        if (action.includes('BULK') || action.includes('DONATE')) return 'var(--warning)';
+        return 'var(--text-muted)';
+      };
+
+      const getTrendIcon = (trend) => {
+        if (trend === 'rising') return '📈';
+        if (trend === 'falling') return '📉';
+        if (trend === 'stable') return '➡️';
+        return '❓';
+      };
+
+      let html = `
+        <!-- Summary Header -->
+        <div style="background: linear-gradient(135deg, rgba(16, 185, 129, 0.15), rgba(0, 246, 255, 0.1)); padding: 24px; border-bottom: 1px solid var(--glass-border);">
+          <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; text-align: center;">
+            <div>
+              <div style="font-size: 28px; font-weight: 700; color: var(--success);">$${summary.totalValue.toFixed(2)}</div>
+              <div style="font-size: 11px; color: var(--text-muted); text-transform: uppercase;">Total Value</div>
+            </div>
+            <div>
+              <div style="font-size: 28px; font-weight: 700; color: var(--cyan);">${summary.pricedCards}</div>
+              <div style="font-size: 11px; color: var(--text-muted); text-transform: uppercase;">Cards Priced</div>
+            </div>
+            <div>
+              <div style="font-size: 28px; font-weight: 700; color: var(--purple);">$${summary.averagePerCard.toFixed(2)}</div>
+              <div style="font-size: 11px; color: var(--text-muted); text-transform: uppercase;">Avg/Card</div>
+            </div>
+            <div>
+              <div style="font-size: 28px; font-weight: 700; color: var(--warning);">${summary.highValueCount}</div>
+              <div style="font-size: 11px; color: var(--text-muted); text-transform: uppercase;">High Value ($20+)</div>
+            </div>
+          </div>
+
+          ${recommendations.sellNow.length > 0 ? `
+            <div style="margin-top: 16px; padding: 12px; background: rgba(255, 68, 102, 0.1); border: 1px solid var(--error); border-radius: 8px;">
+              <div style="font-weight: 600; color: var(--error); margin-bottom: 4px;">⚡ Sell Now (${recommendations.sellNow.length})</div>
+              <div style="font-size: 12px; color: var(--text-muted);">
+                ${recommendations.sellNow.map(c => `${c.player} ($${c.average?.toFixed(2) || '?'})`).join(', ')}
+              </div>
+            </div>
+          ` : ''}
+        </div>
+
+        <!-- Card List -->
+        <div style="padding: 16px;">
+          ${pricings.map((p, i) => `
+            <div style="background: var(--glass); border: 1px solid var(--glass-border); border-radius: 12px; margin-bottom: 12px; overflow: hidden;">
+              <!-- Card Header -->
+              <div style="padding: 16px; border-bottom: 1px solid var(--glass-border); display: flex; justify-content: space-between; align-items: flex-start;">
+                <div>
+                  <div style="font-size: 12px; color: var(--text-muted);">${p.card.year || ''} ${p.card.setName || ''} ${p.card.cardNumber ? '#' + p.card.cardNumber : ''}</div>
+                  <div style="font-size: 16px; font-weight: 600;">${p.card.player || 'Unknown'}</div>
+                  ${p.card.parallel ? `<div style="font-size: 11px; color: var(--purple);">✨ ${p.card.parallel}</div>` : ''}
+                  ${p.card.isGraded ? `<div style="font-size: 11px; color: var(--cyan);">🏆 ${p.card.grade}</div>` : ''}
+                </div>
+                <div style="text-align: right;">
+                  ${p.average !== null ? `
+                    <div style="font-size: 24px; font-weight: 700; color: var(--success);">$${p.average.toFixed(2)}</div>
+                    <div style="font-size: 11px; color: var(--text-muted);">
+                      ${getTrendIcon(p.trend)} ${p.trend} • ${p.confidence} confidence
+                    </div>
+                  ` : `
+                    <div style="font-size: 16px; color: var(--text-muted);">No data</div>
+                  `}
+                </div>
+              </div>
+
+              <!-- Sales & Recommendation -->
+              <div style="padding: 12px 16px; display: flex; gap: 16px;">
+                <!-- Recent Sales -->
+                <div style="flex: 1;">
+                  ${p.recentSales.length > 0 ? `
+                    <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 6px;">Recent eBay Sales:</div>
+                    <div style="display: flex; flex-wrap: wrap; gap: 6px;">
+                      ${p.recentSales.slice(0, 5).map(s => `
+                        <span style="background: var(--bg-deep); padding: 4px 8px; border-radius: 4px; font-size: 12px;">
+                          $${s.price.toFixed(2)} <span style="color: var(--text-muted);">${s.condition}</span>
+                        </span>
+                      `).join('')}
+                    </div>
+                  ` : `
+                    <div style="font-size: 12px; color: var(--text-muted);">No recent sales found</div>
+                  `}
+                </div>
+
+                <!-- Recommendation -->
+                <div style="min-width: 180px; padding: 10px 14px; background: ${getActionColor(p.recommendation.action)}15; border: 1px solid ${getActionColor(p.recommendation.action)}40; border-radius: 8px;">
+                  <div style="font-weight: 600; color: ${getActionColor(p.recommendation.action)}; font-size: 14px;">
+                    ${p.recommendation.emoji || '💡'} ${p.recommendation.action}
+                  </div>
+                  <div style="font-size: 11px; color: var(--text-muted); margin-top: 2px;">${p.recommendation.reason}</div>
+                </div>
+              </div>
+
+              ${p.fromCache ? `<div style="padding: 4px 16px 8px; font-size: 10px; color: var(--text-muted);">📦 Cached result</div>` : ''}
+            </div>
+          `).join('')}
+        </div>
+      `;
+
+      document.getElementById('card-pricing-content').innerHTML = html;
+    }
+
+    function closeCardPricingModal() {
+      document.getElementById('card-pricing-modal').classList.remove('open');
     }
 
     // ==========================================
