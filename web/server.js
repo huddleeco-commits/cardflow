@@ -307,6 +307,11 @@ app.get('/register', (req, res) => {
   res.sendFile(path.join(__dirname, 'register.html'));
 });
 
+// SlabTrack OAuth callback
+app.get('/auth/slabtrack', (req, res) => {
+  res.sendFile(path.join(__dirname, 'auth-slabtrack.html'));
+});
+
 app.get('/signup', (req, res) => {
   res.sendFile(path.join(__dirname, 'register.html'));
 });

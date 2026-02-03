@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CardFlow - Connecting to SlabTrack...</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    :root {
+      --bg-deep: #0a0e1a;
+      --glass: rgba(255, 255, 255, 0.05);
+      --glass-border: rgba(255, 255, 255, 0.1);
+      --cyan: #00f6ff;
+      --purple: #7b2ff7;
+      --text: #e6edf3;
+      --text-muted: rgba(255, 255, 255, 0.5);
+      --success: #00ff88;
+      --error: #ff4466;
+    }
+
+    body {
+      font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: var(--bg-deep);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .container {
+      text-align: center;
+      padding: 40px;
+      max-width: 400px;
+    }
+
+    .logo {
+      font-size: 48px;
+      margin-bottom: 20px;
+    }
+
+    .title {
+      font-size: 24px;
+      font-weight: 600;
+      margin-bottom: 8px;
+      background: linear-gradient(135deg, var(--cyan), var(--purple));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .status {
+      color: var(--text-muted);
+      font-size: 14px;
+      margin-bottom: 30px;
+    }
+
+    .spinner {
+      width: 50px;
+      height: 50px;
+      border: 3px solid var(--glass-border);
+      border-top-color: var(--purple);
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+      margin: 0 auto 20px;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    .error-box {
+      display: none;
+      background: rgba(255, 68, 102, 0.1);
+      border: 1px solid var(--error);
+      border-radius: 12px;
+      padding: 20px;
+      margin-top: 20px;
+    }
+
+    .error-box h3 {
+      color: var(--error);
+      margin-bottom: 8px;
+    }
+
+    .error-box p {
+      color: var(--text-muted);
+      font-size: 14px;
+      margin-bottom: 16px;
+    }
+
+    .btn {
+      display: inline-block;
+      padding: 12px 24px;
+      background: linear-gradient(135deg, var(--cyan), var(--purple));
+      border: none;
+      border-radius: 8px;
+      color: #000;
+      font-weight: 600;
+      text-decoration: none;
+      cursor: pointer;
+    }
+
+    .success-box {
+      display: none;
+      background: rgba(0, 255, 136, 0.1);
+      border: 1px solid var(--success);
+      border-radius: 12px;
+      padding: 20px;
+    }
+
+    .success-box h3 {
+      color: var(--success);
+      margin-bottom: 8px;
+    }
+
+    .user-info {
+      background: var(--glass);
+      border-radius: 8px;
+      padding: 12px;
+      margin: 12px 0;
+      text-align: left;
+    }
+
+    .user-info div {
+      font-size: 13px;
+      color: var(--text-muted);
+      margin: 4px 0;
+    }
+
+    .user-info strong {
+      color: var(--text);
+    }
+
+    .tier-badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+    }
+
+    .tier-power { background: var(--purple); color: white; }
+    .tier-dealer { background: linear-gradient(135deg, #ffd700, #ff8c00); color: #000; }
+    .tier-free { background: var(--glass-border); color: var(--text-muted); }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="logo">🔗</div>
+    <h1 class="title">Connecting to SlabTrack</h1>
+
+    <div id="loading">
+      <p class="status">Verifying your account...</p>
+      <div class="spinner"></div>
+    </div>
+
+    <div class="success-box" id="success">
+      <h3>Connected!</h3>
+      <div class="user-info" id="user-info"></div>
+      <p style="color: var(--text-muted); font-size: 13px;">Redirecting to dashboard...</p>
+    </div>
+
+    <div class="error-box" id="error">
+      <h3>Connection Failed</h3>
+      <p id="error-message">Unable to verify your SlabTrack account.</p>
+      <a href="/login" class="btn">Back to Login</a>
+    </div>
+  </div>
+
+  <script>
+    const API_URL = '/api';
+
+    async function handleSlabTrackAuth() {
+      const params = new URLSearchParams(window.location.search);
+      const token = params.get('token');
+
+      if (!token) {
+        showError('No token provided. Please try signing in again.');
+        return;
+      }
+
+      try {
+        // Call CardFlow backend to verify token and create/login user
+        const response = await fetch(`${API_URL}/auth/slabtrack-login`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ slabtrackToken: token })
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error(data.error || 'Failed to verify SlabTrack token');
+        }
+
+        // Store CardFlow session
+        localStorage.setItem('token', data.token);
+        localStorage.setItem('user', JSON.stringify(data.user));
+
+        // Store SlabTrack tier for feature checks
+        if (data.slabtrackTier) {
+          localStorage.setItem('slabtrack_tier', data.slabtrackTier);
+        }
+
+        // Show success
+        showSuccess(data);
+
+        // Redirect to dashboard after brief delay
+        setTimeout(() => {
+          window.location.href = '/app';
+        }, 1500);
+
+      } catch (error) {
+        console.error('SlabTrack auth error:', error);
+        showError(error.message);
+      }
+    }
+
+    function showSuccess(data) {
+      document.getElementById('loading').style.display = 'none';
+      document.getElementById('success').style.display = 'block';
+
+      const tierClass = {
+        'power': 'tier-power',
+        'dealer': 'tier-dealer',
+        'free': 'tier-free'
+      }[data.slabtrackTier] || 'tier-free';
+
+      const tierLabel = (data.slabtrackTier || 'free').charAt(0).toUpperCase() + (data.slabtrackTier || 'free').slice(1);
+
+      document.getElementById('user-info').innerHTML = `
+        <div><strong>${data.user.name || data.user.email}</strong></div>
+        <div>${data.user.email}</div>
+        <div style="margin-top: 8px;">
+          <span class="tier-badge ${tierClass}">${tierLabel}</span>
+          ${data.canUseScanAPI ? '<span style="margin-left: 8px; color: var(--success); font-size: 12px;">SlabTrack Scanning Enabled</span>' : ''}
+        </div>
+      `;
+    }
+
+    function showError(message) {
+      document.getElementById('loading').style.display = 'none';
+      document.getElementById('error').style.display = 'block';
+      document.getElementById('error-message').textContent = message;
+    }
+
+    // Start auth flow on page load
+    handleSlabTrackAuth();
+  </script>
+</body>
+</html>
