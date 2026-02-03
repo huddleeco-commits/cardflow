@@ -309,6 +309,220 @@
     }
 
     #canvas { display: none; }
+
+    /* Tutorial Modal */
+    .tutorial-overlay {
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0,0,0,0.95);
+      z-index: 300;
+      display: none;
+      overflow-y: auto;
+      padding: 20px;
+    }
+    .tutorial-overlay.show { display: block; }
+
+    .tutorial-content {
+      max-width: 400px;
+      margin: 0 auto;
+      padding-bottom: 40px;
+    }
+
+    .tutorial-header {
+      text-align: center;
+      margin-bottom: 24px;
+    }
+    .tutorial-header h2 {
+      font-size: 24px;
+      background: linear-gradient(135deg, #7b2ff7, #00f6ff);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      margin-bottom: 8px;
+    }
+    .tutorial-header p {
+      opacity: 0.7;
+      font-size: 14px;
+    }
+
+    .tutorial-close {
+      position: absolute;
+      top: 16px;
+      right: 16px;
+      background: rgba(255,255,255,0.1);
+      border: none;
+      color: #fff;
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      font-size: 24px;
+      cursor: pointer;
+    }
+
+    .tutorial-step {
+      background: rgba(255,255,255,0.05);
+      border-radius: 16px;
+      padding: 20px;
+      margin-bottom: 16px;
+      position: relative;
+    }
+
+    .step-number {
+      position: absolute;
+      top: -10px;
+      left: 20px;
+      background: linear-gradient(135deg, #7b2ff7, #00f6ff);
+      color: #000;
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      font-size: 14px;
+    }
+
+    .step-title {
+      font-weight: 600;
+      font-size: 16px;
+      margin-bottom: 12px;
+      margin-top: 8px;
+    }
+
+    .step-visual {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      margin: 16px 0;
+      padding: 16px;
+      background: rgba(0,0,0,0.3);
+      border-radius: 12px;
+    }
+
+    .card-stack {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+    }
+    .card-stack-label {
+      font-size: 10px;
+      opacity: 0.6;
+      text-transform: uppercase;
+    }
+    .stack-cards {
+      position: relative;
+      width: 40px;
+      height: 56px;
+    }
+    .mini-card {
+      position: absolute;
+      width: 36px;
+      height: 50px;
+      border-radius: 4px;
+      border: 2px solid;
+    }
+    .mini-card.back {
+      background: linear-gradient(135deg, #7b2ff7, #5a1fd6);
+      border-color: #7b2ff7;
+    }
+    .mini-card.front {
+      background: linear-gradient(135deg, #00f6ff, #00c4cc);
+      border-color: #00f6ff;
+    }
+    .stack-cards .mini-card:nth-child(1) { top: 0; left: 0; }
+    .stack-cards .mini-card:nth-child(2) { top: 3px; left: 3px; }
+    .stack-cards .mini-card:nth-child(3) { top: 6px; left: 6px; }
+
+    .scan-area {
+      width: 50px;
+      height: 70px;
+      border: 2px dashed rgba(255,255,255,0.3);
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .scan-area-icon {
+      font-size: 20px;
+      opacity: 0.5;
+    }
+
+    .arrow {
+      font-size: 20px;
+      opacity: 0.5;
+    }
+
+    .step-desc {
+      font-size: 13px;
+      opacity: 0.8;
+      line-height: 1.5;
+    }
+
+    .flip-animation {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      justify-content: center;
+    }
+    .flip-arrow {
+      font-size: 24px;
+      animation: flipPulse 1s infinite;
+    }
+    @keyframes flipPulse {
+      0%, 100% { transform: scaleX(1); opacity: 0.5; }
+      50% { transform: scaleX(1.2); opacity: 1; }
+    }
+
+    .tutorial-tip {
+      background: rgba(0, 246, 255, 0.1);
+      border: 1px solid rgba(0, 246, 255, 0.3);
+      border-radius: 12px;
+      padding: 16px;
+      margin-top: 24px;
+    }
+    .tutorial-tip-title {
+      color: #00f6ff;
+      font-weight: 600;
+      margin-bottom: 8px;
+      font-size: 14px;
+    }
+    .tutorial-tip p {
+      font-size: 13px;
+      opacity: 0.8;
+      margin: 0;
+    }
+
+    .tutorial-start-btn {
+      width: 100%;
+      padding: 16px;
+      background: linear-gradient(135deg, #7b2ff7, #00f6ff);
+      border: none;
+      border-radius: 12px;
+      color: #fff;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      margin-top: 24px;
+    }
+
+    .help-btn {
+      padding: 8px 12px;
+      background: rgba(123, 47, 247, 0.2);
+      border: 1px solid rgba(123, 47, 247, 0.4);
+      border-radius: 20px;
+      color: #7b2ff7;
+      font-size: 11px;
+      cursor: pointer;
+      margin-left: 8px;
+    }
+
+    .mode-toggle.backs-first {
+      background: rgba(123, 47, 247, 0.2);
+      border-color: #7b2ff7;
+      color: #7b2ff7;
+    }
   </style>
 </head>
 <body>
@@ -333,6 +547,7 @@
       </div>
       <div style="display: flex; align-items: center;">
         <button class="mode-toggle" id="mode-toggle" onclick="toggleMode()">PAIR MODE</button>
+        <button class="help-btn" id="help-btn" onclick="showTutorial()" style="display:none;">?</button>
         <button class="voice-btn" id="voice-btn" onclick="toggleVoice()">🎤</button>
       </div>
     </div>
@@ -364,6 +579,134 @@
     <div class="flash" id="flash"></div>
   </div>
 
+  <!-- Backs First Tutorial -->
+  <div class="tutorial-overlay" id="tutorial-overlay">
+    <button class="tutorial-close" onclick="closeTutorial()">&times;</button>
+    <div class="tutorial-content">
+      <div class="tutorial-header">
+        <h2>Backs First Mode</h2>
+        <p>Scan backs first for better parallel detection</p>
+      </div>
+
+      <div class="tutorial-step">
+        <div class="step-number">1</div>
+        <div class="step-title">Stack cards face-down on LEFT</div>
+        <div class="step-visual">
+          <div class="card-stack">
+            <div class="stack-cards">
+              <div class="mini-card back"></div>
+              <div class="mini-card back"></div>
+              <div class="mini-card back"></div>
+            </div>
+            <div class="card-stack-label">Left Stack</div>
+          </div>
+          <div class="arrow">→</div>
+          <div class="scan-area">
+            <span class="scan-area-icon">📷</span>
+          </div>
+          <div class="arrow">→</div>
+          <div class="card-stack" style="opacity: 0.3;">
+            <div class="stack-cards">
+              <div class="mini-card back"></div>
+            </div>
+            <div class="card-stack-label">Right Stack</div>
+          </div>
+        </div>
+        <div class="step-desc">Place your stack of cards with backs facing up on your left side.</div>
+      </div>
+
+      <div class="tutorial-step">
+        <div class="step-number">2</div>
+        <div class="step-title">Scan each BACK, move to RIGHT</div>
+        <div class="step-visual">
+          <div class="card-stack" style="opacity: 0.5;">
+            <div class="stack-cards">
+              <div class="mini-card back"></div>
+              <div class="mini-card back"></div>
+            </div>
+            <div class="card-stack-label">Left</div>
+          </div>
+          <div class="arrow">→</div>
+          <div class="scan-area" style="border-color: #7b2ff7;">
+            <div class="mini-card back" style="position: relative; width: 30px; height: 42px;"></div>
+          </div>
+          <div class="arrow">→</div>
+          <div class="card-stack">
+            <div class="stack-cards">
+              <div class="mini-card back"></div>
+              <div class="mini-card back"></div>
+            </div>
+            <div class="card-stack-label">Right</div>
+          </div>
+        </div>
+        <div class="step-desc">Take top card from left, scan the back, say "Next", place it face-down on the right stack. Repeat for all cards.</div>
+      </div>
+
+      <div class="tutorial-step">
+        <div class="step-number">3</div>
+        <div class="step-title">FLIP the right stack over</div>
+        <div class="step-visual">
+          <div class="flip-animation">
+            <div class="card-stack">
+              <div class="stack-cards">
+                <div class="mini-card back"></div>
+                <div class="mini-card back"></div>
+                <div class="mini-card back"></div>
+              </div>
+              <div class="card-stack-label">Backs up</div>
+            </div>
+            <div class="flip-arrow">🔄</div>
+            <div class="card-stack">
+              <div class="stack-cards">
+                <div class="mini-card front"></div>
+                <div class="mini-card front"></div>
+                <div class="mini-card front"></div>
+              </div>
+              <div class="card-stack-label">Fronts up</div>
+            </div>
+          </div>
+        </div>
+        <div class="step-desc">When all backs are scanned, tap "Done with Backs". Then flip the entire right stack so fronts face up. The order is preserved!</div>
+      </div>
+
+      <div class="tutorial-step">
+        <div class="step-number">4</div>
+        <div class="step-title">Scan each FRONT in same order</div>
+        <div class="step-visual">
+          <div class="card-stack">
+            <div class="stack-cards">
+              <div class="mini-card front"></div>
+              <div class="mini-card front"></div>
+              <div class="mini-card front"></div>
+            </div>
+            <div class="card-stack-label">Fronts</div>
+          </div>
+          <div class="arrow">→</div>
+          <div class="scan-area" style="border-color: #00f6ff;">
+            <div class="mini-card front" style="position: relative; width: 30px; height: 42px;"></div>
+          </div>
+          <div class="arrow">→</div>
+          <div class="card-stack" style="opacity: 0.3;">
+            <div class="stack-cards">
+              <div class="mini-card front"></div>
+            </div>
+            <div class="card-stack-label">Done</div>
+          </div>
+        </div>
+        <div class="step-desc">Scan fronts in the same order. System already knows the card from the back - now it identifies the parallel/color!</div>
+      </div>
+
+      <div class="tutorial-tip">
+        <div class="tutorial-tip-title">💡 Why Backs First?</div>
+        <p>Card backs contain definitive info (player, year, set, card number). By scanning backs first, the AI knows exactly what card it is, then focuses only on identifying the parallel type from the front (refractor, gold, prizm, etc.)</p>
+      </div>
+
+      <button class="tutorial-start-btn" onclick="closeTutorial(); setScanMode('backsFirst');">
+        Start Backs First Scanning
+      </button>
+    </div>
+  </div>
+
   <canvas id="canvas"></canvas>
 
   <script>
@@ -378,7 +721,7 @@
     let recognition = null;
     let voiceEnabled = false;
 
-    // Mode: 'pair' (front-back-front-back) or 'bulk' (all fronts, then all backs)
+    // Mode: 'pair' (front-back-front-back), 'bulk' (all fronts, then all backs), 'backsFirst' (all backs, then all fronts)
     let scanMode = 'pair';
 
     // Pair mode state
@@ -390,6 +733,12 @@
     let bulkFronts = []; // Array of blobs
     let bulkBacks = []; // Array of blobs
     let bulkIndex = 0; // Current back index
+
+    // Backs First mode state
+    let backsFirstPhase = 'backs'; // 'backs' or 'fronts'
+    let backsFirstBacks = []; // Array of blobs (scanned first)
+    let backsFirstFronts = []; // Array of blobs (scanned second)
+    let backsFirstIndex = 0;
 
     let totalCards = 0;
 
@@ -510,12 +859,37 @@
         bulkFronts = [];
         bulkBacks = [];
         bulkIndex = 0;
+      } else if (scanMode === 'bulk') {
+        scanMode = 'backsFirst';
+        backsFirstPhase = 'backs';
+        backsFirstBacks = [];
+        backsFirstFronts = [];
+        backsFirstIndex = 0;
       } else {
         scanMode = 'pair';
         pairPhase = 'front';
         pairFrontBlob = null;
       }
       updateUI();
+    }
+
+    function setScanMode(mode) {
+      scanMode = mode;
+      if (mode === 'backsFirst') {
+        backsFirstPhase = 'backs';
+        backsFirstBacks = [];
+        backsFirstFronts = [];
+        backsFirstIndex = 0;
+      }
+      updateUI();
+    }
+
+    function showTutorial() {
+      document.getElementById('tutorial-overlay').classList.add('show');
+    }
+
+    function closeTutorial() {
+      document.getElementById('tutorial-overlay').classList.remove('show');
     }
 
     async function capture() {
@@ -532,8 +906,10 @@
 
       if (scanMode === 'pair') {
         await capturePairMode(blob);
-      } else {
+      } else if (scanMode === 'bulk') {
         await captureBulkMode(blob);
+      } else if (scanMode === 'backsFirst') {
+        await captureBacksFirstMode(blob);
       }
 
       updateUI();
@@ -581,6 +957,51 @@
       updateUI();
     }
 
+    // Backs First Mode functions
+    async function captureBacksFirstMode(blob) {
+      if (backsFirstPhase === 'backs') {
+        backsFirstBacks.push(blob);
+        playSound('back');
+      } else {
+        backsFirstFronts.push(blob);
+        playSound('front');
+        backsFirstIndex++;
+
+        // If we have all fronts, upload them all
+        if (backsFirstFronts.length === backsFirstBacks.length) {
+          await uploadAllBacksFirstPairs();
+        }
+      }
+    }
+
+    function finishBacks() {
+      if (backsFirstBacks.length === 0) {
+        alert('Capture at least one back first');
+        return;
+      }
+      backsFirstPhase = 'fronts';
+      backsFirstIndex = 0;
+      playSound('complete');
+      updateUI();
+    }
+
+    async function uploadAllBacksFirstPairs() {
+      playSound('complete');
+
+      for (let i = 0; i < backsFirstBacks.length; i++) {
+        // Note: front and back are swapped in array order but uploaded correctly
+        await uploadPair(backsFirstFronts[i], backsFirstBacks[i]);
+        totalCards++;
+      }
+
+      // Reset backs first mode
+      backsFirstBacks = [];
+      backsFirstFronts = [];
+      backsFirstPhase = 'backs';
+      backsFirstIndex = 0;
+      updateUI();
+    }
+
     async function uploadAllPairs() {
       playSound('complete');
 
@@ -625,9 +1046,24 @@
       const bulkInfo = document.getElementById('bulk-info');
       const doneBtn = document.getElementById('done-btn');
       const cardFrame = document.getElementById('card-frame');
+      const helpBtn = document.getElementById('help-btn');
 
-      modeBtn.textContent = scanMode === 'pair' ? 'PAIR MODE' : 'BULK MODE';
-      modeBtn.classList.toggle('active', scanMode === 'bulk');
+      // Update mode button text and style
+      if (scanMode === 'pair') {
+        modeBtn.textContent = 'PAIR MODE';
+        modeBtn.classList.remove('active', 'backs-first');
+      } else if (scanMode === 'bulk') {
+        modeBtn.textContent = 'BULK MODE';
+        modeBtn.classList.add('active');
+        modeBtn.classList.remove('backs-first');
+      } else if (scanMode === 'backsFirst') {
+        modeBtn.textContent = 'BACKS FIRST';
+        modeBtn.classList.remove('active');
+        modeBtn.classList.add('backs-first');
+      }
+
+      // Show help button only for backsFirst mode
+      helpBtn.style.display = scanMode === 'backsFirst' ? 'inline-block' : 'none';
 
       if (scanMode === 'pair') {
         badge.textContent = pairPhase.toUpperCase();
@@ -636,7 +1072,7 @@
         bulkInfo.classList.remove('show');
         doneBtn.classList.remove('show');
         document.getElementById('fronts-count').textContent = pairPhase === 'back' ? '1' : '0';
-      } else {
+      } else if (scanMode === 'bulk') {
         if (bulkPhase === 'fronts') {
           badge.textContent = 'FRONTS';
           badge.classList.remove('back');
@@ -646,6 +1082,7 @@
           bulkInfo.innerHTML = `<span class="count">${bulkFronts.length}</span> fronts captured`;
           doneBtn.classList.toggle('show', bulkFronts.length > 0);
           doneBtn.textContent = `Done with Fronts (${bulkFronts.length}) →`;
+          doneBtn.onclick = finishFronts;
           document.getElementById('fronts-count').textContent = bulkFronts.length;
         } else {
           badge.textContent = `BACK ${bulkBacks.length + 1}/${bulkFronts.length}`;
@@ -655,6 +1092,28 @@
           bulkInfo.innerHTML = `<span class="count">${bulkBacks.length}/${bulkFronts.length}</span> backs captured`;
           doneBtn.classList.remove('show');
           document.getElementById('fronts-count').textContent = bulkFronts.length;
+        }
+      } else if (scanMode === 'backsFirst') {
+        if (backsFirstPhase === 'backs') {
+          badge.textContent = 'BACKS';
+          badge.classList.add('back');
+          cardFrame.classList.add('back-mode');
+          bulkInfo.classList.add('show');
+          bulkInfo.classList.add('back-phase');
+          bulkInfo.innerHTML = `<span class="count">${backsFirstBacks.length}</span> backs captured`;
+          doneBtn.classList.toggle('show', backsFirstBacks.length > 0);
+          doneBtn.textContent = `Done with Backs (${backsFirstBacks.length}) → Flip & Scan Fronts`;
+          doneBtn.onclick = finishBacks;
+          document.getElementById('fronts-count').textContent = '0';
+        } else {
+          badge.textContent = `FRONT ${backsFirstFronts.length + 1}/${backsFirstBacks.length}`;
+          badge.classList.remove('back');
+          cardFrame.classList.remove('back-mode');
+          bulkInfo.classList.add('show');
+          bulkInfo.classList.remove('back-phase');
+          bulkInfo.innerHTML = `<span class="count">${backsFirstFronts.length}/${backsFirstBacks.length}</span> fronts captured`;
+          doneBtn.classList.remove('show');
+          document.getElementById('fronts-count').textContent = backsFirstFronts.length;
         }
       }
 
@@ -806,8 +1265,8 @@
 
       // Capture commands
       const captureWords = ['capture', 'next', 'snap', 'go', 'take', 'shoot', 'got it', 'got', 'front', 'back', 'yes', 'yep', 'okay', 'cap'];
-      // Done commands (for bulk mode)
-      const doneWords = ['done', 'finished', 'flip', 'switch', 'backs now', 'do backs'];
+      // Done commands (for bulk/backsFirst mode)
+      const doneWords = ['done', 'finished', 'flip', 'switch', 'backs now', 'do backs', 'fronts now', 'do fronts'];
 
       const isCapture = captureWords.some(w => command.includes(w));
       const isDone = doneWords.some(w => command.includes(w));
@@ -822,6 +1281,11 @@
         indicator.classList.add('show');
         setTimeout(() => indicator.classList.remove('show'), 1000);
         finishFronts();
+      } else if (isDone && scanMode === 'backsFirst' && backsFirstPhase === 'backs' && backsFirstBacks.length > 0) {
+        indicator.textContent = '✓ Flip stack & scan fronts!';
+        indicator.classList.add('show');
+        setTimeout(() => indicator.classList.remove('show'), 1500);
+        finishBacks();
       } else {
         // Show what was heard for debugging
         indicator.textContent = `Heard: "${command}"`;
