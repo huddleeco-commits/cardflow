@@ -1483,14 +1483,47 @@ async function getImageBase64(imagePathOrUrl, folder = null) {
   return imageToBase64(localPath);
 }
 
+// Check if user can use SlabTrack scanning API
+async function canUseSlabTrackScan(userId) {
+  try {
+    const result = await pool.query(
+      'SELECT slabtrack_api_token FROM users WHERE id = $1',
+      [userId]
+    );
+    const slabtrackToken = result.rows[0]?.slabtrack_api_token;
+    if (!slabtrackToken) return { canUse: false };
+
+    // Verify token and check tier
+    const stResponse = await axios.get(`${SLABTRACK_API}/users/me`, {
+      headers: { 'X-API-Token': slabtrackToken },
+      timeout: 10000
+    });
+
+    if (stResponse.data?.success) {
+      const proTiers = ['pro', 'dealer', 'enterprise', 'admin'];
+      const canUse = proTiers.includes(stResponse.data.user.subscription_tier);
+      return { canUse, token: slabtrackToken };
+    }
+  } catch (e) {
+    console.log('[SlabTrack] Token verification failed:', e.message);
+  }
+  return { canUse: false };
+}
+
 // Identify a single card (for batch mode auto-identification)
+// Supports dual-mode: SlabTrack API for Pro users, BYOK for others
 async function identifySingleCard(userId, cardId) {
   console.log(`[Batch] Auto-identifying card ${cardId} for user ${userId}`);
 
-  // Get API key
+  // Check if user can use SlabTrack scanning (Pro tier)
+  const slabTrackCheck = await canUseSlabTrackScan(userId);
+
+  // Get BYOK API key as fallback
   const apiKey = await getUserApiKey(userId);
-  if (!apiKey) {
-    console.error('[Batch] No API key for user', userId);
+
+  // Need at least one method
+  if (!slabTrackCheck.canUse && !apiKey) {
+    console.error('[Batch] No API key or SlabTrack Pro for user', userId);
     return;
   }
 
@@ -1507,9 +1540,79 @@ async function identifySingleCard(userId, cardId) {
   broadcast({
     type: 'batch_identify_start',
     cardId,
-    userId
+    userId,
+    scanMode: slabTrackCheck.canUse ? 'slabtrack' : 'byok'
   });
 
+  // Try SlabTrack API first if available
+  if (slabTrackCheck.canUse) {
+    try {
+      console.log(`[Batch] Using SlabTrack API for card ${cardId}`);
+
+      // Get images as base64
+      const frontBase64 = await getImageBase64(card.front_image_path, FOLDERS.new);
+      let backBase64 = null;
+      if (card.back_image_path) {
+        backBase64 = await getImageBase64(card.back_image_path, FOLDERS.new);
+      }
+
+      // Call SlabTrack scanning API
+      const stResponse = await axios.post(`${SLABTRACK_API}/scanner/quick-price-check`, {
+        frontImage: `data:${frontBase64.media_type};base64,${frontBase64.data}`,
+        backImage: backBase64 ? `data:${backBase64.media_type};base64,${backBase64.data}` : null
+      }, {
+        headers: {
+          'Content-Type': 'application/json',
+          'X-API-Token': slabTrackCheck.token
+        },
+        timeout: 60000
+      });
+
+      if (stResponse.data?.success) {
+        const cardData = stResponse.data.card;
+        cardData.identified_at = new Date().toISOString();
+        cardData.scan_source = 'slabtrack';
+
+        // Update the card
+        await pool.query(`
+          UPDATE cards SET card_data = $1, status = 'identified', updated_at = NOW()
+          WHERE id = $2
+        `, [JSON.stringify(cardData), cardId]);
+
+        // Log usage (no cost for user - SlabTrack credits)
+        await pool.query(`
+          INSERT INTO api_usage (user_id, operation, model_used, tokens_input, tokens_output, cost, card_id, metadata)
+          VALUES ($1, 'identify', 'slabtrack', 0, 0, 0, $2, $3)
+        `, [userId, cardId, JSON.stringify({ scan_source: 'slabtrack', front_image: card.front_image_path })]);
+
+        console.log(`[Batch] Card ${cardId} identified via SlabTrack: ${cardData.player}`);
+
+        broadcast({
+          type: 'batch_card_identified',
+          cardId,
+          cardData,
+          userId,
+          scanMode: 'slabtrack'
+        });
+        return;
+      }
+    } catch (e) {
+      console.error(`[Batch] SlabTrack scan failed for ${cardId}:`, e.message);
+      // Fall through to BYOK if available
+      if (!apiKey) {
+        broadcast({
+          type: 'batch_identify_error',
+          cardId,
+          error: 'SlabTrack scan failed: ' + e.message,
+          userId
+        });
+        return;
+      }
+      console.log(`[Batch] Falling back to BYOK for card ${cardId}`);
+    }
+  }
+
+  // Use BYOK (Anthropic API)
   try {
     const Anthropic = require('@anthropic-ai/sdk');
     const anthropic = new Anthropic({ apiKey });
@@ -1581,6 +1684,7 @@ Return ONLY a JSON object with these fields (no other text):
 
     const cardData = JSON.parse(jsonMatch[0]);
     cardData.identified_at = new Date().toISOString();
+    cardData.scan_source = 'byok';
 
     // Calculate cost
     const inputTokens = response.usage?.input_tokens || 0;
@@ -1606,14 +1710,15 @@ Return ONLY a JSON object with these fields (no other text):
       VALUES ($1, 'identify', 'sonnet4', $2, $3, $4, $5, $6)
     `, [userId, inputTokens, outputTokens, cost, cardId, JSON.stringify(metadata)]);
 
-    console.log(`[Batch] Card ${cardId} identified: ${cardData.player}`);
+    console.log(`[Batch] Card ${cardId} identified via BYOK: ${cardData.player}`);
 
     // Broadcast completion with card data
     broadcast({
       type: 'batch_card_identified',
       cardId,
       cardData,
-      userId
+      userId,
+      scanMode: 'byok'
     });
 
   } catch (e) {

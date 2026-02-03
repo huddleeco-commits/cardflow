@@ -2275,15 +2275,32 @@
             </div>
 
             <div id="slabtrack-connected" style="display: none;">
-              <div style="background: rgba(0, 255, 136, 0.1); border: 1px solid rgba(0, 255, 136, 0.3); border-radius: 8px; padding: 16px; margin-bottom: 16px;">
-                <div style="display: flex; align-items: center; gap: 12px;">
+              <!-- User Info -->
+              <div id="slabtrack-user-info" style="background: rgba(0, 255, 136, 0.1); border: 1px solid rgba(0, 255, 136, 0.3); border-radius: 8px; padding: 16px; margin-bottom: 16px;">
+                <div style="display: flex; align-items: flex-start; gap: 12px;">
                   <span style="font-size: 28px;">✓</span>
-                  <div>
-                    <div style="font-weight: 600; color: var(--success);">SlabTrack Connected</div>
-                    <div style="font-size: 12px; color: var(--text-muted);">You can send cards directly to your SlabTrack collection.</div>
+                  <div style="flex: 1;">
+                    <div style="font-weight: 600; color: var(--success);" id="slabtrack-user-name">SlabTrack Connected</div>
+                    <div style="font-size: 12px; color: var(--text-muted);" id="slabtrack-user-email"></div>
+                    <div style="display: flex; gap: 16px; margin-top: 8px; font-size: 12px;">
+                      <span>Plan: <strong id="slabtrack-user-tier" style="color: var(--cyan);">-</strong></span>
+                      <span id="slabtrack-scans-info" style="display: none;">Scans: <strong id="slabtrack-user-scans" style="color: var(--purple);">0</strong></span>
+                    </div>
                   </div>
                 </div>
               </div>
+
+              <!-- Scan Mode Indicator -->
+              <div id="slabtrack-scan-mode" style="display: none; background: linear-gradient(135deg, rgba(123, 47, 247, 0.2), rgba(0, 246, 255, 0.1)); border: 1px solid var(--purple); border-radius: 8px; padding: 16px; margin-bottom: 16px;">
+                <div style="display: flex; align-items: center; gap: 12px;">
+                  <span style="font-size: 24px;">🔍</span>
+                  <div>
+                    <div style="font-weight: 600; color: var(--purple);">SlabTrack Scanning Enabled</div>
+                    <div style="font-size: 12px; color: var(--text-muted);">Cards will be scanned using SlabTrack's AI (uses your SlabTrack credits, no BYOK needed!)</div>
+                  </div>
+                </div>
+              </div>
+
               <p style="margin-bottom: 16px; color: var(--text-muted);">
                 Use the "Send to SlabTrack" button when selecting cards to transfer them to your SlabTrack collection.
               </p>
@@ -4491,16 +4508,30 @@
     // SLABTRACK INTEGRATION FUNCTIONS
     // ==========================================
 
+    // Store SlabTrack status globally for use by scanner
+    let slabTrackStatus = { connected: false, canUseScanAPI: false };
+
     async function loadSlabTrackStatus() {
       try {
         const data = await api('/slabtrack/status');
         if (!data) return;
+
+        // Update global status
+        slabTrackStatus = data;
 
         const indicator = document.getElementById('slabtrack-indicator');
         const statusText = document.getElementById('slabtrack-status-text');
         const tokenPreview = document.getElementById('slabtrack-token-preview');
         const notConnected = document.getElementById('slabtrack-not-connected');
         const connected = document.getElementById('slabtrack-connected');
+
+        // User info elements
+        const userName = document.getElementById('slabtrack-user-name');
+        const userEmail = document.getElementById('slabtrack-user-email');
+        const userTier = document.getElementById('slabtrack-user-tier');
+        const userScans = document.getElementById('slabtrack-user-scans');
+        const scansInfo = document.getElementById('slabtrack-scans-info');
+        const scanMode = document.getElementById('slabtrack-scan-mode');
 
         if (data.connected) {
           indicator.style.background = 'var(--success)';
@@ -4509,6 +4540,26 @@
           tokenPreview.textContent = data.tokenPreview ? `Token: ${data.tokenPreview}` : '';
           notConnected.style.display = 'none';
           connected.style.display = 'block';
+
+          // Populate user info if available
+          if (data.user) {
+            userName.textContent = data.user.name || 'SlabTrack Connected';
+            userEmail.textContent = data.user.email || '';
+            userTier.textContent = (data.user.tier || 'free').charAt(0).toUpperCase() + (data.user.tier || 'free').slice(1);
+
+            // Show scans info if available
+            if (data.user.scansUsed !== undefined) {
+              userScans.textContent = data.user.scansUsed.toLocaleString();
+              scansInfo.style.display = 'inline';
+            }
+          }
+
+          // Show SlabTrack Scanning mode if Pro tier
+          if (data.canUseScanAPI) {
+            scanMode.style.display = 'block';
+          } else {
+            scanMode.style.display = 'none';
+          }
         } else {
           indicator.style.background = 'var(--error)';
           indicator.style.boxShadow = 'none';
@@ -4516,6 +4567,14 @@
           tokenPreview.textContent = '';
           notConnected.style.display = 'block';
           connected.style.display = 'none';
+          scanMode.style.display = 'none';
+
+          // Reset user info
+          userName.textContent = 'SlabTrack Connected';
+          userEmail.textContent = '';
+          userTier.textContent = '-';
+          userScans.textContent = '0';
+          scansInfo.style.display = 'none';
         }
       } catch (e) {
         console.error('Failed to load SlabTrack status:', e);
