@@ -436,6 +436,7 @@
     let detectionCanvas = null;
     let detectionCtx = null;
     let detectionFrame = null;
+    let isCapturing = false; // Prevent duplicate captures
 
     // Mode: 'pair' (front-back-front-back) or 'bulk' (all fronts, then all backs)
     let scanMode = 'pair';
@@ -578,6 +579,13 @@
     }
 
     async function capture() {
+      // Prevent duplicate captures while processing
+      if (isCapturing) {
+        console.log('Capture already in progress, ignoring');
+        return;
+      }
+      isCapturing = true;
+
       if (!frameRect) calculateFrameRect();
 
       // Flash
@@ -666,6 +674,7 @@
       }
 
       updateUI();
+      isCapturing = false; // Allow next capture
     }
 
     async function capturePairMode(blob) {
