@@ -284,11 +284,39 @@ function getTierInfo(subscription_tier) {
 }
 
 // ============================================
+// PAGE ROUTES (before static files)
+// ============================================
+
+// Landing page - public marketing page
+app.get('/', (req, res) => {
+  res.sendFile(path.join(__dirname, 'landing.html'));
+});
+
+// Main app dashboard
+app.get('/app', (req, res) => {
+  res.sendFile(path.join(__dirname, 'index.html'));
+});
+
+// Login/Register - serve the app (client-side routing)
+app.get('/login', (req, res) => {
+  res.sendFile(path.join(__dirname, 'index.html'));
+});
+
+app.get('/register', (req, res) => {
+  res.sendFile(path.join(__dirname, 'index.html'));
+});
+
+// Pricing redirects to landing
+app.get('/pricing', (req, res) => {
+  res.redirect('/#pricing');
+});
+
+// ============================================
 // STATIC FILES
 // ============================================
 
-// Serve static files (but not auth-protected pages directly)
-app.use(express.static(__dirname));
+// Serve static files (but not index.html at root - we handle that above)
+app.use(express.static(__dirname, { index: false }));
 
 // Serve images from all folders
 app.use('/images/1-new', express.static(FOLDERS.new));
@@ -5975,30 +6003,6 @@ app.get('/collection', (req, res) => {
 // Serve phone scanner page
 app.get('/scan', (req, res) => {
   res.sendFile(path.join(__dirname, 'scan.html'));
-});
-
-// Landing page - public marketing page
-app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, 'landing.html'));
-});
-
-// Main app dashboard (requires auth via client-side check)
-app.get('/app', (req, res) => {
-  res.sendFile(path.join(__dirname, 'index.html'));
-});
-
-// Pricing page (redirects to landing with anchor)
-app.get('/pricing', (req, res) => {
-  res.redirect('/#pricing');
-});
-
-// Login/Register redirect to app (handled client-side)
-app.get('/login', (req, res) => {
-  res.sendFile(path.join(__dirname, 'index.html'));
-});
-
-app.get('/register', (req, res) => {
-  res.sendFile(path.join(__dirname, 'index.html'));
 });
 
 // ============================================
