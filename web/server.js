@@ -6988,10 +6988,10 @@ app.get('/api/cards/:id/social-caption', authenticateToken, async (req, res) => 
 });
 
 // ============================================
-// PERPLEXITY API SERVICE
+// SPORTSCARDSPRO API SERVICE (Card Pricing)
 // ============================================
 
-const PERPLEXITY_API_KEY = process.env.PERPLEXITY_API_KEY;
+const SPORTSCARDSPRO_API_KEY = process.env.SPORTSCARDSPRO_API_KEY;
 
 // Cost rates per provider
 const COST_RATES = {
@@ -7001,10 +7001,8 @@ const COST_RATES = {
     'claude-3-5-haiku-20241022': { inputPer1M: 0.80, outputPer1M: 4.00 },
     'sonnet4': { inputPer1M: 3.00, outputPer1M: 15.00 }  // alias
   },
-  perplexity: {
-    'sonar': { perRequest: 0.005 },
-    'sonar-pro': { perRequest: 0.02 },
-    'sonar-reasoning': { perRequest: 0.005 }
+  sportscardspro: {
+    'price-lookup': { perRequest: 0.01 }  // $0.01 per card lookup
   }
 };
 
@@ -7016,10 +7014,9 @@ function calculateClaudeCost(model, inputTokens, outputTokens) {
   return parseFloat((inputCost + outputCost).toFixed(6));
 }
 
-// Calculate cost for Perplexity
-function calculatePerplexityCost(model = 'sonar') {
-  const rates = COST_RATES.perplexity[model] || COST_RATES.perplexity['sonar'];
-  return rates.perRequest;
+// Calculate cost for SportsCardsPro
+function calculateSportsCardsProCost(lookupCount = 1) {
+  return parseFloat((COST_RATES.sportscardspro['price-lookup'].perRequest * lookupCount).toFixed(4));
 }
 
 // Track API cost in database
@@ -7063,50 +7060,56 @@ async function trackApiCost({
   }
 }
 
-// Search Perplexity API
-async function searchPerplexity(query, context = {}) {
-  if (!PERPLEXITY_API_KEY) {
-    console.log('[Perplexity] No API key configured');
+// Search SportsCardsPro API for card pricing
+async function searchSportsCardsPro(card, context = {}) {
+  if (!SPORTSCARDSPRO_API_KEY) {
+    console.log('[SportsCardsPro] No API key configured');
     return null;
   }
 
-  const model = context.model || 'sonar';
   const startTime = Date.now();
 
   try {
-    console.log(`[Perplexity] Searching: "${query.substring(0, 60)}..."`);
+    // Build search payload from card data
+    const payload = {
+      year: parseInt(card.year) || null,
+      sport: card.sport || detectSport(card) || 'basketball',
+      brand: card.brand || extractBrand(card.set_name || card.set) || 'Unknown',
+      set: card.set_name || card.set || '',
+      subset: card.subset || null,
+      number: card.card_number || '',
+      player: card.player || card.subject || '',
+      parallel: card.parallel || 'base',
+      variation: card.variation || null,
+      graded: card.is_graded || false,
+      grade: card.grade || null,
+      grading_company: card.grading_company || null
+    };
 
-    const response = await fetch('https://api.perplexity.ai/chat/completions', {
+    console.log(`[SportsCardsPro] Looking up: ${payload.year} ${payload.set} ${payload.player}`);
+
+    const response = await fetch('https://api.sportscardspro.com/v1/card/price', {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${PERPLEXITY_API_KEY}`,
+        'Authorization': `Bearer ${SPORTSCARDSPRO_API_KEY}`,
         'Content-Type': 'application/json'
       },
-      body: JSON.stringify({
-        model: model,
-        messages: [{
-          role: 'system',
-          content: 'You are a sports card pricing expert. Provide concise, factual pricing information based on recent eBay sold listings and market data. Always include specific dollar amounts when available.'
-        }, {
-          role: 'user',
-          content: query
-        }],
-        temperature: 0.2,
-        max_tokens: 1000
-      })
+      body: JSON.stringify(payload)
     });
+
+    const responseTime = Date.now() - startTime;
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error('[Perplexity] API error:', response.status, errorText);
+      console.error('[SportsCardsPro] API error:', response.status, errorText);
 
       // Track failed request
       await trackApiCost({
         userId: context.userId,
-        provider: 'perplexity',
-        model: model,
-        operation: context.operation || 'search',
-        feature: context.feature || 'general-search',
+        provider: 'sportscardspro',
+        model: 'price-lookup',
+        operation: 'card-price',
+        feature: 'individual-card-pricing',
         cost: 0,
         success: false,
         errorMessage: `HTTP ${response.status}: ${errorText.substring(0, 100)}`
@@ -7116,43 +7119,55 @@ async function searchPerplexity(query, context = {}) {
     }
 
     const data = await response.json();
-    const cost = calculatePerplexityCost(model);
+    const cost = calculateSportsCardsProCost(1);
 
     // Track successful request
     await trackApiCost({
       userId: context.userId,
-      provider: 'perplexity',
-      model: model,
-      operation: context.operation || 'search',
-      feature: context.feature || 'general-search',
+      provider: 'sportscardspro',
+      model: 'price-lookup',
+      operation: 'card-price',
+      feature: 'individual-card-pricing',
       cost: cost,
-      tokensInput: data.usage?.prompt_tokens || 0,
-      tokensOutput: data.usage?.completion_tokens || 0,
-      requestSize: `Query: ${query.length} chars`,
+      requestSize: `${payload.year} ${payload.set} ${payload.player}`,
       success: true,
       metadata: {
-        query: query.substring(0, 100),
-        responseTime: Date.now() - startTime
+        player: payload.player,
+        year: payload.year,
+        set: payload.set,
+        responseTime: responseTime
       }
     });
 
-    console.log(`[Perplexity] Success - cost: $${cost.toFixed(4)}, time: ${Date.now() - startTime}ms`);
+    console.log(`[SportsCardsPro] Success - cost: $${cost.toFixed(4)}, time: ${responseTime}ms`);
 
+    // Normalize the response
     return {
-      content: data.choices?.[0]?.message?.content || '',
-      citations: data.citations || [],
-      usage: data.usage
+      value: data.marketValue || data.price || data.average || null,
+      low: data.lowPrice || data.low || null,
+      high: data.highPrice || data.high || null,
+      recentSales: (data.recentSales || data.sales || []).map(s => ({
+        price: s.price || s.amount,
+        condition: s.condition || 'Raw',
+        date: s.date || s.soldDate || 'Recent',
+        source: s.source || 'eBay'
+      })),
+      lastUpdated: data.lastUpdated || data.updated || new Date().toISOString(),
+      confidence: data.confidence || (data.salesCount > 5 ? 'high' : data.salesCount > 2 ? 'medium' : 'low'),
+      salesCount: data.salesCount || data.recentSales?.length || 0,
+      source: 'SportsCardsPro',
+      responseTime: responseTime
     };
 
   } catch (e) {
-    console.error('[Perplexity] Request failed:', e.message);
+    console.error('[SportsCardsPro] Request failed:', e.message);
 
     await trackApiCost({
       userId: context.userId,
-      provider: 'perplexity',
-      model: model,
-      operation: context.operation || 'search',
-      feature: context.feature || 'general-search',
+      provider: 'sportscardspro',
+      model: 'price-lookup',
+      operation: 'card-price',
+      feature: 'individual-card-pricing',
       cost: 0,
       success: false,
       errorMessage: e.message
@@ -7162,99 +7177,133 @@ async function searchPerplexity(query, context = {}) {
   }
 }
 
+// Helper to detect sport from card data
+function detectSport(card) {
+  const text = `${card.player || ''} ${card.set_name || ''} ${card.set || ''}`.toLowerCase();
+  if (/nba|basketball|hoops|prizm|court|optic/i.test(text)) return 'basketball';
+  if (/nfl|football|score|gridiron|touchdown/i.test(text)) return 'football';
+  if (/mlb|baseball|topps|diamond|bowman/i.test(text)) return 'baseball';
+  if (/nhl|hockey|upper deck|ice/i.test(text)) return 'hockey';
+  if (/soccer|premier|uefa|world cup/i.test(text)) return 'soccer';
+  return 'basketball'; // Default
+}
+
+// Helper to extract brand from set name
+function extractBrand(setName) {
+  if (!setName) return null;
+  const s = setName.toLowerCase();
+  if (s.includes('panini')) return 'Panini';
+  if (s.includes('topps')) return 'Topps';
+  if (s.includes('upper deck')) return 'Upper Deck';
+  if (s.includes('bowman')) return 'Bowman';
+  if (s.includes('donruss')) return 'Donruss';
+  if (s.includes('fleer')) return 'Fleer';
+  if (s.includes('prizm') || s.includes('hoops') || s.includes('select') || s.includes('mosaic')) return 'Panini';
+  return null;
+}
+
 // ============================================
-// BULK LOT VALUATION
+// BULK LOT VALUATION (Static Pricing)
 // ============================================
 
-// Get bulk pricing for a set
-async function getBulkSetPricing(year, setName, sport, context = {}) {
-  const query = `${year} ${setName} ${sport} bulk commons lot value price per 100 cards eBay sold 2024 2025`;
+// Static bulk pricing estimates by era (price per 100 commons)
+const BULK_PRICING_ESTIMATES = {
+  // Junk wax era (1987-1993) - heavily overproduced
+  junkWax: { years: [1987, 1988, 1989, 1990, 1991, 1992, 1993], pricePerHundred: 1.00 },
+  // Early modern (1994-2005)
+  earlyModern: { years: [1994, 1995, 1996, 1997, 1998, 1999, 2000, 2001, 2002, 2003, 2004, 2005], pricePerHundred: 2.50 },
+  // Modern era (2006-2015)
+  modern: { years: [2006, 2007, 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015], pricePerHundred: 3.50 },
+  // Recent (2016-2020)
+  recent: { years: [2016, 2017, 2018, 2019, 2020], pricePerHundred: 5.00 },
+  // Current (2021+)
+  current: { years: [2021, 2022, 2023, 2024, 2025], pricePerHundred: 7.50 },
+  // Vintage (pre-1987) - varies widely
+  vintage: { pricePerHundred: 15.00 }
+};
 
-  const result = await searchPerplexity(query, {
-    ...context,
-    operation: 'bulk-pricing',
-    feature: 'set-valuation'
-  });
+// Premium set multipliers
+const SET_MULTIPLIERS = {
+  'prizm': 2.5,
+  'select': 2.0,
+  'optic': 1.8,
+  'mosaic': 1.5,
+  'chronicles': 1.3,
+  'hoops': 1.0, // baseline
+  'donruss': 0.9,
+  'score': 0.8,
+  'topps chrome': 2.0,
+  'bowman chrome': 2.5,
+  'topps': 1.0,
+  'upper deck': 1.2
+};
 
-  if (!result) return null;
+// Get bulk pricing for a set using static estimates
+function getBulkSetPricing(year, setName, sport, context = {}) {
+  const yearNum = parseInt(year);
+  let basePricePerHundred = 2.50; // Default
+  let era = 'unknown';
 
-  // Parse the response to extract pricing info
-  const content = result.content.toLowerCase();
-
-  // Try to extract price per 100 cards
-  let pricePer100 = null;
-  const priceMatches = content.match(/\$(\d+(?:\.\d{2})?)\s*(?:per\s*)?(?:100|hundred)/i) ||
-                       content.match(/(\d+(?:\.\d{2})?)\s*(?:dollars?|usd)\s*(?:per\s*)?(?:100|hundred)/i);
-  if (priceMatches) {
-    pricePer100 = parseFloat(priceMatches[1]);
+  // Determine era-based pricing
+  if (yearNum < 1987) {
+    basePricePerHundred = BULK_PRICING_ESTIMATES.vintage.pricePerHundred;
+    era = 'vintage';
+  } else if (BULK_PRICING_ESTIMATES.junkWax.years.includes(yearNum)) {
+    basePricePerHundred = BULK_PRICING_ESTIMATES.junkWax.pricePerHundred;
+    era = 'junkWax';
+  } else if (BULK_PRICING_ESTIMATES.earlyModern.years.includes(yearNum)) {
+    basePricePerHundred = BULK_PRICING_ESTIMATES.earlyModern.pricePerHundred;
+    era = 'earlyModern';
+  } else if (BULK_PRICING_ESTIMATES.modern.years.includes(yearNum)) {
+    basePricePerHundred = BULK_PRICING_ESTIMATES.modern.pricePerHundred;
+    era = 'modern';
+  } else if (BULK_PRICING_ESTIMATES.recent.years.includes(yearNum)) {
+    basePricePerHundred = BULK_PRICING_ESTIMATES.recent.pricePerHundred;
+    era = 'recent';
+  } else if (BULK_PRICING_ESTIMATES.current.years.includes(yearNum)) {
+    basePricePerHundred = BULK_PRICING_ESTIMATES.current.pricePerHundred;
+    era = 'current';
   }
 
-  // Fallback: extract any dollar amounts and estimate
-  if (!pricePer100) {
-    const allPrices = content.match(/\$(\d+(?:\.\d{2})?)/g);
-    if (allPrices && allPrices.length > 0) {
-      const prices = allPrices.map(p => parseFloat(p.replace('$', ''))).filter(p => p < 100);
-      if (prices.length > 0) {
-        pricePer100 = prices.reduce((a, b) => a + b, 0) / prices.length;
-      }
+  // Apply set multiplier
+  let multiplier = 1.0;
+  const setLower = (setName || '').toLowerCase();
+  for (const [setKey, mult] of Object.entries(SET_MULTIPLIERS)) {
+    if (setLower.includes(setKey)) {
+      multiplier = mult;
+      break;
     }
   }
+
+  const pricePer100 = parseFloat((basePricePerHundred * multiplier).toFixed(2));
+
+  console.log(`[Bulk Pricing] ${year} ${setName}: $${pricePer100}/100 (era: ${era}, mult: ${multiplier}x)`);
 
   return {
     year,
     setName,
     sport,
-    pricePer100: pricePer100 || 2.50, // Default fallback
-    rawResponse: result.content,
-    citations: result.citations,
-    confidence: pricePer100 ? 'high' : 'estimated'
+    pricePer100,
+    era,
+    multiplier,
+    confidence: 'estimated',
+    note: 'Static estimate based on era and set type. Use individual card pricing for accurate values.'
   };
 }
 
-// Get key cards for a set
-async function getKeyCards(year, setName, sport, context = {}) {
-  const query = `${year} ${setName} ${sport} key cards valuable rookies most expensive cards worth`;
-
-  const result = await searchPerplexity(query, {
-    ...context,
-    operation: 'key-cards',
-    feature: 'set-valuation'
-  });
-
-  if (!result) return [];
-
-  // Parse key cards from response
-  const keyCards = [];
-  const lines = result.content.split('\n');
-
-  for (const line of lines) {
-    // Look for patterns like "Card Name - $XX" or "#123 Player Name ($XX)"
-    const cardMatch = line.match(/(?:#?(\d+))?\s*([A-Za-z\s.'-]+?)(?:\s*[-–]\s*|\s*\(?\$)(\d+(?:\.\d{2})?)/);
-    if (cardMatch) {
-      keyCards.push({
-        number: cardMatch[1] || null,
-        name: cardMatch[2].trim(),
-        value: parseFloat(cardMatch[3])
-      });
-    }
-  }
-
-  return keyCards.slice(0, 10); // Top 10 key cards
+// Get key cards - now returns empty (use individual card pricing instead)
+function getKeyCards(year, setName, sport, context = {}) {
+  // Key card detection is now handled by individual card pricing
+  // This function is kept for compatibility but returns empty
+  console.log(`[Key Cards] Use individual card pricing for ${year} ${setName}`);
+  return [];
 }
 
-// Valuate a lot of cards
+// Valuate a lot of cards (using static estimates)
 app.post('/api/lot/valuate', authenticateToken, async (req, res) => {
   const userId = req.user.id;
 
   try {
-    // Check if Perplexity is configured
-    if (!PERPLEXITY_API_KEY) {
-      return res.status(400).json({
-        error: 'Bulk pricing not available',
-        message: 'Perplexity API key not configured. Contact admin.'
-      });
-    }
-
     // Get user's cards grouped by set
     const cardsResult = await pool.query(`
       SELECT
@@ -7418,8 +7467,8 @@ app.post('/api/lot/valuate-sets', authenticateToken, async (req, res) => {
     return res.status(400).json({ error: 'No sets provided' });
   }
 
-  if (!PERPLEXITY_API_KEY) {
-    return res.status(400).json({ error: 'Perplexity API not configured' });
+  if (!SPORTSCARDSPRO_API_KEY) {
+    return res.status(400).json({ error: 'SportsCardsPro API not configured' });
   }
 
   try {
@@ -7494,54 +7543,6 @@ function buildCardCacheKey(card) {
   return parts.join('|');
 }
 
-// Build specific pricing query with base/parallel distinction
-function buildPricingQuery(card) {
-  const player = card.player || card.subject || 'Unknown';
-  const year = card.year || '';
-  const setName = card.set_name || card.set || '';
-  const cardNumber = card.card_number || '';
-  const parallel = card.parallel || '';
-  const graded = card.is_graded ? `${card.grading_company || ''} ${card.grade || ''}`.trim() : '';
-
-  // Detect if this is a base card or parallel
-  const isBase = !parallel ||
-    parallel.toLowerCase() === 'base' ||
-    parallel.toLowerCase() === 'standard' ||
-    parallel.toLowerCase() === 'base set';
-
-  // Build the query parts
-  let queryParts = [];
-
-  if (isBase) {
-    // For BASE cards - be very explicit
-    queryParts = [
-      year,
-      setName,
-      'BASE card',
-      cardNumber ? `#${cardNumber}` : '',
-      player,
-      graded
-    ].filter(Boolean);
-
-    // Add explicit exclusions for base cards
-    const exclusions = 'EXCLUDE: parallels, prizm, refractor, holo, auto, autograph, numbered /99 /50 /25 /10, serial numbered, insert, SP, SSP, variation, color, silver, gold, purple, green, pink, blue, red, orange';
-
-    return `${queryParts.join(' ')} eBay sold listings 2024 2025 - ${exclusions}. Show ONLY standard BASE version prices. List 5-8 recent sale prices with conditions.`;
-  } else {
-    // For PARALLEL cards - include the parallel name
-    queryParts = [
-      year,
-      setName,
-      parallel,  // Include the parallel type (e.g., "Silver Prizm", "Refractor")
-      cardNumber ? `#${cardNumber}` : '',
-      player,
-      graded
-    ].filter(Boolean);
-
-    return `${queryParts.join(' ')} eBay sold listings 2024 2025 - show ONLY ${parallel} version prices, not base card. List 5-8 recent sale prices with conditions.`;
-  }
-}
-
 // Validate price consistency and detect outliers
 function validatePriceConsistency(sales) {
   if (sales.length < 2) {
@@ -7597,7 +7598,7 @@ function validatePriceConsistency(sales) {
   };
 }
 
-// Get individual card pricing from Perplexity
+// Get individual card pricing from SportsCardsPro
 async function getIndividualCardPricing(card, context = {}) {
   const cacheKey = buildCardCacheKey(card);
   const skipCache = context.skipCache === true;
@@ -7613,7 +7614,7 @@ async function getIndividualCardPricing(card, context = {}) {
     console.log('[Card Pricing] Cache bypass requested for:', card.player || card.subject);
   }
 
-  // Build specific query
+  // Extract card info
   const player = card.player || card.subject || 'Unknown';
   const year = card.year || '';
   const setName = card.set_name || card.set || '';
@@ -7622,41 +7623,44 @@ async function getIndividualCardPricing(card, context = {}) {
   const graded = card.is_graded ? `${card.grading_company || ''} ${card.grade || ''}`.trim() : '';
   const isBase = !parallel;
 
-  const query = buildPricingQuery(card);
+  console.log('[Card Pricing] Looking up via SportsCardsPro:', player, isBase ? '(BASE)' : `(${parallel})`);
 
-  console.log('[Card Pricing] Searching for:', player, isBase ? '(BASE)' : `(${parallel})`);
+  // Call SportsCardsPro API
+  const result = await searchSportsCardsPro(card, context);
 
-  const result = await searchPerplexity(query, {
-    ...context,
-    operation: 'individual-card-price',
-    feature: 'card-pricing'
-  });
-
-  if (!result) {
+  if (!result || result.value === null) {
     return {
-      card,
+      card: {
+        id: card.id,
+        player: player,
+        year: year,
+        setName: setName,
+        cardNumber: cardNumber,
+        parallel: parallel,
+        isBase: isBase,
+        isGraded: card.is_graded,
+        grade: graded,
+        imageUrl: card.front_image || card.front || null
+      },
       recentSales: [],
       average: null,
+      low: null,
+      high: null,
       trend: 'unknown',
-      recommendation: { action: 'RESEARCH', emoji: '🔍', reason: 'Unable to find pricing data' },
-      confidence: 'low',
+      recommendation: { action: 'RESEARCH', emoji: '🔍', reason: 'Card not found in pricing database - check eBay manually' },
+      confidence: 'none',
+      confidenceReason: 'No data available',
+      warning: 'No pricing data found. Try searching eBay or COMC manually.',
+      source: null,
       fromCache: false
     };
   }
 
-  // Parse the response to extract prices
-  const sales = parseRecentSales(result.content);
+  // Determine trend from recent sales
+  const trend = determinePriceTrend(result.recentSales);
 
-  // Validate price consistency
-  const validation = validatePriceConsistency(sales);
-
-  // Use adjusted average if outliers detected
-  const average = validation.adjustedAverage !== null
-    ? validation.adjustedAverage
-    : (sales.length > 0 ? sales.reduce((sum, s) => sum + s.price, 0) / sales.length : null);
-
-  const trend = determinePriceTrend(sales);
-  const recommendation = getCardRecommendation(average, trend, sales, card);
+  // Get recommendation based on value
+  const recommendation = getCardRecommendation(result.value, trend, result.recentSales, card);
 
   const pricingResult = {
     card: {
@@ -7671,73 +7675,33 @@ async function getIndividualCardPricing(card, context = {}) {
       grade: graded,
       imageUrl: card.front_image || card.front || null
     },
-    recentSales: sales,
-    average: average,
+    recentSales: result.recentSales || [],
+    average: result.value,
+    low: result.low,
+    high: result.high,
     trend: trend,
     recommendation: recommendation,
-    confidence: validation.confidence,
-    confidenceReason: validation.reason,
-    warning: validation.warning || null,
-    outlierCount: validation.outlierCount || 0,
-    rawResponse: result.content.substring(0, 500),
-    citations: result.citations,
+    confidence: result.confidence,
+    confidenceReason: result.salesCount > 5 ? 'Based on multiple recent sales' :
+                       result.salesCount > 2 ? 'Based on limited sales data' :
+                       'Very limited data available',
+    warning: null,
+    salesCount: result.salesCount,
+    source: result.source,
+    lastUpdated: result.lastUpdated,
+    responseTime: result.responseTime,
     fromCache: false
   };
+
+  // Add warning for low confidence
+  if (result.confidence === 'low') {
+    pricingResult.warning = 'Limited sales data - verify price manually';
+  }
 
   // Cache the result
   cardPricingCache.set(cacheKey, { data: pricingResult, timestamp: Date.now() });
 
   return pricingResult;
-}
-
-// Parse recent sales from Perplexity response
-function parseRecentSales(text) {
-  const sales = [];
-
-  // Look for price patterns: $XX.XX or $XXX
-  const lines = text.split('\n');
-
-  for (const line of lines) {
-    // Match prices with optional context
-    const priceMatch = line.match(/\$(\d{1,4}(?:\.\d{2})?)/g);
-    if (priceMatch) {
-      for (const match of priceMatch) {
-        const price = parseFloat(match.replace('$', ''));
-        if (price > 0.50 && price < 50000) { // Sanity check
-          // Try to extract condition
-          let condition = 'NM';
-          if (/mint|MT|gem/i.test(line)) condition = 'MT';
-          else if (/EX|excellent/i.test(line)) condition = 'EX';
-          else if (/VG|very good/i.test(line)) condition = 'VG';
-          else if (/PSA\s*10/i.test(line)) condition = 'PSA 10';
-          else if (/PSA\s*9/i.test(line)) condition = 'PSA 9';
-          else if (/BGS\s*9\.5/i.test(line)) condition = 'BGS 9.5';
-          else if (/raw/i.test(line)) condition = 'Raw';
-
-          // Try to extract date
-          let date = 'Recent';
-          const dateMatch = line.match(/(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s*\d{1,2}/i) ||
-                          line.match(/\d{1,2}\/\d{1,2}\/\d{2,4}/);
-          if (dateMatch) date = dateMatch[0];
-
-          sales.push({ price, condition, date });
-        }
-      }
-    }
-  }
-
-  // Remove duplicates and limit to 8
-  const uniqueSales = [];
-  const seenPrices = new Set();
-  for (const sale of sales) {
-    const key = `${sale.price}-${sale.condition}`;
-    if (!seenPrices.has(key)) {
-      seenPrices.add(key);
-      uniqueSales.push(sale);
-    }
-  }
-
-  return uniqueSales.slice(0, 8).sort((a, b) => b.price - a.price);
 }
 
 // Determine price trend from sales
@@ -7836,10 +7800,10 @@ app.post('/api/cards/price-individual', authenticateToken, async (req, res) => {
   const userId = req.user.id;
   const { cardIds } = req.body;
 
-  if (!PERPLEXITY_API_KEY) {
+  if (!SPORTSCARDSPRO_API_KEY) {
     return res.status(400).json({
       error: 'Card pricing not available',
-      message: 'Perplexity API not configured'
+      message: 'SportsCardsPro API not configured'
     });
   }
 
@@ -7945,7 +7909,7 @@ app.get('/api/cards/:cardId/price', authenticateToken, async (req, res) => {
   const { cardId } = req.params;
   const skipCache = req.query.fresh === '1' || req.query.fresh === 'true';
 
-  if (!PERPLEXITY_API_KEY) {
+  if (!SPORTSCARDSPRO_API_KEY) {
     return res.status(400).json({ error: 'Card pricing not available' });
   }
 
