@@ -43,8 +43,8 @@ let uploadQueue = [];
 let isUploading = false;
 let reconnectTimer = null;
 
-const API_BASE = 'https://cardflow.trycloudflare.com';
-const WS_URL = 'wss://cardflow.trycloudflare.com';
+const API_BASE = 'https://cardflow.be1st.io';
+const WS_URL = 'wss://cardflow.be1st.io';
 
 // Create main window
 function createWindow() {
