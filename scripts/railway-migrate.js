@@ -244,6 +244,9 @@ BEGIN
   END IF;
 END $$;
 
+-- Allow null password_hash for SlabTrack-authenticated users
+ALTER TABLE users ALTER COLUMN password_hash DROP NOT NULL;
+
 -- Indexes for performance
 CREATE INDEX IF NOT EXISTS idx_cards_user_id ON cards(user_id);
 CREATE INDEX IF NOT EXISTS idx_cards_status ON cards(status);
