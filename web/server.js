@@ -1236,6 +1236,131 @@ app.get('/api/admin/scan-history', authenticateToken, requireAdmin, async (req, 
   }
 });
 
+// Admin: SlabTrack Usage Dashboard - Track platform costs
+app.get('/api/admin/slabtrack-usage', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const { startDate, endDate, limit = 100, offset = 0 } = req.query;
+
+    // Get all SlabTrack scans with full details
+    let query = `
+      SELECT
+        a.id,
+        a.user_id,
+        a.card_id,
+        a.metadata,
+        a.timestamp,
+        u.email,
+        u.name,
+        u.slabtrack_tier,
+        u.slabtrack_user_id,
+        c.front_image_path,
+        c.back_image_path,
+        c.card_data
+      FROM api_usage a
+      LEFT JOIN users u ON a.user_id = u.id
+      LEFT JOIN cards c ON a.card_id = c.id
+      WHERE a.operation = 'slabtrack_scan'
+    `;
+
+    const params = [];
+    let paramIndex = 1;
+
+    if (startDate) {
+      query += ` AND DATE(a.timestamp) >= $${paramIndex++}`;
+      params.push(startDate);
+    }
+
+    if (endDate) {
+      query += ` AND DATE(a.timestamp) <= $${paramIndex++}`;
+      params.push(endDate);
+    }
+
+    query += ` ORDER BY a.timestamp DESC LIMIT $${paramIndex++} OFFSET $${paramIndex++}`;
+    params.push(parseInt(limit), parseInt(offset));
+
+    const scans = await pool.query(query, params);
+
+    // Summary stats
+    const summaryQuery = await pool.query(`
+      SELECT
+        COUNT(*) as total_scans,
+        COUNT(DISTINCT user_id) as unique_users,
+        COUNT(CASE WHEN timestamp > NOW() - INTERVAL '24 hours' THEN 1 END) as scans_24h,
+        COUNT(CASE WHEN timestamp > NOW() - INTERVAL '7 days' THEN 1 END) as scans_7d,
+        COUNT(CASE WHEN timestamp > NOW() - INTERVAL '30 days' THEN 1 END) as scans_30d
+      FROM api_usage
+      WHERE operation = 'slabtrack_scan'
+    `);
+
+    // Top users by SlabTrack scan count
+    const topUsersQuery = await pool.query(`
+      SELECT
+        u.email,
+        u.name,
+        u.slabtrack_tier,
+        COUNT(*) as scan_count,
+        MAX(a.timestamp) as last_scan
+      FROM api_usage a
+      JOIN users u ON a.user_id = u.id
+      WHERE a.operation = 'slabtrack_scan'
+      AND a.timestamp > NOW() - INTERVAL '30 days'
+      GROUP BY u.id, u.email, u.name, u.slabtrack_tier
+      ORDER BY scan_count DESC
+      LIMIT 20
+    `);
+
+    // Daily breakdown (last 30 days)
+    const dailyQuery = await pool.query(`
+      SELECT
+        DATE(timestamp) as date,
+        COUNT(*) as scan_count,
+        COUNT(DISTINCT user_id) as unique_users
+      FROM api_usage
+      WHERE operation = 'slabtrack_scan'
+      AND timestamp > NOW() - INTERVAL '30 days'
+      GROUP BY DATE(timestamp)
+      ORDER BY date DESC
+    `);
+
+    const summary = summaryQuery.rows[0] || {};
+
+    res.json({
+      success: true,
+      summary: {
+        totalScans: parseInt(summary.total_scans || 0),
+        uniqueUsers: parseInt(summary.unique_users || 0),
+        scans24h: parseInt(summary.scans_24h || 0),
+        scans7d: parseInt(summary.scans_7d || 0),
+        scans30d: parseInt(summary.scans_30d || 0)
+      },
+      topUsers: topUsersQuery.rows,
+      dailyBreakdown: dailyQuery.rows,
+      scans: scans.rows.map(scan => ({
+        id: scan.id,
+        timestamp: scan.timestamp,
+        user: {
+          id: scan.user_id,
+          email: scan.email,
+          name: scan.name,
+          slabtrack_tier: scan.slabtrack_tier,
+          slabtrack_user_id: scan.slabtrack_user_id
+        },
+        card: {
+          id: scan.card_id,
+          front_image: scan.front_image_path,
+          back_image: scan.back_image_path,
+          data: typeof scan.card_data === 'string' ? JSON.parse(scan.card_data) : scan.card_data
+        },
+        metadata: typeof scan.metadata === 'string' ? JSON.parse(scan.metadata) : scan.metadata
+      }))
+    });
+
+  } catch (e) {
+    console.error('SlabTrack usage error:', e);
+    res.status(500).json({ error: 'Failed to get SlabTrack usage' });
+  }
+});
+
 // Admin: Get scan stats overview
 app.get('/api/admin/scan-stats', authenticateToken, requireAdmin, async (req, res) => {
   try {
@@ -1610,7 +1735,14 @@ async function canUseSlabTrackScan(userId) {
 async function identifySingleCard(userId, cardId) {
   console.log(`[Batch] Auto-identifying card ${cardId} for user ${userId}`);
 
-  // Check if user can use SlabTrack scanning (Pro tier)
+  // Get user info for logging
+  const userResult = await pool.query(
+    'SELECT email, name, slabtrack_tier, slabtrack_user_id FROM users WHERE id = $1',
+    [userId]
+  );
+  const userInfo = userResult.rows[0] || {};
+
+  // Check if user can use SlabTrack scanning (Power/Dealer tier)
   const slabTrackCheck = await canUseSlabTrackScan(userId);
 
   // Get BYOK API key as fallback
@@ -1691,11 +1823,43 @@ async function identifySingleCard(userId, cardId) {
           WHERE id = $2
         `, [JSON.stringify(cardData), cardId]);
 
-        // Log usage (no cost for user - SlabTrack credits)
+        // Log SlabTrack scan with FULL details for admin tracking (costs platform money)
+        const slabtrackMetadata = {
+          scan_source: 'slabtrack',
+          scan_type: 'slabtrack_api',
+          // User info
+          user_email: userInfo.email,
+          user_name: userInfo.name,
+          slabtrack_tier: slabTrackCheck.tier || userInfo.slabtrack_tier,
+          slabtrack_user_id: userInfo.slabtrack_user_id,
+          // Images
+          front_image_url: card.front_image_path,
+          back_image_url: card.back_image_path,
+          // Card result
+          card_identified: {
+            player: cardData.player,
+            year: cardData.year,
+            set_name: cardData.set_name,
+            card_number: cardData.card_number,
+            parallel: cardData.parallel,
+            sport: cardData.sport,
+            is_graded: cardData.is_graded,
+            grading_company: cardData.grading_company,
+            grade: cardData.grade
+          },
+          // Pricing if available
+          pricing: stResponse.data.pricing || null,
+          sportsCardsPro: stResponse.data.sportsCardsPro || null,
+          // Timestamp
+          scanned_at: new Date().toISOString()
+        };
+
         await pool.query(`
           INSERT INTO api_usage (user_id, operation, model_used, tokens_input, tokens_output, cost, card_id, metadata)
-          VALUES ($1, 'identify', 'slabtrack', 0, 0, 0, $2, $3)
-        `, [userId, cardId, JSON.stringify({ scan_source: 'slabtrack', front_image: card.front_image_path })]);
+          VALUES ($1, 'slabtrack_scan', 'slabtrack_api', 0, 0, 0, $2, $3)
+        `, [userId, cardId, JSON.stringify(slabtrackMetadata)]);
+
+        console.log(`[SlabTrack Scan] ${userInfo.email} (${slabTrackCheck.tier}) scanned: ${cardData.player}`);
 
         console.log(`[Batch] Card ${cardId} identified via SlabTrack: ${cardData.player}`);
 
