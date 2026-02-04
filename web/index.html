@@ -2334,7 +2334,7 @@
         <div class="user-dropdown" id="user-dropdown">
           <a href="#" onclick="showSettingsModal('account'); closeUserMenu();">👤 Account</a>
           <a href="#" onclick="showSettingsModal('api'); closeUserMenu();">🔑 API Key</a>
-          <a href="/download" target="_blank">💻 Desktop Scanner</a>
+          <a href="/download" target="_blank" id="desktop-scanner-link" style="display:none;">💻 Desktop Scanner</a>
           <a href="#" id="subscription-link" class="subscription-link" onclick="manageSubscription(); closeUserMenu();" style="display:none;">💳 Manage Subscription</a>
           <a href="#" id="upgrade-link" class="upgrade-link" onclick="showUpgradeModal(); closeUserMenu();">⚡ Upgrade</a>
           <a href="/admin" class="admin-link" id="admin-link" style="display:none;">⚡ Admin Panel</a>
@@ -5176,9 +5176,13 @@
       const upgradeLink = document.getElementById('upgrade-link');
       const subscriptionLink = document.getElementById('subscription-link');
       const freeTierBanner = document.getElementById('free-tier-banner');
+      const desktopScannerLink = document.getElementById('desktop-scanner-link');
 
       // Hide free tier banner by default
       freeTierBanner.classList.remove('show');
+
+      // Desktop scanner - admin only for now
+      desktopScannerLink.style.display = data.role === 'admin' ? 'block' : 'none';
 
       // Admin - full access, no upgrade needed
       if (data.role === 'admin') {

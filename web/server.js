@@ -616,9 +616,26 @@ app.use(express.static(__dirname, { index: false }));
 // Serve downloads folder
 app.use('/downloads', express.static(path.join(__dirname, 'downloads')));
 
-// Download page
-app.get('/download', (req, res) => {
-  res.sendFile(path.join(__dirname, 'download.html'));
+// Download page - admin only for now
+app.get('/download', async (req, res) => {
+  // Check for admin access via JWT token in cookie or query
+  const token = req.headers.authorization?.replace('Bearer ', '') ||
+                req.cookies?.token ||
+                req.query.token;
+
+  if (token) {
+    try {
+      const decoded = jwt.verify(token, JWT_SECRET);
+      if (decoded.role === 'admin') {
+        return res.sendFile(path.join(__dirname, 'download.html'));
+      }
+    } catch (e) {
+      // Invalid token, fall through to redirect
+    }
+  }
+
+  // Not admin - redirect to app with message
+  res.redirect('/app?error=desktop_scanner_admin_only');
 });
 
 // Scanner download URL (use GitHub Releases or other CDN in production)
