@@ -323,6 +323,23 @@
     .tier-pro { background: rgba(0, 246, 255, 0.2); color: var(--cyan); }
     .tier-admin { background: rgba(123, 47, 247, 0.2); color: var(--purple); }
 
+    /* Delete user button */
+    .btn-delete-user {
+      background: rgba(255, 68, 102, 0.1);
+      border: 1px solid rgba(255, 68, 102, 0.3);
+      color: var(--error);
+      padding: 6px 10px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 14px;
+      transition: all 0.2s;
+    }
+
+    .btn-delete-user:hover {
+      background: rgba(255, 68, 102, 0.2);
+      border-color: var(--error);
+    }
+
     /* Top users list */
     .top-users-list {
       list-style: none;
@@ -646,6 +663,32 @@
 
     let expandedScanId = null;
 
+    async function deleteUser(userId, userEmail) {
+      // Double confirmation for safety
+      if (!confirm(`Are you sure you want to delete user:\n\n${userEmail}\n\nThis will permanently delete all their cards and data.`)) {
+        return;
+      }
+
+      // Second confirmation
+      if (!confirm(`FINAL WARNING!\n\nThis action CANNOT be undone.\n\nDelete ${userEmail} and all their data?`)) {
+        return;
+      }
+
+      try {
+        const result = await api(`/admin/users/${userId}`, { method: 'DELETE' });
+
+        if (result.success) {
+          alert(`User deleted successfully.\n\nEmail: ${userEmail}\nCards removed: ${result.deletedCards}`);
+          // Reload the dashboard to refresh the user list
+          loadDashboard();
+        } else {
+          alert('Failed to delete user: ' + (result.error || 'Unknown error'));
+        }
+      } catch (e) {
+        alert('Error deleting user: ' + e.message);
+      }
+    }
+
     async function loadDashboard() {
       try {
         const [analytics, usersData, scanHistory, aiAnalytics, costOverview] = await Promise.all([
@@ -717,6 +760,7 @@
                       <th>Cards</th>
                       <th>Spent</th>
                       <th>Last Login</th>
+                      <th>Actions</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -739,6 +783,13 @@
                         <td>$${parseFloat(u.total_cost || 0).toFixed(2)}</td>
                         <td style="color: var(--text-muted); font-size: 12px;">
                           ${u.last_login_at ? new Date(u.last_login_at).toLocaleDateString() : 'Never'}
+                        </td>
+                        <td>
+                          ${u.role !== 'admin' ? `
+                            <button class="btn-delete-user" onclick="deleteUser('${u.id}', '${u.email}')" title="Delete User">
+                              🗑️
+                            </button>
+                          ` : '<span style="color: var(--text-muted);">-</span>'}
                         </td>
                       </tr>
                     `).join('')}

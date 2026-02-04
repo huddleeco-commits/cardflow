@@ -1501,6 +1501,50 @@ app.put('/api/admin/users/:id', authenticateToken, requireAdmin, async (req, res
   }
 });
 
+// Delete user (admin only)
+app.delete('/api/admin/users/:id', authenticateToken, requireAdmin, async (req, res) => {
+  const userId = req.params.id;
+
+  // Prevent self-deletion
+  if (userId === req.user.id) {
+    return res.status(400).json({ error: 'Cannot delete your own account' });
+  }
+
+  try {
+    // Check if user exists
+    const userCheck = await pool.query('SELECT email, role FROM users WHERE id = $1', [userId]);
+    if (userCheck.rows.length === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    const targetUser = userCheck.rows[0];
+
+    // Prevent deleting other admins (extra safety)
+    if (targetUser.role === 'admin' && req.user.email !== 'huddleeco@gmail.com') {
+      return res.status(403).json({ error: 'Only super admin can delete admin users' });
+    }
+
+    // Delete user's data in order (foreign key constraints)
+    const deletedCards = await pool.query('DELETE FROM cards WHERE user_id = $1 RETURNING id', [userId]);
+    await pool.query('DELETE FROM api_usage WHERE user_id = $1', [userId]);
+
+    // Delete the user
+    await pool.query('DELETE FROM users WHERE id = $1', [userId]);
+
+    console.log(`[Admin] User deleted: ${targetUser.email} (${deletedCards.rowCount} cards removed)`);
+
+    res.json({
+      success: true,
+      message: `User ${targetUser.email} deleted`,
+      deletedCards: deletedCards.rowCount
+    });
+
+  } catch (e) {
+    console.error('Delete user error:', e);
+    res.status(500).json({ error: 'Failed to delete user' });
+  }
+});
+
 // System analytics (admin only)
 app.get('/api/admin/analytics', authenticateToken, requireAdmin, async (req, res) => {
   try {
@@ -1529,13 +1573,23 @@ app.get('/api/admin/analytics', authenticateToken, requireAdmin, async (req, res
       ORDER BY date
     `);
 
-    // Top users
+    // Top users (fixed: use subqueries to avoid cartesian product)
     const topUsers = await pool.query(`
-      SELECT u.email, u.name, COUNT(c.id) as cards, COALESCE(SUM(a.cost), 0) as cost
+      SELECT
+        u.id,
+        u.email,
+        u.name,
+        u.role,
+        u.created_at,
+        COALESCE(card_counts.count, 0) as cards,
+        COALESCE(cost_totals.total, 0) as cost
       FROM users u
-      LEFT JOIN cards c ON c.user_id = u.id
-      LEFT JOIN api_usage a ON a.user_id = u.id
-      GROUP BY u.id, u.email, u.name
+      LEFT JOIN (
+        SELECT user_id, COUNT(*) as count FROM cards GROUP BY user_id
+      ) card_counts ON card_counts.user_id = u.id
+      LEFT JOIN (
+        SELECT user_id, SUM(cost) as total FROM api_usage GROUP BY user_id
+      ) cost_totals ON cost_totals.user_id = u.id
       ORDER BY cards DESC
       LIMIT 10
     `);
