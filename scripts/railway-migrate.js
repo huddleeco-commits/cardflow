@@ -242,6 +242,11 @@ BEGIN
   IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'users' AND column_name = 'auth_method') THEN
     ALTER TABLE users ADD COLUMN auth_method VARCHAR(50) DEFAULT 'password';
   END IF;
+  -- Stripe subscription fields
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'users' AND column_name = 'stripe_customer_id') THEN
+    ALTER TABLE users ADD COLUMN stripe_customer_id VARCHAR(255);
+    ALTER TABLE users ADD COLUMN stripe_subscription_id VARCHAR(255);
+  END IF;
 END $$;
 
 -- Allow null password_hash for SlabTrack-authenticated users

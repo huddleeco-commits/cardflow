@@ -228,6 +228,37 @@
       padding-top: 12px;
     }
 
+    .user-dropdown .subscription-link {
+      color: var(--success);
+    }
+
+    .user-dropdown .upgrade-link {
+      background: linear-gradient(135deg, var(--cyan), var(--purple));
+      color: #000;
+      font-weight: 600;
+      margin: 4px 8px;
+      border-radius: 8px;
+      text-align: center;
+    }
+
+    .user-dropdown .upgrade-link:hover {
+      background: linear-gradient(135deg, var(--purple), var(--cyan));
+    }
+
+    .tier-badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 12px;
+      font-size: 10px;
+      font-weight: 600;
+      text-transform: uppercase;
+      margin-left: 8px;
+    }
+
+    .tier-badge.free { background: var(--glass); color: var(--text-muted); }
+    .tier-badge.basic { background: var(--cyan-glow); color: var(--cyan); }
+    .tier-badge.pro { background: linear-gradient(135deg, var(--purple), var(--pink)); color: #fff; }
+
     .connection-status {
       display: flex;
       align-items: center;
@@ -2239,6 +2270,8 @@
           <a href="#" onclick="showSettingsModal('account'); closeUserMenu();">👤 Account</a>
           <a href="#" onclick="showSettingsModal('api'); closeUserMenu();">🔑 API Key</a>
           <a href="/download" target="_blank">💻 Desktop Scanner</a>
+          <a href="#" id="subscription-link" class="subscription-link" onclick="manageSubscription(); closeUserMenu();" style="display:none;">💳 Manage Subscription</a>
+          <a href="#" id="upgrade-link" class="upgrade-link" onclick="showUpgradeModal(); closeUserMenu();">⚡ Upgrade</a>
           <a href="/admin" class="admin-link" id="admin-link" style="display:none;">⚡ Admin Panel</a>
           <button class="logout-btn" onclick="logout()">🚪 Logout</button>
         </div>
@@ -2967,6 +3000,54 @@
       <div class="modal-footer">
         <button class="btn btn-secondary" onclick="closeSettingsModal()">Close</button>
         <button class="btn btn-primary" onclick="saveSettings()">Save Settings</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Upgrade Modal -->
+  <div class="modal" id="upgrade-modal">
+    <div class="modal-content" style="max-width: 600px;">
+      <div class="modal-header">
+        <h2>Upgrade Your Plan</h2>
+        <button class="modal-close" onclick="closeUpgradeModal()">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p style="margin-bottom: 24px; color: var(--text-muted); text-align: center;">
+          Unlock unlimited scanning and more features
+        </p>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+          <!-- Basic Plan -->
+          <div style="background: var(--glass); border: 1px solid var(--glass-border); border-radius: 16px; padding: 24px; text-align: center;">
+            <div style="font-size: 12px; color: var(--cyan); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px;">Basic</div>
+            <div style="font-size: 36px; font-weight: 800; margin-bottom: 4px;">$2.99<span style="font-size: 14px; color: var(--text-muted);">/mo</span></div>
+            <ul style="text-align: left; list-style: none; margin: 16px 0; font-size: 13px; color: var(--text-muted);">
+              <li style="padding: 6px 0;">✓ Unlimited scanning (BYOK)</li>
+              <li style="padding: 6px 0;">✓ Export to CSV/SlabTrack</li>
+              <li style="padding: 6px 0;">✓ Price research links</li>
+              <li style="padding: 6px 0; opacity: 0.5;">✗ eBay integration</li>
+            </ul>
+            <button class="btn btn-secondary" onclick="checkout('basic')" style="width: 100%;">Get Basic</button>
+          </div>
+          <!-- Pro Plan -->
+          <div style="background: linear-gradient(135deg, rgba(123, 47, 247, 0.1), rgba(0, 246, 255, 0.1)); border: 2px solid var(--cyan); border-radius: 16px; padding: 24px; text-align: center; position: relative;">
+            <div style="position: absolute; top: -10px; left: 50%; transform: translateX(-50%); background: linear-gradient(135deg, var(--cyan), var(--purple)); color: #000; padding: 4px 12px; border-radius: 12px; font-size: 10px; font-weight: 700;">POPULAR</div>
+            <div style="font-size: 12px; color: var(--purple); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px;">Pro</div>
+            <div style="font-size: 36px; font-weight: 800; margin-bottom: 4px;">$5.99<span style="font-size: 14px; color: var(--text-muted);">/mo</span></div>
+            <ul style="text-align: left; list-style: none; margin: 16px 0; font-size: 13px; color: var(--text-muted);">
+              <li style="padding: 6px 0;">✓ Unlimited scanning (BYOK)</li>
+              <li style="padding: 6px 0;">✓ Export to CSV/SlabTrack</li>
+              <li style="padding: 6px 0;">✓ Price research links</li>
+              <li style="padding: 6px 0; color: var(--success);">✓ <strong>eBay Integration</strong></li>
+            </ul>
+            <button class="btn btn-primary" onclick="checkout('pro')" style="width: 100%;">Get Pro</button>
+          </div>
+        </div>
+        <p style="text-align: center; margin-top: 16px; font-size: 12px; color: var(--text-muted);">
+          + AI costs (~$0.01-0.03 per card with your Claude API key)
+        </p>
+        <p style="text-align: center; margin-top: 8px; font-size: 12px; color: var(--success);">
+          Already have SlabTrack? <a href="/auth-slabtrack" style="color: var(--cyan);">Link your account</a> for free access!
+        </p>
       </div>
     </div>
   </div>
@@ -4972,6 +5053,75 @@
       document.getElementById('settings-modal').classList.remove('open');
     }
 
+    // Subscription/Upgrade functions
+    let userTier = 'free';
+
+    function showUpgradeModal() {
+      document.getElementById('upgrade-modal').classList.add('open');
+    }
+
+    function closeUpgradeModal() {
+      document.getElementById('upgrade-modal').classList.remove('open');
+    }
+
+    async function checkout(tier) {
+      try {
+        const res = await fetch('/api/stripe/checkout', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({ tier })
+        });
+        const data = await res.json();
+        if (data.url) {
+          window.location.href = data.url;
+        } else {
+          alert(data.error || 'Failed to create checkout session');
+        }
+      } catch (e) {
+        console.error('Checkout error:', e);
+        alert('Failed to start checkout');
+      }
+    }
+
+    async function manageSubscription() {
+      try {
+        const res = await fetch('/api/stripe/portal', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+        const data = await res.json();
+        if (data.url) {
+          window.location.href = data.url;
+        } else {
+          alert(data.error || 'Failed to open subscription portal');
+        }
+      } catch (e) {
+        console.error('Portal error:', e);
+        alert('Failed to open subscription management');
+      }
+    }
+
+    function updateSubscriptionUI(tier) {
+      userTier = tier;
+      const upgradeLink = document.getElementById('upgrade-link');
+      const subscriptionLink = document.getElementById('subscription-link');
+
+      if (tier === 'pro' || tier === 'basic') {
+        // Has paid subscription
+        upgradeLink.style.display = 'none';
+        subscriptionLink.style.display = 'block';
+      } else {
+        // Free tier
+        upgradeLink.style.display = 'block';
+        subscriptionLink.style.display = 'none';
+      }
+    }
+
     function switchSettingsTab(tab) {
       document.querySelectorAll('.settings-tab').forEach(t => t.classList.remove('active'));
       document.querySelectorAll('.settings-panel').forEach(p => p.classList.remove('active'));
@@ -4990,6 +5140,9 @@
         document.getElementById('account-email').textContent = data.email;
         document.getElementById('account-tier').textContent = data.subscriptionTier;
         document.getElementById('account-created').textContent = new Date(data.createdAt).toLocaleDateString();
+
+        // Update subscription UI
+        updateSubscriptionUI(data.subscriptionTier);
 
         // API key status
         const indicator = document.getElementById('api-key-indicator');
@@ -7945,6 +8098,20 @@
     loadStatus();
     loadCards();
     connectWebSocket();
+    loadUserInfo(); // Load user tier for subscription UI
+
+    // Handle subscription success redirect
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('subscription') === 'success') {
+      showToast('Subscription activated! Thank you!', 'success');
+      // Clean up URL
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }
+
+    // Close upgrade modal when clicking outside
+    document.getElementById('upgrade-modal').addEventListener('click', function(e) {
+      if (e.target === this) closeUpgradeModal();
+    });
   </script>
 </body>
 </html>
