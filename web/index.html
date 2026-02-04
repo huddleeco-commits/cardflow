@@ -136,6 +136,63 @@
       letter-spacing: 1px;
     }
 
+    /* Free tier usage indicator */
+    .free-tier-banner {
+      display: none;
+      align-items: center;
+      gap: 12px;
+      padding: 8px 16px;
+      background: linear-gradient(135deg, rgba(255, 170, 0, 0.1), rgba(255, 46, 151, 0.1));
+      border: 1px solid rgba(255, 170, 0, 0.3);
+      border-radius: 12px;
+      font-size: 13px;
+    }
+
+    .free-tier-banner.show {
+      display: flex;
+    }
+
+    .free-tier-banner .usage-bar {
+      width: 80px;
+      height: 6px;
+      background: var(--glass);
+      border-radius: 3px;
+      overflow: hidden;
+    }
+
+    .free-tier-banner .usage-fill {
+      height: 100%;
+      background: linear-gradient(90deg, var(--cyan), var(--warning));
+      border-radius: 3px;
+      transition: width 0.3s ease;
+    }
+
+    .free-tier-banner .usage-fill.full {
+      background: linear-gradient(90deg, var(--warning), var(--error));
+    }
+
+    .free-tier-banner .usage-text {
+      color: var(--warning);
+      font-weight: 600;
+    }
+
+    .free-tier-banner .upgrade-btn {
+      padding: 4px 12px;
+      background: linear-gradient(135deg, var(--cyan), var(--purple));
+      color: #000;
+      border: none;
+      border-radius: 8px;
+      font-size: 11px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .free-tier-banner .upgrade-btn:hover {
+      transform: scale(1.05);
+      box-shadow: 0 0 15px var(--cyan-glow);
+    }
+
     .header-right {
       display: flex;
       align-items: center;
@@ -2257,6 +2314,14 @@
       </div>
     </div>
     <div class="header-right">
+      <!-- Free tier usage indicator -->
+      <div class="free-tier-banner" id="free-tier-banner">
+        <div class="usage-bar">
+          <div class="usage-fill" id="usage-fill" style="width: 0%"></div>
+        </div>
+        <span class="usage-text" id="usage-text">0/10</span>
+        <button class="upgrade-btn" onclick="showUpgradeModal()">Upgrade</button>
+      </div>
       <div class="connection-status">
         <div class="status-dot" id="ws-status"></div>
         <span id="ws-text">Connecting...</span>
@@ -5110,6 +5175,10 @@
       userTier = data.subscriptionTier;
       const upgradeLink = document.getElementById('upgrade-link');
       const subscriptionLink = document.getElementById('subscription-link');
+      const freeTierBanner = document.getElementById('free-tier-banner');
+
+      // Hide free tier banner by default
+      freeTierBanner.classList.remove('show');
 
       // Admin - full access, no upgrade needed
       if (data.role === 'admin') {
@@ -5132,9 +5201,20 @@
         return;
       }
 
-      // Free tier - show upgrade
+      // Free tier - show upgrade and usage banner
       upgradeLink.style.display = 'block';
       subscriptionLink.style.display = 'none';
+
+      // Show free tier banner with usage
+      const cardCount = data.stats?.totalCards || 0;
+      const limit = 10;
+      const percentage = Math.min((cardCount / limit) * 100, 100);
+
+      freeTierBanner.classList.add('show');
+      document.getElementById('usage-text').textContent = `${cardCount}/${limit}`;
+      const usageFill = document.getElementById('usage-fill');
+      usageFill.style.width = percentage + '%';
+      usageFill.classList.toggle('full', cardCount >= limit);
     }
 
     function switchSettingsTab(tab) {
