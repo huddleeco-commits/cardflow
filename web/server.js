@@ -842,7 +842,7 @@ app.post('/api/auth/slabtrack-login', async (req, res) => {
 app.get('/api/auth/me', authenticateToken, async (req, res) => {
   try {
     const result = await pool.query(`
-      SELECT id, email, name, role, subscription_tier, api_key, scans_used, monthly_limit, created_at
+      SELECT id, email, name, role, subscription_tier, api_key, scans_used, monthly_limit, created_at, slabtrack_tier, stripe_subscription_id
       FROM users WHERE id = $1
     `, [req.user.id]);
 
@@ -859,6 +859,9 @@ app.get('/api/auth/me', authenticateToken, async (req, res) => {
     // Get tier info
     const tierInfo = getTierInfo(user.subscription_tier);
 
+    // SlabTrack power/dealer tiers get free access
+    const slabtrackFreeAccess = ['power', 'dealer'].includes(user.slabtrack_tier);
+
     res.json({
       id: user.id,
       email: user.email,
@@ -871,6 +874,9 @@ app.get('/api/auth/me', authenticateToken, async (req, res) => {
       scansUsed: user.scans_used,
       monthlyLimit: user.monthly_limit,
       createdAt: user.created_at,
+      slabtrackTier: user.slabtrack_tier,
+      slabtrackFreeAccess: slabtrackFreeAccess,
+      hasStripeSubscription: !!user.stripe_subscription_id,
       stats: {
         totalCards: parseInt(cardCount.rows[0].count),
         totalSpent: parseFloat(usageTotal.rows[0].total || 0)

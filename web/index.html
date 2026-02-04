@@ -5106,20 +5106,35 @@
       }
     }
 
-    function updateSubscriptionUI(tier) {
-      userTier = tier;
+    function updateSubscriptionUI(data) {
+      userTier = data.subscriptionTier;
       const upgradeLink = document.getElementById('upgrade-link');
       const subscriptionLink = document.getElementById('subscription-link');
 
-      if (tier === 'pro' || tier === 'basic') {
-        // Has paid subscription
+      // Admin - full access, no upgrade needed
+      if (data.role === 'admin') {
+        upgradeLink.style.display = 'none';
+        subscriptionLink.style.display = 'none';
+        return;
+      }
+
+      // SlabTrack power/dealer - free access
+      if (data.slabtrackFreeAccess) {
+        upgradeLink.style.display = 'none';
+        subscriptionLink.style.display = 'none';
+        return;
+      }
+
+      // Has paid Stripe subscription
+      if (data.hasStripeSubscription || data.subscriptionTier === 'pro' || data.subscriptionTier === 'basic') {
         upgradeLink.style.display = 'none';
         subscriptionLink.style.display = 'block';
-      } else {
-        // Free tier
-        upgradeLink.style.display = 'block';
-        subscriptionLink.style.display = 'none';
+        return;
       }
+
+      // Free tier - show upgrade
+      upgradeLink.style.display = 'block';
+      subscriptionLink.style.display = 'none';
     }
 
     function switchSettingsTab(tab) {
@@ -5141,8 +5156,8 @@
         document.getElementById('account-tier').textContent = data.subscriptionTier;
         document.getElementById('account-created').textContent = new Date(data.createdAt).toLocaleDateString();
 
-        // Update subscription UI
-        updateSubscriptionUI(data.subscriptionTier);
+        // Update subscription UI (pass full data for role/slabtrack checks)
+        updateSubscriptionUI(data);
 
         // API key status
         const indicator = document.getElementById('api-key-indicator');
