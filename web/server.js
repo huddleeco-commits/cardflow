@@ -2113,7 +2113,9 @@ async function getUserApiKey(userId) {
       return result.rows[0].api_key;
     }
   } catch (e) {}
-  return process.env.ANTHROPIC_API_KEY || null;
+  // No fallback to platform key - true BYOK model
+  // Users must have their own API key or use SlabTrack Power/Dealer
+  return null;
 }
 
 // Convert image to base64 (local file)
