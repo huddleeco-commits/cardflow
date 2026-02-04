@@ -5857,6 +5857,24 @@ app.post('/api/slabtrack/send', authenticateToken, async (req, res) => {
       timeout: 60000 // 60 second timeout for large imports
     });
 
+    // Check for success: false in response (SlabTrack may return 200 with error)
+    if (response.data?.success === false) {
+      console.error('[SlabTrack] API returned error:', response.data);
+      const errorMsg = response.data?.error || 'Unknown error';
+
+      if (errorMsg.toLowerCase().includes('token') || errorMsg.toLowerCase().includes('auth')) {
+        return res.status(401).json({
+          error: 'SlabTrack token expired',
+          message: 'Your SlabTrack token is invalid or expired. Please reconnect in Settings → SlabTrack.'
+        });
+      }
+
+      return res.status(400).json({
+        error: 'SlabTrack error',
+        message: errorMsg
+      });
+    }
+
     console.log(`[SlabTrack] Send complete: ${response.data?.imported || cards.length} cards imported`);
 
     res.json({
