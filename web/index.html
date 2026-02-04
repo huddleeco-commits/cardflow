@@ -1827,14 +1827,29 @@
       }
 
       /* Mobile bulk action bar */
+      #bulk-action-bar {
+        padding: 10px 12px !important;
+      }
+
       #bulk-action-bar > div {
         flex-direction: column;
         gap: 12px;
       }
 
+      #bulk-action-bar > div > div:first-child {
+        justify-content: center;
+        flex-wrap: wrap;
+      }
+
       #bulk-action-bar > div > div:last-child {
         flex-wrap: wrap;
         justify-content: center;
+        gap: 6px !important;
+      }
+
+      #bulk-action-bar .btn {
+        padding: 8px 12px;
+        font-size: 11px;
       }
 
       /* Mobile upload zone */
@@ -2550,7 +2565,8 @@
   <section class="bulk-action-bar" id="bulk-action-bar" style="display: none; padding: 12px 24px; background: linear-gradient(135deg, rgba(0, 246, 255, 0.1), rgba(123, 47, 247, 0.1)); border-bottom: 1px solid var(--glass-border);">
     <div style="display: flex; align-items: center; justify-content: space-between;">
       <div style="display: flex; align-items: center; gap: 16px;">
-        <input type="checkbox" id="select-all-checkbox" onchange="toggleSelectAll()" style="width: 20px; height: 20px;">
+        <button class="btn btn-secondary" onclick="selectAllCards()" id="select-all-btn" style="padding: 8px 16px; font-size: 13px;">☑️ Select All</button>
+        <button class="btn btn-secondary" onclick="deselectAllCards()" style="padding: 8px 16px; font-size: 13px;">☐ Deselect All</button>
         <span id="selected-count" style="color: var(--cyan); font-weight: 600;">0 selected</span>
       </div>
       <div style="display: flex; gap: 8px;">
@@ -5745,24 +5761,51 @@
       btn.disabled = true;
       btn.innerHTML = '⏳ Sending...';
 
+      const cardIdsToSend = Array.from(selectedCards);
+
       try {
         const result = await api('/slabtrack/send', {
           method: 'POST',
           body: JSON.stringify({
-            cardIds: Array.from(selectedCards)
+            cardIds: cardIdsToSend
           })
         });
 
         if (result?.success) {
           showToast(`Successfully sent ${result.imported} cards to SlabTrack!`, 'success');
+
+          // Ask if user wants to remove cards from CardFlow
+          const removeCards = confirm(
+            `Cards sent successfully!\n\nWould you like to REMOVE these ${result.imported} cards from CardFlow?\n\n` +
+            `Click OK to remove them (they're now in SlabTrack)\n` +
+            `Click Cancel to keep them in both places`
+          );
+
+          if (removeCards) {
+            // Delete the sent cards from CardFlow
+            try {
+              const deleteResult = await api('/cards/bulk-delete', {
+                method: 'DELETE',
+                body: JSON.stringify({ cardIds: cardIdsToSend })
+              });
+              if (deleteResult?.success) {
+                showToast(`Removed ${deleteResult.deleted} cards from CardFlow`, 'success');
+              }
+            } catch (delError) {
+              showToast('Cards sent but failed to remove from CardFlow', 'warning');
+            }
+          }
+
           selectedCards.clear();
           updateSelectedCount();
-          renderCards();
+          loadCards();
+          loadStatus();
         } else {
           showToast(result?.error || 'Failed to send cards', 'error');
         }
       } catch (e) {
-        showToast('Failed to send to SlabTrack: ' + e.message, 'error');
+        console.error('SlabTrack send error:', e);
+        showToast('Failed to send to SlabTrack: ' + (e.message || 'Unknown error'), 'error');
       } finally {
         btn.disabled = false;
         btn.innerHTML = originalText;
@@ -6939,19 +6982,32 @@
     }
 
     function toggleSelectAll() {
-      const checkbox = document.getElementById('select-all-checkbox');
-      if (checkbox.checked) {
-        cards.forEach(c => selectedCards.add(c.id));
-      } else {
+      // Legacy function for checkbox
+      if (selectedCards.size === cards.length) {
         selectedCards.clear();
+      } else {
+        cards.forEach(c => selectedCards.add(c.id));
       }
       updateSelectedCount();
       renderCards();
     }
 
+    function selectAllCards() {
+      cards.forEach(c => selectedCards.add(c.id));
+      updateSelectedCount();
+      renderCards();
+      showToast(`Selected all ${cards.length} cards`, 'info');
+    }
+
+    function deselectAllCards() {
+      selectedCards.clear();
+      updateSelectedCount();
+      renderCards();
+      showToast('Deselected all cards', 'info');
+    }
+
     function updateSelectedCount() {
       document.getElementById('selected-count').textContent = `${selectedCards.size} selected`;
-      document.getElementById('select-all-checkbox').checked = selectedCards.size === cards.length && cards.length > 0;
     }
 
     async function bulkSetPrice() {
