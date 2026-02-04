@@ -2050,6 +2050,7 @@ app.post('/api/upload-pair', authenticateToken, (req, res) => {
 
       // Store in database and get the card ID
       const isBatchMode = req.body && req.body.batch === 'true';
+      const uploadSource = req.body && req.body.source ? req.body.source : 'web'; // phone, desktop, or web
       console.log(`[Upload] Body fields:`, req.body); // Debug: see what's in req.body
       const insertResult = await pool.query(`
         INSERT INTO cards (user_id, card_data, front_image_path, back_image_path, status)
@@ -2057,20 +2058,21 @@ app.post('/api/upload-pair', authenticateToken, (req, res) => {
         RETURNING id
       `, [
         req.user.id,
-        JSON.stringify({ uploaded_at: new Date().toISOString(), cloudinary: useCloudinary, batch: isBatchMode }),
+        JSON.stringify({ uploaded_at: new Date().toISOString(), cloudinary: useCloudinary, batch: isBatchMode, source: uploadSource }),
         frontUrl,
         backUrl || null
       ]);
 
       const cardId = insertResult.rows[0].id;
-      console.log(`[Upload] Pair saved: ${cardId} - ${frontUrl}${backUrl ? ' + ' + backUrl : ' (single)'}${isBatchMode ? ' [BATCH]' : ''}`);
+      console.log(`[Upload] Pair saved: ${cardId} - ${frontUrl}${backUrl ? ' + ' + backUrl : ' (single)'}${isBatchMode ? ' [BATCH]' : ''} [source: ${uploadSource}]`);
 
       broadcast({
         type: isBatchMode ? 'batch_card_uploaded' : 'pair_uploaded',
         cardId,
         front: frontUrl,
         back: backUrl || null,
-        userId: req.user.id
+        userId: req.user.id,
+        source: uploadSource
       });
 
       // Auto-identify in batch mode
@@ -2275,12 +2277,15 @@ async function identifySingleCard(userId, cardId) {
   }
 
   const card = cardResult.rows[0];
+  const cardMeta = typeof card.card_data === 'string' ? JSON.parse(card.card_data) : (card.card_data || {});
+  const uploadSource = cardMeta.source || 'web';
 
   // Notify that identification started
   broadcast({
     type: 'batch_identify_start',
     cardId,
     userId,
+    source: uploadSource,
     scanMode: slabTrackCheck.canUse ? 'slabtrack' : 'byok'
   });
 
@@ -2384,6 +2389,7 @@ async function identifySingleCard(userId, cardId) {
           cardId,
           cardData,
           userId,
+          source: uploadSource,
           scanMode: 'slabtrack'
         });
         return;
@@ -2545,6 +2551,7 @@ Return ONLY a JSON object with these fields (no other text):
       cardId,
       cardData,
       userId,
+      source: uploadSource,
       scanMode: 'byok'
     });
 

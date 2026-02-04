@@ -5092,14 +5092,24 @@
         }
 
         // Batch mode events (from desktop scanner or phone scanner)
-        // NO hero view in main app - hero view is only for scanner.html
         if (data.type === 'batch_card_uploaded') {
-          // Just refresh the card list - no hero animation
-          loadCards();
-          loadStatus();
+          // Only show hero view for PHONE scanner, not desktop scanner
+          if (data.source === 'phone') {
+            heroCardNum++;
+            showHeroView(data.cardId, heroCardNum, data.front, data.back, 'identifying');
+          } else {
+            // Desktop scanner - just refresh the card list, no hero animation
+            loadCards();
+            loadStatus();
+          }
         }
         if (data.type === 'batch_card_identified') {
-          // Refresh the cards list to show the identified card
+          // Only update hero for phone scanner
+          if (data.source === 'phone') {
+            const cardData = data.cardData || {};
+            updateHeroIdentified(data.cardId, cardData);
+          }
+          // Always refresh the cards list to show the identified card
           loadCards();
           loadStatus();
           showToast(`Card identified: ${data.cardData?.player || 'Unknown'}`, 'success');

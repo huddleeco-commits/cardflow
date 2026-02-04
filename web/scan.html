@@ -1045,6 +1045,7 @@
       formData.append('front', front, 'front.jpg');
       formData.append('back', back, 'back.jpg');
       formData.append('batch', 'true');
+      formData.append('source', 'phone');
 
       try {
         const res = await fetch(`${API_URL}/upload-pair`, {

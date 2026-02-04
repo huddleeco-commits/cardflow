@@ -502,6 +502,7 @@ async function processUploadQueue() {
     form.append('front', fs.createReadStream(frontPath));
     form.append('back', fs.createReadStream(backPath));
     form.append('batch', 'true'); // Auto-identify after upload
+    form.append('source', 'desktop'); // Desktop scanner - no hero view in main app
     form.append('holoMode', settings.holoMode.toString());
     form.append('brightnessBoost', settings.brightnessBoost.toString());
     form.append('autoRotateBack', settings.autoRotateBack.toString());
