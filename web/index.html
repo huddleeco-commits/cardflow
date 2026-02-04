@@ -8100,8 +8100,7 @@
     connectWebSocket();
     loadUserInfo(); // Load user tier for subscription UI
 
-    // Handle subscription success redirect
-    const urlParams = new URLSearchParams(window.location.search);
+    // Handle subscription success redirect (urlParams already defined above for eBay)
     if (urlParams.get('subscription') === 'success') {
       showToast('Subscription activated! Thank you!', 'success');
       // Clean up URL
