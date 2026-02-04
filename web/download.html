@@ -221,6 +221,26 @@
   </style>
 </head>
 <body>
+  <script>
+    // Admin check - verify user is logged in and is admin
+    (function() {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        window.location.href = '/login?redirect=/download';
+        return;
+      }
+      try {
+        const payload = JSON.parse(atob(token.split('.')[1]));
+        if (payload.role !== 'admin') {
+          alert('Access denied - Admin only');
+          window.location.href = '/app';
+          return;
+        }
+      } catch (e) {
+        window.location.href = '/login?redirect=/download';
+      }
+    })();
+  </script>
   <div class="container">
     <div class="header">
       <svg class="logo" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
