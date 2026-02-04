@@ -5852,7 +5852,7 @@ app.post('/api/slabtrack/send', authenticateToken, async (req, res) => {
     }, {
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${slabtrackToken}`
+        'X-API-Token': slabtrackToken
       },
       timeout: 60000 // 60 second timeout for large imports
     });
