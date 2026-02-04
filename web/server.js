@@ -294,6 +294,65 @@ function getTierInfo(subscription_tier) {
   };
 }
 
+// Middleware to check scan limit for free tier
+async function checkScanLimit(req, res, next) {
+  if (!req.user) {
+    return res.status(401).json({ error: 'Authentication required' });
+  }
+
+  try {
+    const result = await pool.query(`
+      SELECT subscription_tier, role, slabtrack_tier
+      FROM users WHERE id = $1
+    `, [req.user.id]);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    const { subscription_tier, role, slabtrack_tier } = result.rows[0];
+
+    // Admins always have unlimited access
+    if (role === 'admin') {
+      return next();
+    }
+
+    // SlabTrack power/dealer tiers have free access
+    if (['power', 'dealer'].includes(slabtrack_tier)) {
+      return next();
+    }
+
+    // Paid tiers have unlimited scans
+    const tier = TIERS[subscription_tier] || TIERS.free;
+    if (tier.features.includes('unlimited_scans')) {
+      return next();
+    }
+
+    // Free tier - check card count
+    const cardCount = await pool.query(
+      'SELECT COUNT(*) FROM cards WHERE user_id = $1',
+      [req.user.id]
+    );
+    const count = parseInt(cardCount.rows[0].count);
+    const limit = tier.limit || 10;
+
+    if (count >= limit) {
+      return res.status(403).json({
+        error: 'Scan limit reached',
+        message: `Free tier is limited to ${limit} cards. Upgrade to continue scanning!`,
+        currentCount: count,
+        limit: limit,
+        upgrade_url: '/pricing'
+      });
+    }
+
+    next();
+  } catch (e) {
+    console.error('Scan limit check error:', e);
+    return res.status(500).json({ error: 'Failed to verify scan limit' });
+  }
+}
+
 // ============================================
 // STRIPE SUBSCRIPTION ENDPOINTS
 // ============================================
@@ -1822,6 +1881,41 @@ app.post('/api/upload-pair', authenticateToken, (req, res) => {
     }
 
     try {
+      // Check scan limit for free tier users
+      const userResult = await pool.query(`
+        SELECT subscription_tier, role, slabtrack_tier
+        FROM users WHERE id = $1
+      `, [req.user.id]);
+
+      if (userResult.rows.length > 0) {
+        const { subscription_tier, role, slabtrack_tier } = userResult.rows[0];
+
+        // Skip limit check for admin, SlabTrack power/dealer, or paid tiers
+        const isAdmin = role === 'admin';
+        const hasSlabtrackAccess = ['power', 'dealer'].includes(slabtrack_tier);
+        const tier = TIERS[subscription_tier] || TIERS.free;
+        const hasUnlimited = tier.features.includes('unlimited_scans');
+
+        if (!isAdmin && !hasSlabtrackAccess && !hasUnlimited) {
+          const cardCount = await pool.query(
+            'SELECT COUNT(*) FROM cards WHERE user_id = $1',
+            [req.user.id]
+          );
+          const count = parseInt(cardCount.rows[0].count);
+          const limit = tier.limit || 10;
+
+          if (count >= limit) {
+            return res.status(403).json({
+              error: 'Scan limit reached',
+              message: `Free tier is limited to ${limit} cards. Upgrade to continue scanning!`,
+              currentCount: count,
+              limit: limit,
+              upgrade_url: '/pricing'
+            });
+          }
+        }
+      }
+
       const frontFile = req.files['front'] ? req.files['front'][0] : null;
       const backFile = req.files['back'] ? req.files['back'][0] : null;
 
