@@ -1,7 +1,7 @@
 {
   "name": "cardflow-scanner",
   "productName": "CardFlow Scanner",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Desktop scanner agent for CardFlow - Upload and identify trading cards",
   "main": "src/main.js",
   "author": "CardFlow",

@@ -666,6 +666,12 @@ app.get('/api/download/scanner', (req, res) => {
   // Otherwise serve local file (development only)
   const filePath = path.join(__dirname, 'downloads', 'CardFlowScanner-Setup.exe');
   if (fs.existsSync(filePath)) {
+    // Add no-cache headers to force fresh download
+    res.set({
+      'Cache-Control': 'no-cache, no-store, must-revalidate',
+      'Pragma': 'no-cache',
+      'Expires': '0'
+    });
     res.download(filePath, 'CardFlow Scanner Setup.exe');
   } else {
     res.status(404).json({ error: 'Installer not available. Set SCANNER_DOWNLOAD_URL in environment.' });
@@ -674,11 +680,23 @@ app.get('/api/download/scanner', (req, res) => {
 
 // API to get download info
 app.get('/api/download/info', (req, res) => {
+  const filePath = path.join(__dirname, 'downloads', 'CardFlowScanner-Setup.exe');
+  let fileModTime = null;
+  let fileSize = null;
+
+  if (fs.existsSync(filePath)) {
+    const stats = fs.statSync(filePath);
+    fileModTime = stats.mtime.toISOString();
+    fileSize = stats.size;
+  }
+
   res.json({
-    version: '1.0.0',
+    version: process.env.SCANNER_VERSION || '1.0.1',
     platform: 'windows',
-    downloadUrl: SCANNER_DOWNLOAD_URL || '/api/download/scanner',
-    available: !!SCANNER_DOWNLOAD_URL || fs.existsSync(path.join(__dirname, 'downloads', 'CardFlowScanner-Setup.exe'))
+    downloadUrl: SCANNER_DOWNLOAD_URL || `/api/download/scanner?t=${Date.now()}`,
+    available: !!SCANNER_DOWNLOAD_URL || fs.existsSync(filePath),
+    lastModified: fileModTime,
+    fileSize: fileSize
   });
 });
 
