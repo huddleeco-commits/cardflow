@@ -606,6 +606,21 @@ app.get('/pricing', (req, res) => {
   res.redirect('/#pricing');
 });
 
+// Privacy Policy
+app.get('/privacy', (req, res) => {
+  res.sendFile(path.join(__dirname, 'privacy.html'));
+});
+
+// Terms of Service
+app.get('/terms', (req, res) => {
+  res.sendFile(path.join(__dirname, 'terms.html'));
+});
+
+// Contact page
+app.get('/contact', (req, res) => {
+  res.sendFile(path.join(__dirname, 'contact.html'));
+});
+
 // ============================================
 // STATIC FILES
 // ============================================

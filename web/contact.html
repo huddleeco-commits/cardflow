@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Contact Us - CardFlow</title>
+  <style>
+    :root {
+      --bg-deep: #0a0a0f;
+      --bg-card: #12121a;
+      --glass-border: rgba(255, 255, 255, 0.08);
+      --text: #f0f0f5;
+      --text-muted: #8888aa;
+      --cyan: #00f6ff;
+      --cyan-glow: rgba(0, 246, 255, 0.3);
+      --purple: #7b2ff7;
+      --purple-glow: rgba(123, 47, 247, 0.3);
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: var(--bg-deep);
+      color: var(--text);
+      line-height: 1.7;
+      min-height: 100vh;
+    }
+
+    nav {
+      padding: 20px 40px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid var(--glass-border);
+    }
+
+    .logo {
+      font-size: 24px;
+      font-weight: 800;
+      background: linear-gradient(135deg, var(--cyan), var(--purple));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      text-decoration: none;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .logo img {
+      width: 32px;
+      height: 32px;
+      border-radius: 6px;
+    }
+
+    .container {
+      max-width: 600px;
+      margin: 0 auto;
+      padding: 80px 20px;
+      text-align: center;
+    }
+
+    h1 {
+      font-size: 48px;
+      margin-bottom: 16px;
+      background: linear-gradient(135deg, var(--cyan), var(--purple));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .subtitle {
+      color: var(--text-muted);
+      font-size: 18px;
+      margin-bottom: 50px;
+    }
+
+    .contact-card {
+      background: var(--bg-card);
+      border: 1px solid var(--glass-border);
+      border-radius: 24px;
+      padding: 40px;
+      margin-bottom: 30px;
+    }
+
+    .contact-method {
+      margin-bottom: 30px;
+    }
+
+    .contact-method:last-child {
+      margin-bottom: 0;
+    }
+
+    .contact-icon {
+      font-size: 40px;
+      margin-bottom: 16px;
+    }
+
+    .contact-label {
+      font-size: 14px;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      margin-bottom: 8px;
+    }
+
+    .contact-value {
+      font-size: 20px;
+      font-weight: 600;
+    }
+
+    .contact-value a {
+      color: var(--cyan);
+      text-decoration: none;
+      transition: all 0.3s;
+    }
+
+    .contact-value a:hover {
+      text-shadow: 0 0 20px var(--cyan-glow);
+    }
+
+    .email-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      padding: 16px 32px;
+      background: linear-gradient(135deg, var(--cyan), var(--purple));
+      color: #000;
+      font-size: 16px;
+      font-weight: 700;
+      text-decoration: none;
+      border-radius: 12px;
+      transition: all 0.3s;
+      margin-top: 20px;
+    }
+
+    .email-btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 10px 40px var(--cyan-glow);
+    }
+
+    .response-time {
+      background: rgba(0, 246, 255, 0.1);
+      border: 1px solid rgba(0, 246, 255, 0.2);
+      border-radius: 12px;
+      padding: 16px 24px;
+      display: inline-block;
+      margin-top: 30px;
+    }
+
+    .response-time span {
+      color: var(--cyan);
+      font-weight: 600;
+    }
+
+    .links {
+      margin-top: 50px;
+      display: flex;
+      justify-content: center;
+      gap: 30px;
+      flex-wrap: wrap;
+    }
+
+    .links a {
+      color: var(--text-muted);
+      text-decoration: none;
+      font-size: 14px;
+      transition: color 0.3s;
+    }
+
+    .links a:hover {
+      color: var(--cyan);
+    }
+
+    footer {
+      border-top: 1px solid var(--glass-border);
+      padding: 40px 20px;
+      text-align: center;
+      color: var(--text-muted);
+      margin-top: auto;
+    }
+
+    @media (max-width: 768px) {
+      nav { padding: 16px 20px; }
+      h1 { font-size: 36px; }
+      .container { padding: 50px 20px; }
+      .contact-card { padding: 30px 20px; }
+    }
+  </style>
+</head>
+<body>
+  <nav>
+    <a href="/" class="logo">
+      <img src="/cardflow-logo.jpg" alt="CardFlow">
+      CardFlow
+    </a>
+  </nav>
+
+  <div class="container">
+    <h1>Contact Us</h1>
+    <p class="subtitle">Have a question, feedback, or need support? We're here to help.</p>
+
+    <div class="contact-card">
+      <div class="contact-method">
+        <div class="contact-icon">📧</div>
+        <div class="contact-label">Email</div>
+        <div class="contact-value">
+          <a href="mailto:huddleeco@gmail.com">huddleeco@gmail.com</a>
+        </div>
+      </div>
+
+      <a href="mailto:huddleeco@gmail.com?subject=CardFlow Support Request" class="email-btn">
+        Send us an Email
+      </a>
+
+      <div class="response-time">
+        Typical response time: <span>24-48 hours</span>
+      </div>
+    </div>
+
+    <div class="links">
+      <a href="/privacy">Privacy Policy</a>
+      <a href="/terms">Terms of Service</a>
+      <a href="https://slabtrack.io" target="_blank">SlabTrack</a>
+    </div>
+  </div>
+
+  <footer>
+    <p>&copy; 2025 CardFlow. Part of the SlabTrack ecosystem.</p>
+  </footer>
+</body>
+</html>

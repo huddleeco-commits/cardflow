@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Privacy Policy - CardFlow</title>
+  <style>
+    :root {
+      --bg-deep: #0a0a0f;
+      --bg-card: #12121a;
+      --glass-border: rgba(255, 255, 255, 0.08);
+      --text: #f0f0f5;
+      --text-muted: #8888aa;
+      --cyan: #00f6ff;
+      --purple: #7b2ff7;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: var(--bg-deep);
+      color: var(--text);
+      line-height: 1.7;
+    }
+
+    nav {
+      padding: 20px 40px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid var(--glass-border);
+    }
+
+    .logo {
+      font-size: 24px;
+      font-weight: 800;
+      background: linear-gradient(135deg, var(--cyan), var(--purple));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      text-decoration: none;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .logo img {
+      width: 32px;
+      height: 32px;
+      border-radius: 6px;
+    }
+
+    .container {
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 60px 20px;
+    }
+
+    h1 {
+      font-size: 42px;
+      margin-bottom: 10px;
+      background: linear-gradient(135deg, var(--cyan), var(--purple));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .last-updated {
+      color: var(--text-muted);
+      margin-bottom: 40px;
+    }
+
+    h2 {
+      font-size: 24px;
+      margin-top: 40px;
+      margin-bottom: 16px;
+      color: var(--cyan);
+    }
+
+    h3 {
+      font-size: 18px;
+      margin-top: 24px;
+      margin-bottom: 12px;
+    }
+
+    p, li {
+      color: var(--text-muted);
+      margin-bottom: 16px;
+    }
+
+    ul {
+      margin-left: 24px;
+      margin-bottom: 16px;
+    }
+
+    li {
+      margin-bottom: 8px;
+    }
+
+    a {
+      color: var(--cyan);
+    }
+
+    .highlight {
+      background: var(--bg-card);
+      border: 1px solid var(--glass-border);
+      border-radius: 12px;
+      padding: 20px;
+      margin: 20px 0;
+    }
+
+    footer {
+      border-top: 1px solid var(--glass-border);
+      padding: 40px 20px;
+      text-align: center;
+      color: var(--text-muted);
+    }
+
+    @media (max-width: 768px) {
+      nav { padding: 16px 20px; }
+      h1 { font-size: 32px; }
+      .container { padding: 40px 20px; }
+    }
+  </style>
+</head>
+<body>
+  <nav>
+    <a href="/" class="logo">
+      <img src="/cardflow-logo.jpg" alt="CardFlow">
+      CardFlow
+    </a>
+  </nav>
+
+  <div class="container">
+    <h1>Privacy Policy</h1>
+    <p class="last-updated">Last Updated: February 4, 2025</p>
+
+    <p>CardFlow ("we," "our," or "us") is committed to protecting your privacy. This Privacy Policy explains how we collect, use, disclose, and safeguard your information when you use our card scanning and identification service.</p>
+
+    <div class="highlight">
+      <strong>Key Points:</strong>
+      <ul style="margin-top: 12px;">
+        <li>We collect only the information necessary to provide our service</li>
+        <li>Your card images are processed for identification purposes only</li>
+        <li>We do not sell your personal information to third parties</li>
+        <li>You can request deletion of your data at any time</li>
+      </ul>
+    </div>
+
+    <h2>1. Information We Collect</h2>
+
+    <h3>1.1 Account Information</h3>
+    <p>When you create an account, we collect:</p>
+    <ul>
+      <li>Email address</li>
+      <li>Password (stored securely using industry-standard hashing)</li>
+      <li>Name (optional)</li>
+    </ul>
+
+    <h3>1.2 Card Images and Data</h3>
+    <p>When you use our scanning service, we collect:</p>
+    <ul>
+      <li>Images of trading cards you upload</li>
+      <li>Card identification data (player names, years, sets, etc.)</li>
+      <li>Pricing information you add to cards</li>
+    </ul>
+
+    <h3>1.3 Payment Information</h3>
+    <p>Payment processing is handled by Stripe. We do not store your full credit card numbers. Stripe's privacy policy governs their handling of your payment information.</p>
+
+    <h3>1.4 API Keys</h3>
+    <p>If you provide your own API keys (e.g., Anthropic Claude API key), these are stored securely and used solely to process your card identification requests. We do not share your API keys with any third parties.</p>
+
+    <h3>1.5 Usage Data</h3>
+    <p>We automatically collect:</p>
+    <ul>
+      <li>Log data (IP address, browser type, pages visited)</li>
+      <li>Device information</li>
+      <li>Usage patterns and feature interactions</li>
+    </ul>
+
+    <h2>2. How We Use Your Information</h2>
+    <p>We use the collected information to:</p>
+    <ul>
+      <li>Provide and maintain our card scanning and identification service</li>
+      <li>Process your transactions and manage your subscription</li>
+      <li>Send you service-related communications</li>
+      <li>Improve and optimize our service</li>
+      <li>Detect and prevent fraud or abuse</li>
+      <li>Comply with legal obligations</li>
+    </ul>
+
+    <h2>3. Third-Party Services</h2>
+    <p>We use the following third-party services:</p>
+    <ul>
+      <li><strong>Anthropic (Claude AI):</strong> For card identification. Card images are sent to Anthropic's API for processing. See <a href="https://www.anthropic.com/privacy" target="_blank">Anthropic's Privacy Policy</a>.</li>
+      <li><strong>Stripe:</strong> For payment processing. See <a href="https://stripe.com/privacy" target="_blank">Stripe's Privacy Policy</a>.</li>
+      <li><strong>Cloudinary:</strong> For image storage (if configured). See <a href="https://cloudinary.com/privacy" target="_blank">Cloudinary's Privacy Policy</a>.</li>
+      <li><strong>SlabTrack:</strong> If you link your SlabTrack account, we exchange authentication tokens. See SlabTrack's Privacy Policy.</li>
+    </ul>
+
+    <h2>4. Data Retention</h2>
+    <p>We retain your data as follows:</p>
+    <ul>
+      <li><strong>Account data:</strong> Until you delete your account</li>
+      <li><strong>Card images and data:</strong> Until you delete them or your account</li>
+      <li><strong>Usage logs:</strong> Up to 12 months</li>
+      <li><strong>Payment records:</strong> As required by law (typically 7 years)</li>
+    </ul>
+
+    <h2>5. Data Security</h2>
+    <p>We implement appropriate technical and organizational measures to protect your data, including:</p>
+    <ul>
+      <li>Encryption of data in transit (HTTPS/TLS)</li>
+      <li>Secure password hashing (bcrypt)</li>
+      <li>Regular security assessments</li>
+      <li>Access controls and authentication</li>
+    </ul>
+    <p>However, no method of transmission over the Internet is 100% secure. We cannot guarantee absolute security.</p>
+
+    <h2>6. Your Rights</h2>
+    <p>You have the right to:</p>
+    <ul>
+      <li><strong>Access:</strong> Request a copy of your personal data</li>
+      <li><strong>Correction:</strong> Update or correct inaccurate data</li>
+      <li><strong>Deletion:</strong> Request deletion of your data</li>
+      <li><strong>Portability:</strong> Export your card data</li>
+      <li><strong>Opt-out:</strong> Unsubscribe from marketing communications</li>
+    </ul>
+    <p>To exercise these rights, contact us at <a href="mailto:huddleeco@gmail.com">huddleeco@gmail.com</a>.</p>
+
+    <h2>7. Children's Privacy</h2>
+    <p>CardFlow is not intended for children under 13 years of age. We do not knowingly collect personal information from children under 13. If you believe we have collected information from a child under 13, please contact us immediately.</p>
+
+    <h2>8. International Data Transfers</h2>
+    <p>Your data may be transferred to and processed in countries other than your own. We ensure appropriate safeguards are in place for such transfers in compliance with applicable data protection laws.</p>
+
+    <h2>9. California Privacy Rights (CCPA)</h2>
+    <p>California residents have additional rights under the CCPA, including:</p>
+    <ul>
+      <li>Right to know what personal information is collected</li>
+      <li>Right to know if personal information is sold or disclosed</li>
+      <li>Right to opt-out of the sale of personal information</li>
+      <li>Right to non-discrimination for exercising privacy rights</li>
+    </ul>
+    <p>We do not sell personal information to third parties.</p>
+
+    <h2>10. European Privacy Rights (GDPR)</h2>
+    <p>If you are in the European Economic Area, you have rights under GDPR including access, rectification, erasure, restriction, portability, and objection. Our legal basis for processing is contract performance and legitimate interests.</p>
+
+    <h2>11. Changes to This Policy</h2>
+    <p>We may update this Privacy Policy from time to time. We will notify you of any changes by posting the new policy on this page and updating the "Last Updated" date. Continued use of the service after changes constitutes acceptance of the revised policy.</p>
+
+    <h2>12. Contact Us</h2>
+    <p>If you have questions about this Privacy Policy or our data practices, please contact us:</p>
+    <div class="highlight">
+      <p><strong>Email:</strong> <a href="mailto:huddleeco@gmail.com">huddleeco@gmail.com</a></p>
+      <p style="margin-bottom: 0;"><strong>Service:</strong> CardFlow by BE1st</p>
+    </div>
+  </div>
+
+  <footer>
+    <p>&copy; 2025 CardFlow. Part of the SlabTrack ecosystem.</p>
+  </footer>
+</body>
+</html>
