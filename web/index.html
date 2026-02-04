@@ -5084,11 +5084,9 @@
           showToast('Price error: ' + data.error, 'error');
         }
 
-        // Pair uploaded (regular upload, not batch)
+        // Pair uploaded (regular drag/drop upload, not phone scanner)
         if (data.type === 'pair_uploaded') {
-          // Show hero view for this card
-          heroCardNum++;
-          showHeroView(data.cardId, heroCardNum, data.front, data.back, 'identifying');
+          // Just refresh the cards list - no hero animation for drag/drop
           loadCards();
           loadStatus();
         }
