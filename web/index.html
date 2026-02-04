@@ -5097,6 +5097,9 @@
           if (data.source === 'phone') {
             heroCardNum++;
             showHeroView(data.cardId, heroCardNum, data.front, data.back, 'identifying');
+            if (batchMode) {
+              addCardToBatchView(data.cardId, data.front, data.back);
+            }
           } else {
             // Desktop scanner - just refresh the card list, no hero animation
             loadCards();
@@ -5108,9 +5111,16 @@
           if (data.source === 'phone') {
             const cardData = data.cardData || {};
             updateHeroIdentified(data.cardId, cardData);
+            if (batchMode) {
+              updateBatchCard(data.cardId, data.cardData);
+            } else {
+              // In normal mode, refresh the cards list to show the identified card
+              loadCards();
+            }
+          } else {
+            // Desktop scanner - just refresh the card list
+            loadCards();
           }
-          // Always refresh the cards list to show the identified card
-          loadCards();
           loadStatus();
           showToast(`Card identified: ${data.cardData?.player || 'Unknown'}`, 'success');
         }
