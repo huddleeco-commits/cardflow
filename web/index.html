@@ -1734,6 +1734,159 @@
       .form-group.full {
         grid-column: span 1;
       }
+
+      /* Mobile header */
+      .header {
+        padding: 10px 12px;
+      }
+
+      .logo {
+        font-size: 16px;
+      }
+
+      .logo img {
+        width: 24px !important;
+        height: 24px !important;
+      }
+
+      .free-tier-banner {
+        padding: 6px 10px;
+        font-size: 11px;
+      }
+
+      .free-tier-banner .usage-bar {
+        width: 50px;
+      }
+
+      .free-tier-banner .upgrade-btn {
+        padding: 3px 8px;
+        font-size: 10px;
+      }
+
+      /* Mobile pipeline */
+      .pipeline {
+        padding: 12px 8px;
+        gap: 4px;
+        overflow-x: auto;
+      }
+
+      .pipeline-step {
+        padding: 8px 12px;
+        min-width: fit-content;
+      }
+
+      .step-count {
+        font-size: 16px;
+      }
+
+      .step-name {
+        font-size: 9px;
+      }
+
+      .pipeline-arrow {
+        font-size: 12px;
+      }
+
+      /* Mobile actions bar */
+      .actions-bar {
+        flex-direction: column;
+        gap: 12px;
+        padding: 12px;
+      }
+
+      .filter-group {
+        width: 100%;
+        justify-content: space-between;
+      }
+
+      .filter-group select {
+        flex: 1;
+        padding: 8px 12px;
+      }
+
+      .action-buttons {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        width: 100%;
+        justify-content: center;
+      }
+
+      .action-buttons .btn {
+        padding: 8px 10px;
+        font-size: 11px;
+        flex: 0 0 auto;
+      }
+
+      /* Hide some buttons on very small screens */
+      @media (max-width: 480px) {
+        .action-buttons .btn-success,
+        .action-buttons .btn-danger {
+          display: none;
+        }
+      }
+
+      /* Mobile bulk action bar */
+      #bulk-action-bar > div {
+        flex-direction: column;
+        gap: 12px;
+      }
+
+      #bulk-action-bar > div > div:last-child {
+        flex-wrap: wrap;
+        justify-content: center;
+      }
+
+      /* Mobile upload zone */
+      .upload-zone {
+        padding: 20px;
+        margin: 12px;
+      }
+
+      .upload-zone .upload-icon {
+        font-size: 36px;
+      }
+
+      .upload-zone h3 {
+        font-size: 16px;
+      }
+
+      /* Mobile user dropdown */
+      .user-menu {
+        padding: 6px 10px;
+      }
+
+      .user-avatar {
+        width: 28px;
+        height: 28px;
+        font-size: 12px;
+      }
+
+      .user-name {
+        font-size: 12px;
+        max-width: 60px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+    }
+
+    /* Extra small screens */
+    @media (max-width: 400px) {
+      .header-left {
+        gap: 8px;
+      }
+
+      .logo-text {
+        display: none;
+      }
+
+      .action-buttons .btn span {
+        display: none;
+      }
+
+      .action-buttons .btn::before {
+        margin-right: 0;
+      }
     }
 
     /* Price Preview Panel */
