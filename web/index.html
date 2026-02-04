@@ -530,6 +530,91 @@
       color: #fff;
     }
 
+    /* Bulk Action Bar Styles */
+    .bulk-select-btn {
+      padding: 8px 16px !important;
+      font-size: 13px !important;
+    }
+
+    .bulk-dropdown {
+      position: relative;
+      display: inline-block;
+    }
+
+    .bulk-dropdown-btn {
+      padding: 10px 16px !important;
+      font-size: 13px !important;
+      display: flex !important;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .bulk-dropdown-btn .dropdown-arrow {
+      font-size: 10px;
+      opacity: 0.7;
+    }
+
+    .bulk-dropdown-menu {
+      display: none;
+      position: absolute;
+      top: 100%;
+      left: 0;
+      margin-top: 4px;
+      background: var(--bg-card);
+      border: 1px solid var(--glass-border);
+      border-radius: 10px;
+      padding: 6px 0;
+      min-width: 180px;
+      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.4);
+      z-index: 1000;
+    }
+
+    .bulk-dropdown-menu.open {
+      display: block;
+    }
+
+    .bulk-dropdown-menu button {
+      display: block;
+      width: 100%;
+      padding: 10px 16px;
+      background: none;
+      border: none;
+      color: var(--text);
+      font-size: 13px;
+      text-align: left;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+
+    .bulk-dropdown-menu button:hover {
+      background: rgba(255, 255, 255, 0.08);
+    }
+
+    .bulk-dropdown-menu button.danger {
+      color: var(--error);
+    }
+
+    .bulk-dropdown-menu button.danger:hover {
+      background: rgba(255, 68, 102, 0.15);
+    }
+
+    .bulk-dropdown-menu .dropdown-divider {
+      height: 1px;
+      background: var(--glass-border);
+      margin: 6px 0;
+    }
+
+    .send-slabtrack-btn {
+      background: linear-gradient(135deg, #00d4ff, #7b2ff7) !important;
+      color: #fff !important;
+      font-weight: 600 !important;
+      padding: 10px 20px !important;
+    }
+
+    .send-slabtrack-btn:hover {
+      box-shadow: 0 0 20px rgba(0, 212, 255, 0.4);
+    }
+
     .btn-ai {
       background: linear-gradient(135deg, #10b981, #06b6d4);
       color: #fff;
@@ -2562,24 +2647,55 @@
   </section>
 
   <!-- Bulk Action Bar (hidden by default) -->
-  <section class="bulk-action-bar" id="bulk-action-bar" style="display: none; padding: 12px 24px; background: linear-gradient(135deg, rgba(0, 246, 255, 0.1), rgba(123, 47, 247, 0.1)); border-bottom: 1px solid var(--glass-border);">
-    <div style="display: flex; align-items: center; justify-content: space-between;">
-      <div style="display: flex; align-items: center; gap: 16px;">
-        <button class="btn btn-secondary" onclick="selectAllCards()" id="select-all-btn" style="padding: 8px 16px; font-size: 13px;">☑️ Select All</button>
-        <button class="btn btn-secondary" onclick="deselectAllCards()" style="padding: 8px 16px; font-size: 13px;">☐ Deselect All</button>
-        <span id="selected-count" style="color: var(--cyan); font-weight: 600;">0 selected</span>
+  <section class="bulk-action-bar" id="bulk-action-bar" style="display: none; padding: 12px 24px; background: linear-gradient(135deg, rgba(0, 246, 255, 0.05), rgba(123, 47, 247, 0.05)); border-bottom: 1px solid var(--glass-border);">
+    <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px;">
+      <div style="display: flex; align-items: center; gap: 12px;">
+        <button class="btn btn-secondary bulk-select-btn" onclick="selectAllCards()">Select All</button>
+        <button class="btn btn-secondary bulk-select-btn" onclick="deselectAllCards()">Clear</button>
+        <span id="selected-count" style="color: var(--cyan); font-weight: 600; font-size: 14px;">0 selected</span>
       </div>
-      <div style="display: flex; gap: 8px;">
-        <button class="btn btn-secondary" onclick="bulkSetPrice()">💲 Set Price</button>
-        <button class="btn btn-secondary" onclick="bulkSetStatus()">📋 Set Status</button>
-        <button class="btn btn-accent" onclick="bulkListSelected()">📦 List Selected</button>
-        <button class="btn btn-success" onclick="bulkMarkSold()">💰 Mark Sold</button>
-        <button class="btn btn-secondary" onclick="showLinkMatrix()">🔗 Link Matrix</button>
-        <button class="btn btn-primary" onclick="exportSelected('csv')">📄 CSV</button>
-        <button class="btn btn-primary" onclick="exportSelected('excel')">📊 Excel</button>
-        <button class="btn btn-primary" onclick="exportSelected('slabtrack')">📋 SlabTrack Excel</button>
-        <button class="btn btn-accent" onclick="sendToSlabTrack()" id="send-slabtrack-btn" style="background: linear-gradient(135deg, #00d4ff, #7b2ff7);">🚀 Send to SlabTrack</button>
-        <button class="btn btn-danger" onclick="bulkDeleteSelected()">🗑️ Delete</button>
+      <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+        <!-- Actions Dropdown -->
+        <div class="bulk-dropdown">
+          <button class="btn btn-secondary bulk-dropdown-btn" onclick="toggleBulkDropdown('actions')">
+            Actions <span class="dropdown-arrow">▼</span>
+          </button>
+          <div class="bulk-dropdown-menu" id="bulk-dropdown-actions">
+            <button onclick="bulkSetPrice(); closeBulkDropdowns();">💲 Set Price</button>
+            <button onclick="bulkMarkSold(); closeBulkDropdowns();">💰 Mark as Sold</button>
+            <button onclick="showLinkMatrix(); closeBulkDropdowns();">🔗 Price Check Links</button>
+            <div class="dropdown-divider"></div>
+            <button onclick="bulkDeleteSelected(); closeBulkDropdowns();" class="danger">🗑️ Delete Selected</button>
+          </div>
+        </div>
+
+        <!-- Listing Dropdown -->
+        <div class="bulk-dropdown">
+          <button class="btn btn-accent bulk-dropdown-btn" onclick="toggleBulkDropdown('listing')">
+            List <span class="dropdown-arrow">▼</span>
+          </button>
+          <div class="bulk-dropdown-menu" id="bulk-dropdown-listing">
+            <button onclick="bulkListSelected(); closeBulkDropdowns();">📦 List Selected Cards</button>
+            <button onclick="showLotListingModal(); closeBulkDropdowns();">🎴 Create Lot Listing</button>
+          </div>
+        </div>
+
+        <!-- Export Dropdown -->
+        <div class="bulk-dropdown">
+          <button class="btn btn-primary bulk-dropdown-btn" onclick="toggleBulkDropdown('export')">
+            Export <span class="dropdown-arrow">▼</span>
+          </button>
+          <div class="bulk-dropdown-menu" id="bulk-dropdown-export">
+            <button onclick="exportSelected('csv'); closeBulkDropdowns();">📄 Export as CSV</button>
+            <button onclick="exportSelected('excel'); closeBulkDropdowns();">📊 Export as Excel</button>
+            <button onclick="exportSelected('slabtrack'); closeBulkDropdowns();">📋 SlabTrack Format</button>
+          </div>
+        </div>
+
+        <!-- Send to SlabTrack - prominent button -->
+        <button class="btn send-slabtrack-btn" onclick="sendToSlabTrack()" id="send-slabtrack-btn">
+          🚀 Send to SlabTrack
+        </button>
       </div>
     </div>
   </section>
@@ -5785,7 +5901,7 @@
             // Delete the sent cards from CardFlow
             try {
               const deleteResult = await api('/cards/bulk-delete', {
-                method: 'DELETE',
+                method: 'POST',
                 body: JSON.stringify({ cardIds: cardIdsToSend })
               });
               if (deleteResult?.success) {
@@ -7010,6 +7126,27 @@
       document.getElementById('selected-count').textContent = `${selectedCards.size} selected`;
     }
 
+    // Bulk dropdown functions
+    function toggleBulkDropdown(name) {
+      const menu = document.getElementById(`bulk-dropdown-${name}`);
+      const wasOpen = menu.classList.contains('open');
+      closeBulkDropdowns();
+      if (!wasOpen) {
+        menu.classList.add('open');
+      }
+    }
+
+    function closeBulkDropdowns() {
+      document.querySelectorAll('.bulk-dropdown-menu').forEach(m => m.classList.remove('open'));
+    }
+
+    // Close dropdowns when clicking outside
+    document.addEventListener('click', (e) => {
+      if (!e.target.closest('.bulk-dropdown')) {
+        closeBulkDropdowns();
+      }
+    });
+
     async function bulkSetPrice() {
       if (selectedCards.size === 0) {
         showToast('No cards selected', 'error');
@@ -7083,11 +7220,11 @@
         return;
       }
 
-      if (!confirm(`Delete ${selectedCards.size} selected cards? This cannot be undone.`)) return;
+      if (!confirm(`Delete ${selectedCards.size} selected cards?\n\nThis cannot be undone.`)) return;
 
       try {
         const result = await api('/cards/bulk-delete', {
-          method: 'DELETE',
+          method: 'POST',
           body: JSON.stringify({ cardIds: Array.from(selectedCards) })
         });
 
@@ -7097,8 +7234,11 @@
           updateSelectedCount();
           loadCards();
           loadStatus();
+        } else {
+          showToast(result?.error || 'Failed to delete cards', 'error');
         }
       } catch (e) {
+        console.error('Bulk delete error:', e);
         showToast('Failed to delete cards: ' + e.message, 'error');
       }
     }

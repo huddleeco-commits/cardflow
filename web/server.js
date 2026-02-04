@@ -4814,8 +4814,11 @@ app.put('/api/cards/bulk-update', authenticateToken, async (req, res) => {
   }
 });
 
-// Bulk delete cards
-app.delete('/api/cards/bulk-delete', authenticateToken, async (req, res) => {
+// Bulk delete cards (supports both DELETE and POST for compatibility)
+app.delete('/api/cards/bulk-delete', authenticateToken, bulkDeleteHandler);
+app.post('/api/cards/bulk-delete', authenticateToken, bulkDeleteHandler);
+
+async function bulkDeleteHandler(req, res) {
   try {
     const { cardIds } = req.body;
 
@@ -4835,7 +4838,7 @@ app.delete('/api/cards/bulk-delete', authenticateToken, async (req, res) => {
     console.error('Bulk delete error:', e);
     res.status(500).json({ error: 'Failed to delete cards' });
   }
-});
+}
 
 // ============================================
 // LISTING TEMPLATES API
