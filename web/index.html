@@ -531,40 +531,117 @@
     }
 
     /* Bulk Action Bar Styles */
-    .bulk-select-btn {
-      padding: 8px 16px !important;
-      font-size: 13px !important;
+    .bulk-action-bar {
+      display: none;
+      padding: 10px 24px;
+      background: var(--bg-card);
+      border-bottom: 1px solid var(--glass-border);
+      position: sticky;
+      top: 60px;
+      z-index: 90;
+    }
+
+    .bulk-bar-content {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+
+    .bulk-bar-left {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .selected-count {
+      color: var(--cyan);
+      font-weight: 600;
+      font-size: 14px;
+      min-width: 90px;
+    }
+
+    .bulk-text-btn {
+      background: none;
+      border: none;
+      color: var(--text-muted);
+      font-size: 13px;
+      cursor: pointer;
+      padding: 4px 8px;
+      transition: color 0.2s;
+    }
+
+    .bulk-text-btn:hover {
+      color: var(--cyan);
+    }
+
+    .bulk-bar-right {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+
+    .bulk-action-btn {
+      padding: 8px 14px;
+      background: var(--glass);
+      border: 1px solid var(--glass-border);
+      border-radius: 8px;
+      color: var(--text);
+      font-size: 13px;
+      cursor: pointer;
+      transition: all 0.2s;
+      white-space: nowrap;
+    }
+
+    .bulk-action-btn:hover {
+      background: var(--glass-hover);
+      border-color: var(--cyan);
+    }
+
+    .bulk-action-btn.send-btn {
+      background: linear-gradient(135deg, var(--cyan), var(--purple));
+      border: none;
+      color: #000;
+      font-weight: 600;
+    }
+
+    .bulk-action-btn.send-btn:hover {
+      box-shadow: 0 0 15px var(--cyan-glow);
+    }
+
+    .bulk-action-btn.delete-btn {
+      color: var(--error);
+    }
+
+    .bulk-action-btn.delete-btn:hover {
+      background: rgba(255, 68, 102, 0.2);
+      border-color: var(--error);
+    }
+
+    .bulk-divider {
+      width: 1px;
+      height: 24px;
+      background: var(--glass-border);
+      margin: 0 4px;
     }
 
     .bulk-dropdown {
       position: relative;
-      display: inline-block;
-    }
-
-    .bulk-dropdown-btn {
-      padding: 10px 16px !important;
-      font-size: 13px !important;
-      display: flex !important;
-      align-items: center;
-      gap: 6px;
-    }
-
-    .bulk-dropdown-btn .dropdown-arrow {
-      font-size: 10px;
-      opacity: 0.7;
     }
 
     .bulk-dropdown-menu {
       display: none;
       position: absolute;
       top: 100%;
-      left: 0;
+      right: 0;
       margin-top: 4px;
       background: var(--bg-card);
       border: 1px solid var(--glass-border);
-      border-radius: 10px;
-      padding: 6px 0;
-      min-width: 180px;
+      border-radius: 8px;
+      padding: 4px 0;
+      min-width: 120px;
       box-shadow: 0 10px 40px rgba(0, 0, 0, 0.4);
       z-index: 1000;
     }
@@ -576,7 +653,7 @@
     .bulk-dropdown-menu button {
       display: block;
       width: 100%;
-      padding: 10px 16px;
+      padding: 8px 14px;
       background: none;
       border: none;
       color: var(--text);
@@ -588,31 +665,6 @@
 
     .bulk-dropdown-menu button:hover {
       background: rgba(255, 255, 255, 0.08);
-    }
-
-    .bulk-dropdown-menu button.danger {
-      color: var(--error);
-    }
-
-    .bulk-dropdown-menu button.danger:hover {
-      background: rgba(255, 68, 102, 0.15);
-    }
-
-    .bulk-dropdown-menu .dropdown-divider {
-      height: 1px;
-      background: var(--glass-border);
-      margin: 6px 0;
-    }
-
-    .send-slabtrack-btn {
-      background: linear-gradient(135deg, #00d4ff, #7b2ff7) !important;
-      color: #fff !important;
-      font-weight: 600 !important;
-      padding: 10px 20px !important;
-    }
-
-    .send-slabtrack-btn:hover {
-      box-shadow: 0 0 20px rgba(0, 212, 255, 0.4);
     }
 
     .btn-ai {
@@ -727,6 +779,35 @@
       overflow: hidden;
       transition: all 0.4s ease;
       position: relative;
+    }
+
+    /* Card selection checkbox */
+    .card-checkbox {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      z-index: 10;
+      opacity: 0;
+      transition: opacity 0.2s ease;
+    }
+
+    .card-item:hover .card-checkbox,
+    .card-checkbox.checked {
+      opacity: 1;
+    }
+
+    .card-checkbox input[type="checkbox"] {
+      width: 22px;
+      height: 22px;
+      cursor: pointer;
+      accent-color: var(--cyan);
+      background: var(--bg-card);
+      border: 2px solid var(--glass-border);
+      border-radius: 4px;
+    }
+
+    .card-checkbox.checked input[type="checkbox"] {
+      box-shadow: 0 0 10px var(--cyan-glow);
     }
 
     .card-item::before {
@@ -2633,7 +2714,6 @@
         <option value="listed">Listed</option>
         <option value="sold">Sold</option>
       </select>
-      <button class="btn btn-secondary" onclick="toggleSelectMode()" id="select-mode-btn" style="margin-left: 12px;">☐ Select</button>
     </div>
     <div class="action-buttons">
       <button class="btn btn-accent" id="identify-btn" onclick="runIdentify()">🔍 Identify</button>
@@ -2643,56 +2723,42 @@
     </div>
   </section>
 
-  <!-- Bulk Action Bar (hidden by default) -->
-  <section class="bulk-action-bar" id="bulk-action-bar" style="display: none; padding: 12px 24px; background: linear-gradient(135deg, rgba(0, 246, 255, 0.05), rgba(123, 47, 247, 0.05)); border-bottom: 1px solid var(--glass-border);">
-    <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px;">
-      <div style="display: flex; align-items: center; gap: 12px;">
-        <button class="btn btn-secondary bulk-select-btn" onclick="selectAllCards()">Select All</button>
-        <button class="btn btn-secondary bulk-select-btn" onclick="deselectAllCards()">Clear</button>
-        <span id="selected-count" style="color: var(--cyan); font-weight: 600; font-size: 14px;">0 selected</span>
+  <!-- Bulk Action Bar (appears when cards selected) -->
+  <section class="bulk-action-bar" id="bulk-action-bar">
+    <div class="bulk-bar-content">
+      <div class="bulk-bar-left">
+        <span id="selected-count" class="selected-count">0 selected</span>
+        <button class="bulk-text-btn" onclick="selectAllCards()">Select All</button>
+        <button class="bulk-text-btn" onclick="deselectAllCards()">Clear</button>
       </div>
-      <div style="display: flex; gap: 8px; flex-wrap: wrap;">
-        <!-- Actions Dropdown -->
-        <div class="bulk-dropdown">
-          <button class="btn btn-secondary bulk-dropdown-btn" onclick="toggleBulkDropdown('actions')">
-            Actions <span class="dropdown-arrow">▼</span>
-          </button>
-          <div class="bulk-dropdown-menu" id="bulk-dropdown-actions">
-            <button onclick="bulkSetPrice(); closeBulkDropdowns();">💲 Set Price</button>
-            <button onclick="bulkMarkSold(); closeBulkDropdowns();">💰 Mark as Sold</button>
-            <button onclick="showLinkMatrix(); closeBulkDropdowns();">🔗 Price Check Links</button>
-            <div class="dropdown-divider"></div>
-            <button onclick="bulkDeleteSelected(); closeBulkDropdowns();" class="danger">🗑️ Delete Selected</button>
-          </div>
-        </div>
+      <div class="bulk-bar-right">
+        <button class="bulk-action-btn" onclick="bulkSetPrice()" title="Set Price">💲 Price</button>
+        <button class="bulk-action-btn" onclick="bulkMarkSold()" title="Mark as Sold">💰 Sold</button>
 
-        <!-- Listing Dropdown -->
-        <div class="bulk-dropdown">
-          <button class="btn btn-accent bulk-dropdown-btn" onclick="toggleBulkDropdown('listing')">
-            List <span class="dropdown-arrow">▼</span>
-          </button>
-          <div class="bulk-dropdown-menu" id="bulk-dropdown-listing">
-            <button onclick="bulkListSelected(); closeBulkDropdowns();">📦 List Selected Cards</button>
-            <button onclick="showLotListingModal(); closeBulkDropdowns();">🎴 Create Lot Listing</button>
-          </div>
-        </div>
+        <div class="bulk-divider"></div>
 
-        <!-- Export Dropdown -->
+        <button class="bulk-action-btn" onclick="bulkListSelected()" title="List on eBay">📦 List</button>
+        <button class="bulk-action-btn" onclick="showLotListingModal()" title="Create Lot">🎴 Lot</button>
+
+        <div class="bulk-divider"></div>
+
+        <!-- Export Dropdown (only one dropdown needed) -->
         <div class="bulk-dropdown">
-          <button class="btn btn-primary bulk-dropdown-btn" onclick="toggleBulkDropdown('export')">
-            Export <span class="dropdown-arrow">▼</span>
+          <button class="bulk-action-btn" onclick="toggleBulkDropdown('export')">
+            📤 Export ▾
           </button>
           <div class="bulk-dropdown-menu" id="bulk-dropdown-export">
-            <button onclick="exportSelected('csv'); closeBulkDropdowns();">📄 Export as CSV</button>
-            <button onclick="exportSelected('excel'); closeBulkDropdowns();">📊 Export as Excel</button>
-            <button onclick="exportSelected('slabtrack'); closeBulkDropdowns();">📋 SlabTrack Format</button>
+            <button onclick="exportSelected('csv'); closeBulkDropdowns();">CSV</button>
+            <button onclick="exportSelected('excel'); closeBulkDropdowns();">Excel</button>
+            <button onclick="exportSelected('slabtrack'); closeBulkDropdowns();">SlabTrack</button>
           </div>
         </div>
 
-        <!-- Send to SlabTrack - prominent button -->
-        <button class="btn send-slabtrack-btn" onclick="sendToSlabTrack()" id="send-slabtrack-btn">
-          🚀 Send to SlabTrack
-        </button>
+        <button class="bulk-action-btn send-btn" onclick="sendToSlabTrack()" id="send-slabtrack-btn" title="Send to SlabTrack">🚀 Send</button>
+
+        <div class="bulk-divider"></div>
+
+        <button class="bulk-action-btn delete-btn" onclick="bulkDeleteSelected()" title="Delete Selected">🗑️</button>
       </div>
     </div>
   </section>
@@ -5161,12 +5227,12 @@
         const serialNumber = card.serial_number || '';
         const isSelected = selectedCards.has(card.id);
 
-        const checkboxHtml = selectMode ? `
-          <div style="position: absolute; top: 12px; left: 12px; z-index: 10;">
-            <input type="checkbox" ${isSelected ? 'checked' : ''} onchange="toggleCardSelection('${card.id}')"
-                   style="width: 22px; height: 22px; cursor: pointer; accent-color: var(--cyan);">
+        // Always show checkbox (visible on hover or when selected)
+        const checkboxHtml = `
+          <div class="card-checkbox ${isSelected ? 'checked' : ''}">
+            <input type="checkbox" ${isSelected ? 'checked' : ''} onclick="event.stopPropagation(); toggleCardSelection('${card.id}')">
           </div>
-        ` : '';
+        `;
 
         const askingPrice = card.my_price || card.asking_price || '';
         const cardNum = card.card_number || '';
@@ -5174,13 +5240,13 @@
         return `
           <div class="card-item ${isSelected ? 'selected' : ''}" data-id="${card.id}" style="position: relative; ${isSelected ? 'border-color: var(--cyan); box-shadow: 0 0 20px var(--cyan-glow);' : ''}">
             ${checkboxHtml}
-            <div class="card-images" ${selectMode ? `onclick="toggleCardSelection('${card.id}')" style="cursor: pointer;"` : ''}>
-              <div class="card-img-wrapper" ${!selectMode ? `onclick="openLightbox('${frontSrc}')"` : ''}>
+            <div class="card-images">
+              <div class="card-img-wrapper" onclick="openLightbox('${frontSrc}')">
                 ${frontSrc ? `<img src="${frontSrc}" alt="Front" loading="lazy">` : '<div class="no-image">No Image</div>'}
                 <div class="img-label">Front</div>
               </div>
               ${backSrc ? `
-              <div class="card-img-wrapper" ${!selectMode ? `onclick="openLightbox('${backSrc}')"` : ''}>
+              <div class="card-img-wrapper" onclick="openLightbox('${backSrc}')">
                 <img src="${backSrc}" alt="Back" loading="lazy">
                 <div class="img-label">Back</div>
               </div>
@@ -5198,7 +5264,7 @@
                      title="Asking Price">
             </div>
 
-            <div class="card-info" ${selectMode ? `onclick="toggleCardSelection('${card.id}')" style="cursor: pointer;"` : ''}>
+            <div class="card-info">
               <!-- Editable Player -->
               <div class="card-header">
                 <input type="text" class="inline-edit-field inline-edit-player"
@@ -7061,28 +7127,7 @@
     // ==========================================
     // BULK SELECTION FUNCTIONS
     // ==========================================
-    let selectMode = false;
     let selectedCards = new Set();
-
-    function toggleSelectMode() {
-      selectMode = !selectMode;
-      const btn = document.getElementById('select-mode-btn');
-      const bar = document.getElementById('bulk-action-bar');
-
-      if (selectMode) {
-        btn.innerHTML = '✓ Select Mode';
-        btn.style.background = 'var(--cyan)';
-        btn.style.color = '#000';
-        bar.style.display = 'block';
-      } else {
-        btn.innerHTML = '☐ Select';
-        btn.style.background = '';
-        btn.style.color = '';
-        bar.style.display = 'none';
-        selectedCards.clear();
-      }
-      renderCards();
-    }
 
     function toggleCardSelection(cardId) {
       if (selectedCards.has(cardId)) {
@@ -7090,37 +7135,38 @@
       } else {
         selectedCards.add(cardId);
       }
-      updateSelectedCount();
+      updateBulkBar();
       renderCards();
     }
 
-    function toggleSelectAll() {
-      // Legacy function for checkbox
-      if (selectedCards.size === cards.length) {
-        selectedCards.clear();
+    function updateBulkBar() {
+      const bar = document.getElementById('bulk-action-bar');
+      if (selectedCards.size > 0) {
+        bar.style.display = 'block';
       } else {
-        cards.forEach(c => selectedCards.add(c.id));
+        bar.style.display = 'none';
       }
       updateSelectedCount();
-      renderCards();
     }
 
     function selectAllCards() {
       cards.forEach(c => selectedCards.add(c.id));
-      updateSelectedCount();
+      updateBulkBar();
       renderCards();
       showToast(`Selected all ${cards.length} cards`, 'info');
     }
 
     function deselectAllCards() {
       selectedCards.clear();
-      updateSelectedCount();
+      updateBulkBar();
       renderCards();
-      showToast('Deselected all cards', 'info');
     }
 
     function updateSelectedCount() {
-      document.getElementById('selected-count').textContent = `${selectedCards.size} selected`;
+      const countEl = document.getElementById('selected-count');
+      if (countEl) {
+        countEl.textContent = `${selectedCards.size} selected`;
+      }
     }
 
     // Bulk dropdown functions
