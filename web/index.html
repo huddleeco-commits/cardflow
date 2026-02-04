@@ -6779,13 +6779,21 @@
         }
       }
 
-      setTimeout(() => {
+      setTimeout(async () => {
         progressDiv.style.display = 'none';
         if (uploaded > 0) {
-          showToast(`Uploaded ${uploaded} cards. Click Identify to process.`, 'success');
+          showToast(`Uploaded ${uploaded} cards. Starting identification...`, 'info');
           loadStatus();
+          loadCards();
+
+          // Auto-identify the newly uploaded cards
+          try {
+            await runIdentify();
+          } catch (e) {
+            console.error('Auto-identify error:', e);
+          }
         }
-      }, 1000);
+      }, 500);
     }
 
     // Lightbox
