@@ -14,6 +14,26 @@
 
 require('dotenv').config();
 
+// ============================================
+// SENTRY ERROR MONITORING (Initialize first!)
+// ============================================
+const Sentry = require('@sentry/node');
+if (process.env.SENTRY_DSN) {
+  Sentry.init({
+    dsn: process.env.SENTRY_DSN,
+    environment: process.env.NODE_ENV || 'development',
+    tracesSampleRate: 0.1, // 10% of transactions for performance monitoring
+    beforeSend(event) {
+      // Don't send errors in development unless explicitly enabled
+      if (process.env.NODE_ENV !== 'production' && !process.env.SENTRY_DEV) {
+        return null;
+      }
+      return event;
+    }
+  });
+  console.log('[Sentry] Error monitoring initialized');
+}
+
 const express = require('express');
 const http = require('http');
 const WebSocket = require('ws');
@@ -271,6 +291,12 @@ const passwordResetLimiter = rateLimit({
 // ============================================
 // MIDDLEWARE
 // ============================================
+
+// Sentry request handler (must be first middleware)
+if (process.env.SENTRY_DSN) {
+  app.use(Sentry.Handlers.requestHandler());
+}
+
 app.use(cors({
   origin: process.env.NODE_ENV === 'production'
     ? ['https://cardflow.be1st.io', 'https://www.cardflow.be1st.io']
@@ -8185,6 +8211,19 @@ app.get('/api/admin/costs/export', authenticateToken, requireAdmin, async (req, 
     console.error('[Admin Costs] Export error:', e);
     res.status(500).json({ error: 'Failed to export costs' });
   }
+});
+
+// ============================================
+// SENTRY ERROR HANDLER (must be after all routes)
+// ============================================
+if (process.env.SENTRY_DSN) {
+  app.use(Sentry.Handlers.errorHandler());
+}
+
+// Generic error handler (catches anything Sentry didn't)
+app.use((err, req, res, next) => {
+  console.error('[Error]', err.message);
+  res.status(500).json({ error: 'Internal server error' });
 });
 
 // ============================================
