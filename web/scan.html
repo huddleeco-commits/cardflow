@@ -310,6 +310,106 @@
 
     #canvas { display: none; }
 
+    /* Zoom slider */
+    .zoom-slider-container {
+      position: absolute;
+      right: 16px;
+      top: 50%;
+      transform: translateY(-50%);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      z-index: 15;
+      display: none;
+    }
+    .zoom-slider-container.show { display: flex; }
+    .zoom-label {
+      font-size: 11px;
+      font-weight: 600;
+      color: #00f6ff;
+      margin-bottom: 6px;
+    }
+    .zoom-slider {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 140px;
+      height: 4px;
+      background: rgba(255,255,255,0.2);
+      border-radius: 2px;
+      outline: none;
+      transform: rotate(-90deg);
+      transform-origin: center center;
+    }
+    .zoom-slider::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      background: #00f6ff;
+      cursor: pointer;
+      box-shadow: 0 0 6px rgba(0,246,255,0.5);
+    }
+
+    /* Focus ring */
+    .focus-ring {
+      position: absolute;
+      width: 60px;
+      height: 60px;
+      border: 2px solid #00f6ff;
+      border-radius: 50%;
+      pointer-events: none;
+      z-index: 12;
+      transform: translate(-50%, -50%);
+      animation: focusRingAnim 0.8s ease-out forwards;
+    }
+    @keyframes focusRingAnim {
+      0% { transform: translate(-50%, -50%) scale(1.5); opacity: 0; }
+      20% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+      80% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+      100% { transform: translate(-50%, -50%) scale(0.8); opacity: 0; }
+    }
+
+    /* Blur warning toast */
+    .blur-warning {
+      position: absolute;
+      bottom: 140px;
+      left: 50%;
+      transform: translateX(-50%);
+      padding: 10px 24px;
+      background: rgba(255, 165, 0, 0.9);
+      color: #000;
+      font-size: 13px;
+      font-weight: 600;
+      border-radius: 20px;
+      z-index: 25;
+      pointer-events: none;
+      animation: fadeInOut 2s ease-in-out forwards;
+    }
+    @keyframes fadeInOut {
+      0% { opacity: 0; transform: translateX(-50%) translateY(8px); }
+      15% { opacity: 1; transform: translateX(-50%) translateY(0); }
+      75% { opacity: 1; transform: translateX(-50%) translateY(0); }
+      100% { opacity: 0; transform: translateX(-50%) translateY(-8px); }
+    }
+
+    /* Deskew toggle */
+    .deskew-toggle {
+      padding: 6px 12px;
+      background: rgba(255,255,255,0.1);
+      border: 1px solid rgba(255,255,255,0.2);
+      border-radius: 16px;
+      color: #fff;
+      font-size: 10px;
+      cursor: pointer;
+      margin-left: 8px;
+    }
+    .deskew-toggle.active {
+      background: rgba(0, 246, 255, 0.2);
+      border-color: #00f6ff;
+      color: #00f6ff;
+    }
+
     /* Tutorial Modal */
     .tutorial-overlay {
       position: fixed;
@@ -540,6 +640,12 @@
     <video id="video" autoplay playsinline muted></video>
     <div class="card-frame" id="card-frame"></div>
 
+    <!-- Zoom slider -->
+    <div class="zoom-slider-container" id="zoom-slider-container">
+      <span class="zoom-label" id="zoom-label">1.0x</span>
+      <input type="range" class="zoom-slider" id="zoom-slider" min="1" max="5" step="0.1" value="1" oninput="setZoom(parseFloat(this.value))">
+    </div>
+
     <div class="status-bar">
       <div>
         <div class="logo" style="display: flex; align-items: center; gap: 8px;"><img src="/cardflow-logo.jpg" alt="CardFlow" style="width: 24px; height: 24px; border-radius: 4px;">CARDFLOW</div>
@@ -548,6 +654,7 @@
       <div style="display: flex; align-items: center;">
         <button class="mode-toggle" id="mode-toggle" onclick="toggleMode()">PAIR MODE</button>
         <button class="help-btn" id="help-btn" onclick="showTutorial()" style="display:none;">?</button>
+        <button class="deskew-toggle" id="deskew-toggle" onclick="toggleDeskew()">DESKEW</button>
         <button class="voice-btn" id="voice-btn" onclick="toggleVoice()">🎤</button>
       </div>
     </div>
@@ -742,6 +849,14 @@
 
     let totalCards = 0;
 
+    // Camera enhancement state
+    let videoTrack = null;
+    let zoomCapabilities = null;
+    let currentZoom = 1;
+    let autoDeskewEnabled = false;
+    let initialPinchDistance = null;
+    let pinchZoomStart = 1;
+
     if (token) {
       initScanner();
     }
@@ -818,6 +933,10 @@
         video.srcObject = stream;
         await video.play();
 
+        // Store track reference and check zoom capabilities
+        videoTrack = stream.getVideoTracks()[0];
+        initZoomCapabilities();
+
         // Log actual resolution
         console.log(`Camera resolution: ${video.videoWidth}x${video.videoHeight}`);
       } catch (e) {
@@ -832,10 +951,43 @@
           });
           video.srcObject = stream;
           await video.play();
+
+          videoTrack = stream.getVideoTracks()[0];
+          initZoomCapabilities();
         } catch (e2) {
           alert('Camera access required');
         }
       }
+    }
+
+    function initZoomCapabilities() {
+      const slider = document.getElementById('zoom-slider');
+      const container = document.getElementById('zoom-slider-container');
+
+      if (videoTrack && typeof videoTrack.getCapabilities === 'function') {
+        const caps = videoTrack.getCapabilities();
+        if (caps.zoom) {
+          zoomCapabilities = { min: caps.zoom.min, max: caps.zoom.max, type: 'hardware' };
+          slider.min = caps.zoom.min;
+          slider.max = caps.zoom.max;
+          slider.step = (caps.zoom.max - caps.zoom.min) / 50;
+          slider.value = caps.zoom.min;
+          currentZoom = caps.zoom.min;
+          container.classList.add('show');
+          console.log(`Hardware zoom: ${caps.zoom.min}-${caps.zoom.max}`);
+          return;
+        }
+      }
+
+      // Digital zoom fallback
+      zoomCapabilities = { min: 1, max: 5, type: 'digital' };
+      slider.min = 1;
+      slider.max = 5;
+      slider.step = 0.1;
+      slider.value = 1;
+      currentZoom = 1;
+      container.classList.add('show');
+      console.log('Using digital zoom fallback');
     }
 
     function calculateFrameRect() {
@@ -922,9 +1074,53 @@
       flash.classList.add('show');
       setTimeout(() => flash.classList.remove('show'), 150);
 
+      // Adjust crop for digital zoom
+      let sx = frameRect.x, sy = frameRect.y, sw = frameRect.width, sh = frameRect.height;
+      if (zoomCapabilities && zoomCapabilities.type === 'digital' && currentZoom > 1) {
+        const cx = video.videoWidth / 2;
+        const cy = video.videoHeight / 2;
+        const zoomedW = video.videoWidth / currentZoom;
+        const zoomedH = video.videoHeight / currentZoom;
+        const offsetX = cx - zoomedW / 2;
+        const offsetY = cy - zoomedH / 2;
+
+        const videoBox = video.getBoundingClientRect();
+        const scaleX = video.videoWidth / videoBox.width;
+        const scaleY = video.videoHeight / videoBox.height;
+        const frameEl = document.getElementById('card-frame');
+        const frameBox = frameEl.getBoundingClientRect();
+
+        sx = offsetX + (frameBox.left - videoBox.left) * scaleX / currentZoom;
+        sy = offsetY + (frameBox.top - videoBox.top) * scaleY / currentZoom;
+        sw = frameBox.width * scaleX / currentZoom;
+        sh = frameBox.height * scaleY / currentZoom;
+      }
+
       // Capture cropped frame
-      ctx.drawImage(video, frameRect.x, frameRect.y, frameRect.width, frameRect.height, 0, 0, canvas.width, canvas.height);
+      canvas.width = frameRect.width;
+      canvas.height = frameRect.height;
+      ctx.drawImage(video, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height);
+
+      // Auto-deskew if enabled
+      if (autoDeskewEnabled) {
+        const angle = detectSkewAngle(canvas);
+        if (Math.abs(angle) >= 0.5 && Math.abs(angle) <= 15) {
+          deskewImage(canvas, angle);
+        }
+      }
+
       const blob = await new Promise(r => canvas.toBlob(r, 'image/jpeg', 0.95));
+
+      // Non-blocking blur detection
+      const capturedCanvas = document.createElement('canvas');
+      capturedCanvas.width = canvas.width;
+      capturedCanvas.height = canvas.height;
+      capturedCanvas.getContext('2d').drawImage(canvas, 0, 0);
+      requestAnimationFrame(() => {
+        if (detectBlur(capturedCanvas)) {
+          showBlurWarning();
+        }
+      });
 
       if (scanMode === 'pair') {
         await capturePairMode(blob);
@@ -1190,9 +1386,238 @@
       }
     }
 
+    // Pinch-to-zoom and tap-to-focus on video area
     document.addEventListener('touchstart', e => {
-      if (e.touches.length > 1) e.preventDefault();
+      if (e.touches.length === 2) {
+        e.preventDefault();
+        const dx = e.touches[0].clientX - e.touches[1].clientX;
+        const dy = e.touches[0].clientY - e.touches[1].clientY;
+        initialPinchDistance = Math.hypot(dx, dy);
+        pinchZoomStart = currentZoom;
+      } else if (e.touches.length === 1) {
+        const t = e.target;
+        if (t === video || t.closest('.scanner')) {
+          handleTapToFocus(e.touches[0]);
+        }
+      }
     }, { passive: false });
+
+    document.addEventListener('touchmove', e => {
+      if (e.touches.length === 2 && initialPinchDistance) {
+        e.preventDefault();
+        const dx = e.touches[0].clientX - e.touches[1].clientX;
+        const dy = e.touches[0].clientY - e.touches[1].clientY;
+        const dist = Math.hypot(dx, dy);
+        const scale = dist / initialPinchDistance;
+        const min = zoomCapabilities ? zoomCapabilities.min : 1;
+        const max = zoomCapabilities ? zoomCapabilities.max : 5;
+        const newZoom = Math.min(max, Math.max(min, pinchZoomStart * scale));
+        setZoom(newZoom);
+        document.getElementById('zoom-slider').value = newZoom;
+      }
+    }, { passive: false });
+
+    document.addEventListener('touchend', e => {
+      if (e.touches.length < 2) {
+        initialPinchDistance = null;
+      }
+    });
+
+    // --- Zoom ---
+    function setZoom(value) {
+      currentZoom = value;
+      document.getElementById('zoom-label').textContent = value.toFixed(1) + 'x';
+
+      if (zoomCapabilities && zoomCapabilities.type === 'hardware' && videoTrack) {
+        try {
+          videoTrack.applyConstraints({ advanced: [{ zoom: value }] });
+        } catch (e) {
+          console.log('Hardware zoom failed, falling back to digital');
+          zoomCapabilities.type = 'digital';
+          applyDigitalZoom(value);
+        }
+      } else {
+        applyDigitalZoom(value);
+      }
+    }
+
+    function applyDigitalZoom(value) {
+      video.style.transform = `scale(${value})`;
+      video.style.transformOrigin = 'center center';
+    }
+
+    function toggleDeskew() {
+      autoDeskewEnabled = !autoDeskewEnabled;
+      const btn = document.getElementById('deskew-toggle');
+      btn.classList.toggle('active', autoDeskewEnabled);
+    }
+
+    // --- Tap-to-Focus ---
+    function handleTapToFocus(touch) {
+      const videoBox = video.getBoundingClientRect();
+      const x = (touch.clientX - videoBox.left) / videoBox.width;
+      const y = (touch.clientY - videoBox.top) / videoBox.height;
+
+      // Only process taps inside the video area
+      if (x < 0 || x > 1 || y < 0 || y > 1) return;
+
+      showFocusRing(touch.clientX, touch.clientY);
+
+      if (videoTrack && typeof videoTrack.getCapabilities === 'function') {
+        const caps = videoTrack.getCapabilities();
+        if (caps.focusMode && caps.focusMode.includes('manual')) {
+          try {
+            videoTrack.applyConstraints({
+              focusMode: 'manual',
+              pointsOfInterest: [{ x, y }]
+            });
+
+            // Return to continuous after 3s
+            setTimeout(() => {
+              try {
+                videoTrack.applyConstraints({ focusMode: 'continuous' });
+              } catch (e) {}
+            }, 3000);
+          } catch (e) {
+            // Silent fail - continuous autofocus is fine
+          }
+        }
+      }
+    }
+
+    function showFocusRing(x, y) {
+      const ring = document.createElement('div');
+      ring.className = 'focus-ring';
+      ring.style.left = x + 'px';
+      ring.style.top = y + 'px';
+      document.querySelector('.scanner').appendChild(ring);
+      ring.addEventListener('animationend', () => ring.remove());
+    }
+
+    // --- Blur Detection ---
+    function detectBlur(cvs) {
+      const w = cvs.width;
+      const h = cvs.height;
+      const c = cvs.getContext('2d');
+      const imgData = c.getImageData(0, 0, w, h);
+      const gray = new Float32Array(w * h);
+
+      // Convert to grayscale
+      for (let i = 0; i < w * h; i++) {
+        const r = imgData.data[i * 4];
+        const g = imgData.data[i * 4 + 1];
+        const b = imgData.data[i * 4 + 2];
+        gray[i] = 0.299 * r + 0.587 * g + 0.114 * b;
+      }
+
+      // Laplacian variance
+      let sum = 0, sumSq = 0, count = 0;
+      for (let y = 1; y < h - 1; y++) {
+        for (let x = 1; x < w - 1; x++) {
+          const lap = -4 * gray[y * w + x]
+            + gray[(y - 1) * w + x]
+            + gray[(y + 1) * w + x]
+            + gray[y * w + (x - 1)]
+            + gray[y * w + (x + 1)];
+          sum += lap;
+          sumSq += lap * lap;
+          count++;
+        }
+      }
+
+      const mean = sum / count;
+      const variance = (sumSq / count) - (mean * mean);
+      console.log('Blur variance:', variance.toFixed(1));
+      return variance < 100; // Threshold for blur detection
+    }
+
+    function showBlurWarning() {
+      const existing = document.querySelector('.blur-warning');
+      if (existing) existing.remove();
+
+      const warning = document.createElement('div');
+      warning.className = 'blur-warning';
+      warning.textContent = 'Image may be blurry';
+      document.querySelector('.scanner').appendChild(warning);
+      warning.addEventListener('animationend', () => warning.remove());
+    }
+
+    // --- Auto-Deskew ---
+    function detectSkewAngle(cvs) {
+      const w = cvs.width;
+      const h = cvs.height;
+      const c = cvs.getContext('2d');
+      const imgData = c.getImageData(0, 0, w, h);
+      const gray = new Float32Array(w * h);
+
+      // Convert to grayscale
+      for (let i = 0; i < w * h; i++) {
+        gray[i] = 0.299 * imgData.data[i * 4] + 0.587 * imgData.data[i * 4 + 1] + 0.114 * imgData.data[i * 4 + 2];
+      }
+
+      // Sobel edge detection - compute gradient magnitudes and angles
+      const angles = [];
+      for (let y = 1; y < h - 1; y++) {
+        for (let x = 1; x < w - 1; x++) {
+          const gx = -gray[(y-1)*w+(x-1)] + gray[(y-1)*w+(x+1)]
+                    - 2*gray[y*w+(x-1)] + 2*gray[y*w+(x+1)]
+                    - gray[(y+1)*w+(x-1)] + gray[(y+1)*w+(x+1)];
+          const gy = -gray[(y-1)*w+(x-1)] - 2*gray[(y-1)*w+x] - gray[(y-1)*w+(x+1)]
+                    + gray[(y+1)*w+(x-1)] + 2*gray[(y+1)*w+x] + gray[(y+1)*w+(x+1)];
+          const mag = Math.sqrt(gx * gx + gy * gy);
+
+          if (mag > 50) { // Only strong edges
+            let angle = Math.atan2(gy, gx) * (180 / Math.PI);
+            // Normalize to -45..45 range (we care about near-horizontal/vertical edges)
+            angle = ((angle % 90) + 90) % 90;
+            if (angle > 45) angle -= 90;
+            angles.push(angle);
+          }
+        }
+      }
+
+      if (angles.length < 100) return 0;
+
+      // Angle histogram with 0.5-degree bins
+      const bins = new Float32Array(180); // -45 to +45 in 0.5 degree steps
+      for (const a of angles) {
+        const bin = Math.round((a + 45) * 2);
+        if (bin >= 0 && bin < 180) bins[bin]++;
+      }
+
+      // Find peak bin
+      let peakBin = 0, peakVal = 0;
+      for (let i = 0; i < 180; i++) {
+        if (bins[i] > peakVal) {
+          peakVal = bins[i];
+          peakBin = i;
+        }
+      }
+
+      const dominantAngle = (peakBin / 2) - 45;
+      console.log('Detected skew angle:', dominantAngle.toFixed(2));
+      return dominantAngle;
+    }
+
+    function deskewImage(cvs, angle) {
+      const w = cvs.width;
+      const h = cvs.height;
+      const c = cvs.getContext('2d');
+
+      // Copy current image
+      const tempCanvas = document.createElement('canvas');
+      tempCanvas.width = w;
+      tempCanvas.height = h;
+      tempCanvas.getContext('2d').drawImage(cvs, 0, 0);
+
+      // Rotate canvas
+      c.clearRect(0, 0, w, h);
+      c.save();
+      c.translate(w / 2, h / 2);
+      c.rotate(-angle * Math.PI / 180);
+      c.drawImage(tempCanvas, -w / 2, -h / 2);
+      c.restore();
+    }
 
     // Voice recognition setup
     function initVoiceRecognition() {
