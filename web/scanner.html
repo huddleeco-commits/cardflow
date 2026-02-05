@@ -1185,6 +1185,7 @@
     let currentFilter = 'all';
     let heroCardId = null; // Currently displayed card in hero view
     let heroAutoDismissTimer = null;
+    let heroMaxTimer = null; // Safety net timer
 
     // Check auth
     if (!token) {
@@ -1891,10 +1892,14 @@
     function showHeroView(card) {
       heroCardId = card.id;
 
-      // Clear any existing auto-dismiss timer
+      // Clear any existing timers
       if (heroAutoDismissTimer) {
         clearTimeout(heroAutoDismissTimer);
         heroAutoDismissTimer = null;
+      }
+      if (heroMaxTimer) {
+        clearTimeout(heroMaxTimer);
+        heroMaxTimer = null;
       }
 
       const overlay = document.getElementById('hero-overlay');
@@ -1922,6 +1927,11 @@
 
       updateHeroCounters();
       overlay.classList.add('show');
+
+      // Safety net: auto-dismiss after 45s even if identification event never arrives
+      heroMaxTimer = setTimeout(() => {
+        dismissHero();
+      }, 45000);
     }
 
     function updateHeroView(card) {
@@ -1979,10 +1989,17 @@
         if (card.serial) attrHtml += `<span class="hero-attribute numbered">${card.serial}</span>`;
         attributes.innerHTML = attrHtml;
 
-        // Auto-dismiss after 5 seconds so user can see the result
+        // Clear safety net timer
+        if (heroMaxTimer) {
+          clearTimeout(heroMaxTimer);
+          heroMaxTimer = null;
+        }
+
+        // Auto-dismiss after 3 seconds to return to review view
+        if (heroAutoDismissTimer) clearTimeout(heroAutoDismissTimer);
         heroAutoDismissTimer = setTimeout(() => {
           dismissHero();
-        }, 5000);
+        }, 3000);
       }
 
       updateHeroCounters();
@@ -2002,6 +2019,10 @@
       if (heroAutoDismissTimer) {
         clearTimeout(heroAutoDismissTimer);
         heroAutoDismissTimer = null;
+      }
+      if (heroMaxTimer) {
+        clearTimeout(heroMaxTimer);
+        heroMaxTimer = null;
       }
       document.getElementById('hero-overlay').classList.remove('show');
       heroCardId = null;

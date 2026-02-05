@@ -5107,24 +5107,28 @@
           }
         }
         if (data.type === 'batch_card_identified') {
-          // Only update hero for phone scanner
-          if (data.source === 'phone') {
+          // Always try to update hero if it's showing for this card
+          if (heroCardId === data.cardId) {
             const cardData = data.cardData || {};
             updateHeroIdentified(data.cardId, cardData);
+          }
+          if (data.source === 'phone' || heroCardId) {
             if (batchMode) {
               updateBatchCard(data.cardId, data.cardData);
             } else {
-              // In normal mode, refresh the cards list to show the identified card
               loadCards();
             }
           } else {
-            // Desktop scanner - just refresh the card list
             loadCards();
           }
           loadStatus();
           showToast(`Card identified: ${data.cardData?.player || 'Unknown'}`, 'success');
         }
         if (data.type === 'batch_identify_error') {
+          // Dismiss hero if it's showing for this card
+          if (heroCardId === data.cardId) {
+            dismissHero();
+          }
           if (batchMode) {
             const cardEl = document.getElementById(`batch-card-${data.cardId}`);
             if (cardEl) {
@@ -5135,6 +5139,7 @@
               statusEl.textContent = 'Error';
             }
           }
+          loadCards();
         }
 
         // eBay listing events
@@ -8499,11 +8504,17 @@
 
     // ========== HERO VIEW FUNCTIONS ==========
 
+    let heroMaxTimer = null; // Safety net timer
+
     function showHeroView(cardId, cardNum, frontImage, backImage, status) {
-      // Clear any existing auto-dismiss timer
+      // Clear any existing timers
       if (heroAutoDismissTimer) {
         clearTimeout(heroAutoDismissTimer);
         heroAutoDismissTimer = null;
+      }
+      if (heroMaxTimer) {
+        clearTimeout(heroMaxTimer);
+        heroMaxTimer = null;
       }
 
       heroCardId = cardId;
@@ -8549,11 +8560,22 @@
 
       // Show the overlay
       overlay.classList.add('show');
+
+      // Safety net: auto-dismiss after 45s even if identification event never arrives
+      heroMaxTimer = setTimeout(() => {
+        dismissHero();
+      }, 45000);
     }
 
     function updateHeroIdentified(cardId, cardData) {
       // Only update if this is the card currently shown in hero
       if (heroCardId !== cardId) return;
+
+      // Clear the safety net timer
+      if (heroMaxTimer) {
+        clearTimeout(heroMaxTimer);
+        heroMaxTimer = null;
+      }
 
       const badge = document.getElementById('hero-status-badge');
       const playerName = document.getElementById('hero-player-name');
@@ -8583,16 +8605,21 @@
       if (cardData.serial_number) attrHtml += `<span class="hero-attribute numbered">${cardData.serial_number}</span>`;
       attributes.innerHTML = attrHtml;
 
-      // Auto-dismiss after 5 seconds
+      // Auto-dismiss after 3 seconds to return to review view
+      if (heroAutoDismissTimer) clearTimeout(heroAutoDismissTimer);
       heroAutoDismissTimer = setTimeout(() => {
         dismissHero();
-      }, 5000);
+      }, 3000);
     }
 
     function dismissHero() {
       if (heroAutoDismissTimer) {
         clearTimeout(heroAutoDismissTimer);
         heroAutoDismissTimer = null;
+      }
+      if (heroMaxTimer) {
+        clearTimeout(heroMaxTimer);
+        heroMaxTimer = null;
       }
       document.getElementById('hero-overlay').classList.remove('show');
       heroCardId = null;
