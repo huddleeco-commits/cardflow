@@ -32,10 +32,60 @@ const server = http.createServer(app);
 const wss = new WebSocket.Server({ server });
 
 const PORT = process.env.PORT || 3005;
-const JWT_SECRET = process.env.JWT_SECRET || 'cardflow-dev-secret-change-in-production';
-const JWT_EXPIRY = '7d';
 const crypto = require('crypto');
 const axios = require('axios');
+
+// ============================================
+// SECURITY: JWT Secret - REQUIRED in production
+// ============================================
+const JWT_SECRET = process.env.JWT_SECRET;
+if (!JWT_SECRET && process.env.NODE_ENV === 'production') {
+  console.error('[FATAL] JWT_SECRET environment variable is required in production');
+  process.exit(1);
+}
+// Allow dev fallback only in development
+const EFFECTIVE_JWT_SECRET = JWT_SECRET || 'cardflow-dev-only-not-for-production';
+const JWT_EXPIRY = '7d';
+
+// API Key encryption for storing user's Anthropic keys securely
+const API_KEY_ENCRYPTION_KEY = process.env.API_KEY_ENCRYPTION_KEY || crypto.randomBytes(32).toString('hex');
+const ENCRYPTION_ALGORITHM = 'aes-256-gcm';
+
+function encryptApiKey(plaintext) {
+  if (!plaintext) return null;
+  const iv = crypto.randomBytes(16);
+  const cipher = crypto.createCipheriv(ENCRYPTION_ALGORITHM, Buffer.from(API_KEY_ENCRYPTION_KEY.slice(0, 32)), iv);
+  let encrypted = cipher.update(plaintext, 'utf8', 'hex');
+  encrypted += cipher.final('hex');
+  const authTag = cipher.getAuthTag().toString('hex');
+  return `${iv.toString('hex')}:${authTag}:${encrypted}`;
+}
+
+function decryptApiKey(encryptedData) {
+  if (!encryptedData) return null;
+  // Handle legacy unencrypted keys (starts with sk-)
+  if (encryptedData.startsWith('sk-')) return encryptedData;
+  try {
+    const [ivHex, authTagHex, encrypted] = encryptedData.split(':');
+    const iv = Buffer.from(ivHex, 'hex');
+    const authTag = Buffer.from(authTagHex, 'hex');
+    const decipher = crypto.createDecipheriv(ENCRYPTION_ALGORITHM, Buffer.from(API_KEY_ENCRYPTION_KEY.slice(0, 32)), iv);
+    decipher.setAuthTag(authTag);
+    let decrypted = decipher.update(encrypted, 'hex', 'utf8');
+    decrypted += decipher.final('utf8');
+    return decrypted;
+  } catch (e) {
+    console.error('[Encryption] Failed to decrypt API key:', e.message);
+    return null;
+  }
+}
+
+// Email configuration for password reset
+const SMTP_HOST = process.env.SMTP_HOST || 'smtp.gmail.com';
+const SMTP_PORT = process.env.SMTP_PORT || 587;
+const SMTP_USER = process.env.SMTP_USER;
+const SMTP_PASS = process.env.SMTP_PASS;
+const FROM_EMAIL = process.env.FROM_EMAIL || 'noreply@cardflow.io';
 const XLSX = require('xlsx');
 
 // Stripe for subscriptions
@@ -185,9 +235,50 @@ function loadCosts() {
   return { total: {}, by_model: {}, by_date: {} };
 }
 
-// Middleware
-app.use(cors());
-app.use(express.json({ limit: '50mb' }));
+// ============================================
+// SECURITY: Rate Limiting
+// ============================================
+const rateLimit = require('express-rate-limit');
+
+// General API rate limiter
+const generalLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 500, // 500 requests per window
+  message: { error: 'Too many requests, please try again later' },
+  standardHeaders: true,
+  legacyHeaders: false
+});
+
+// Strict limiter for authentication endpoints (brute force protection)
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 10, // 10 attempts per window
+  message: { error: 'Too many login attempts, please try again in 15 minutes' },
+  standardHeaders: true,
+  legacyHeaders: false,
+  skipSuccessfulRequests: true // Don't count successful logins
+});
+
+// Password reset limiter (prevent email flooding)
+const passwordResetLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 hour
+  max: 5, // 5 reset requests per hour
+  message: { error: 'Too many password reset requests, please try again later' },
+  standardHeaders: true,
+  legacyHeaders: false
+});
+
+// ============================================
+// MIDDLEWARE
+// ============================================
+app.use(cors({
+  origin: process.env.NODE_ENV === 'production'
+    ? ['https://cardflow.be1st.io', 'https://www.cardflow.be1st.io']
+    : true,
+  credentials: true
+}));
+app.use(generalLimiter);
+app.use(express.json({ limit: '10mb' })); // Reduced from 50mb for security
 
 // ============================================
 // AUTHENTICATION MIDDLEWARE
@@ -201,7 +292,7 @@ function authenticateToken(req, res, next) {
     return res.status(401).json({ error: 'Authentication required' });
   }
 
-  jwt.verify(token, JWT_SECRET, (err, user) => {
+  jwt.verify(token, EFFECTIVE_JWT_SECRET, (err, user) => {
     if (err) {
       return res.status(403).json({ error: 'Invalid or expired token' });
     }
@@ -215,7 +306,7 @@ function optionalAuth(req, res, next) {
   const token = authHeader && authHeader.split(' ')[1];
 
   if (token) {
-    jwt.verify(token, JWT_SECRET, (err, user) => {
+    jwt.verify(token, EFFECTIVE_JWT_SECRET, (err, user) => {
       if (!err) {
         req.user = user;
       }
@@ -592,6 +683,16 @@ app.get('/register', (req, res) => {
   res.sendFile(path.join(__dirname, 'register.html'));
 });
 
+// Forgot password page
+app.get('/forgot-password', (req, res) => {
+  res.sendFile(path.join(__dirname, 'forgot-password.html'));
+});
+
+// Reset password page
+app.get('/reset-password', (req, res) => {
+  res.sendFile(path.join(__dirname, 'reset-password.html'));
+});
+
 // SlabTrack OAuth callback
 app.get('/auth/slabtrack', (req, res) => {
   res.sendFile(path.join(__dirname, 'auth-slabtrack.html'));
@@ -719,8 +820,8 @@ app.get('/api/health', async (req, res) => {
 // AUTH ROUTES
 // ============================================
 
-// Register
-app.post('/api/auth/register', async (req, res) => {
+// Register (rate limited)
+app.post('/api/auth/register', authLimiter, async (req, res) => {
   const { email, password, name } = req.body;
 
   if (!email || !password) {
@@ -762,7 +863,7 @@ app.post('/api/auth/register', async (req, res) => {
       email: user.email,
       role: user.role,
       subscription_tier: user.subscription_tier
-    }, JWT_SECRET, { expiresIn: JWT_EXPIRY });
+    }, EFFECTIVE_JWT_SECRET, { expiresIn: JWT_EXPIRY });
 
     res.json({
       token,
@@ -781,8 +882,8 @@ app.post('/api/auth/register', async (req, res) => {
   }
 });
 
-// Login
-app.post('/api/auth/login', async (req, res) => {
+// Login (rate limited)
+app.post('/api/auth/login', authLimiter, async (req, res) => {
   const { email, password } = req.body;
 
   if (!email || !password) {
@@ -816,7 +917,7 @@ app.post('/api/auth/login', async (req, res) => {
       email: user.email,
       role: user.role,
       subscription_tier: user.subscription_tier
-    }, JWT_SECRET, { expiresIn: JWT_EXPIRY });
+    }, EFFECTIVE_JWT_SECRET, { expiresIn: JWT_EXPIRY });
 
     res.json({
       token,
@@ -836,8 +937,8 @@ app.post('/api/auth/login', async (req, res) => {
   }
 });
 
-// SlabTrack Login - Verify token, create/link account
-app.post('/api/auth/slabtrack-login', async (req, res) => {
+// SlabTrack Login - Verify token, create/link account (rate limited)
+app.post('/api/auth/slabtrack-login', authLimiter, async (req, res) => {
   const { slabtrackToken } = req.body;
 
   if (!slabtrackToken) {
@@ -903,7 +1004,7 @@ app.post('/api/auth/slabtrack-login', async (req, res) => {
       email: user.email,
       role: user.role || 'user',
       subscription_tier: user.subscription_tier || 'free'
-    }, JWT_SECRET, { expiresIn: JWT_EXPIRY });
+    }, EFFECTIVE_JWT_SECRET, { expiresIn: JWT_EXPIRY });
 
     res.json({
       success: true,
@@ -927,6 +1028,200 @@ app.post('/api/auth/slabtrack-login', async (req, res) => {
       return res.status(401).json({ error: 'Invalid or expired SlabTrack token' });
     }
     res.status(500).json({ error: 'Failed to verify SlabTrack token' });
+  }
+});
+
+// ============================================
+// PASSWORD RESET FLOW
+// ============================================
+
+// Forgot Password - Request reset email (rate limited)
+app.post('/api/auth/forgot-password', passwordResetLimiter, async (req, res) => {
+  const { email } = req.body;
+
+  if (!email) {
+    return res.status(400).json({ error: 'Email is required' });
+  }
+
+  const emailLower = email.toLowerCase().trim();
+
+  try {
+    // Check if user exists
+    const result = await pool.query(
+      'SELECT id, email, name, auth_method FROM users WHERE email = $1',
+      [emailLower]
+    );
+
+    // Always return success to prevent email enumeration
+    if (result.rows.length === 0) {
+      console.log(`[Password Reset] No user found for email: ${emailLower}`);
+      return res.json({
+        success: true,
+        message: 'If an account with that email exists, a password reset link has been sent.'
+      });
+    }
+
+    const user = result.rows[0];
+
+    // Check if user uses SlabTrack auth (no password to reset)
+    if (user.auth_method === 'slabtrack') {
+      return res.json({
+        success: true,
+        message: 'If an account with that email exists, a password reset link has been sent.'
+      });
+    }
+
+    // Generate secure reset token
+    const resetToken = crypto.randomBytes(32).toString('hex');
+    const resetTokenHash = crypto.createHash('sha256').update(resetToken).digest('hex');
+    const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
+
+    // Store hashed token in database
+    await pool.query(`
+      UPDATE users SET reset_token = $1, reset_token_expires = $2 WHERE id = $3
+    `, [resetTokenHash, expiresAt, user.id]);
+
+    // Build reset URL
+    const resetUrl = `${FRONTEND_URL}/reset-password?token=${resetToken}&email=${encodeURIComponent(emailLower)}`;
+
+    // Send email (if SMTP is configured)
+    if (SMTP_USER && SMTP_PASS) {
+      try {
+        const nodemailer = require('nodemailer');
+        const transporter = nodemailer.createTransport({
+          host: SMTP_HOST,
+          port: SMTP_PORT,
+          secure: SMTP_PORT === 465,
+          auth: {
+            user: SMTP_USER,
+            pass: SMTP_PASS
+          }
+        });
+
+        await transporter.sendMail({
+          from: `"CardFlow" <${FROM_EMAIL}>`,
+          to: user.email,
+          subject: 'Reset Your CardFlow Password',
+          html: `
+            <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+              <div style="text-align: center; margin-bottom: 30px;">
+                <h1 style="color: #0a0e1a; margin: 0;">CardFlow</h1>
+                <p style="color: #666; margin: 5px 0 0 0;">Password Reset Request</p>
+              </div>
+
+              <div style="background: #f8f9fa; border-radius: 8px; padding: 30px; margin-bottom: 20px;">
+                <p style="color: #333; margin: 0 0 20px 0;">Hi${user.name ? ' ' + user.name : ''},</p>
+                <p style="color: #333; margin: 0 0 20px 0;">We received a request to reset your password. Click the button below to create a new password:</p>
+
+                <div style="text-align: center; margin: 30px 0;">
+                  <a href="${resetUrl}" style="display: inline-block; background: linear-gradient(135deg, #00f6ff, #7b2ff7); color: #000; text-decoration: none; padding: 14px 32px; border-radius: 8px; font-weight: 600;">Reset Password</a>
+                </div>
+
+                <p style="color: #666; font-size: 14px; margin: 0;">This link will expire in 1 hour.</p>
+              </div>
+
+              <div style="color: #999; font-size: 12px; text-align: center;">
+                <p style="margin: 0 0 10px 0;">If you didn't request this, you can safely ignore this email.</p>
+                <p style="margin: 0;">Your password won't change until you click the link above and create a new one.</p>
+              </div>
+            </div>
+          `
+        });
+
+        console.log(`[Password Reset] Email sent to: ${user.email}`);
+      } catch (emailError) {
+        console.error('[Password Reset] Email send failed:', emailError.message);
+        // Don't expose email failure to user
+      }
+    } else {
+      // Development mode - log the reset URL
+      console.log(`[Password Reset] SMTP not configured. Reset URL for ${user.email}:`);
+      console.log(resetUrl);
+    }
+
+    res.json({
+      success: true,
+      message: 'If an account with that email exists, a password reset link has been sent.'
+    });
+
+  } catch (e) {
+    console.error('[Password Reset] Error:', e);
+    res.status(500).json({ error: 'Failed to process password reset request' });
+  }
+});
+
+// Reset Password - Verify token and set new password (rate limited)
+app.post('/api/auth/reset-password', authLimiter, async (req, res) => {
+  const { email, token, password } = req.body;
+
+  if (!email || !token || !password) {
+    return res.status(400).json({ error: 'Email, token, and new password are required' });
+  }
+
+  if (password.length < 6) {
+    return res.status(400).json({ error: 'Password must be at least 6 characters' });
+  }
+
+  const emailLower = email.toLowerCase().trim();
+  const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+
+  try {
+    // Find user with valid reset token
+    const result = await pool.query(`
+      SELECT id, email, reset_token, reset_token_expires
+      FROM users
+      WHERE email = $1 AND reset_token = $2 AND reset_token_expires > NOW()
+    `, [emailLower, tokenHash]);
+
+    if (result.rows.length === 0) {
+      return res.status(400).json({ error: 'Invalid or expired reset link. Please request a new one.' });
+    }
+
+    const user = result.rows[0];
+
+    // Hash new password
+    const passwordHash = await bcrypt.hash(password, 10);
+
+    // Update password and clear reset token
+    await pool.query(`
+      UPDATE users
+      SET password_hash = $1, reset_token = NULL, reset_token_expires = NULL, updated_at = NOW()
+      WHERE id = $2
+    `, [passwordHash, user.id]);
+
+    console.log(`[Password Reset] Password updated for: ${user.email}`);
+
+    res.json({
+      success: true,
+      message: 'Password reset successful. You can now log in with your new password.'
+    });
+
+  } catch (e) {
+    console.error('[Password Reset] Error:', e);
+    res.status(500).json({ error: 'Failed to reset password' });
+  }
+});
+
+// Verify reset token (for frontend validation)
+app.get('/api/auth/verify-reset-token', async (req, res) => {
+  const { email, token } = req.query;
+
+  if (!email || !token) {
+    return res.status(400).json({ valid: false, error: 'Missing email or token' });
+  }
+
+  const emailLower = email.toLowerCase().trim();
+  const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+
+  try {
+    const result = await pool.query(`
+      SELECT id FROM users
+      WHERE email = $1 AND reset_token = $2 AND reset_token_expires > NOW()
+    `, [emailLower, tokenHash]);
+
+    res.json({ valid: result.rows.length > 0 });
+  } catch (e) {
+    res.status(500).json({ valid: false, error: 'Verification failed' });
   }
 });
 
@@ -987,7 +1282,7 @@ app.post('/api/auth/logout', authenticateToken, (req, res) => {
   res.json({ success: true });
 });
 
-// Update user API key
+// Update user API key (encrypted at rest)
 app.put('/api/auth/api-key', authenticateToken, async (req, res) => {
   const { api_key } = req.body;
 
@@ -995,7 +1290,9 @@ app.put('/api/auth/api-key', authenticateToken, async (req, res) => {
     if (api_key === null || api_key === '') {
       await pool.query('UPDATE users SET api_key = NULL WHERE id = $1', [req.user.id]);
     } else if (api_key && api_key.startsWith('sk-ant-api03-')) {
-      await pool.query('UPDATE users SET api_key = $1 WHERE id = $2', [api_key, req.user.id]);
+      // Encrypt the API key before storing
+      const encryptedKey = encryptApiKey(api_key);
+      await pool.query('UPDATE users SET api_key = $1 WHERE id = $2', [encryptedKey, req.user.id]);
     } else if (api_key) {
       return res.status(400).json({ error: 'Invalid API key format' });
     }
@@ -1003,6 +1300,7 @@ app.put('/api/auth/api-key', authenticateToken, async (req, res) => {
     res.json({ success: true, hasKey: !!api_key });
 
   } catch (e) {
+    console.error('API key update error:', e);
     res.status(500).json({ error: 'Failed to update API key' });
   }
 });
@@ -2161,14 +2459,17 @@ app.post('/api/import/identify', authenticateToken, async (req, res) => {
 // PROCESSING ENDPOINTS (Identify & Price)
 // ============================================
 
-// Get user's API key
+// Get user's API key (decrypted)
 async function getUserApiKey(userId) {
   try {
     const result = await pool.query('SELECT api_key FROM users WHERE id = $1', [userId]);
     if (result.rows.length > 0 && result.rows[0].api_key) {
-      return result.rows[0].api_key;
+      // Decrypt the API key before returning
+      return decryptApiKey(result.rows[0].api_key);
     }
-  } catch (e) {}
+  } catch (e) {
+    console.error('[API Key] Error retrieving key:', e.message);
+  }
   // No fallback to platform key - true BYOK model
   // Users must have their own API key or use SlabTrack Power/Dealer
   return null;
@@ -6394,6 +6695,11 @@ app.get('/api/agent/usage', authenticateToken, async (req, res) => {
     // Beta is enabled for: admins, users with their own API key, or users with beta flag
     const isBetaEnabled = quotaCheck.isAdmin || quotaCheck.hasOwnKey || user?.beta_features?.agentAnalysis || false;
 
+    // Decrypt keys for display preview (show last 4 chars only)
+    const decryptedAnthropic = user?.anthropic_api_key ? decryptApiKey(user.anthropic_api_key) : null;
+    const decryptedOpenai = user?.openai_api_key ? decryptApiKey(user.openai_api_key) : null;
+    const decryptedGoogle = user?.google_api_key ? decryptApiKey(user.google_api_key) : null;
+
     res.json({
       quota: {
         used: quotaCheck.used || 0,
@@ -6405,9 +6711,9 @@ app.get('/api/agent/usage', authenticateToken, async (req, res) => {
       },
       betaEnabled: isBetaEnabled,
       apiKeys: {
-        anthropic: user?.anthropic_api_key ? '....' + user.anthropic_api_key.slice(-4) : null,
-        openai: user?.openai_api_key ? '....' + user.openai_api_key.slice(-4) : null,
-        google: user?.google_api_key ? '....' + user.google_api_key.slice(-4) : null
+        anthropic: decryptedAnthropic ? '....' + decryptedAnthropic.slice(-4) : null,
+        openai: decryptedOpenai ? '....' + decryptedOpenai.slice(-4) : null,
+        google: decryptedGoogle ? '....' + decryptedGoogle.slice(-4) : null
       },
       preferredProvider: user?.preferred_ai_provider || 'anthropic'
     });
@@ -6417,7 +6723,7 @@ app.get('/api/agent/usage', authenticateToken, async (req, res) => {
   }
 });
 
-// POST /api/agent/save-settings - Save user's AI settings
+// POST /api/agent/save-settings - Save user's AI settings (encrypted at rest)
 app.post('/api/agent/save-settings', authenticateToken, async (req, res) => {
   try {
     const userId = req.user.id;
@@ -6427,17 +6733,18 @@ app.post('/api/agent/save-settings', authenticateToken, async (req, res) => {
     const values = [];
     let paramIndex = 1;
 
+    // Encrypt API keys before storing
     if (anthropicKey !== undefined) {
       updates.push(`anthropic_api_key = $${paramIndex++}`);
-      values.push(anthropicKey || null);
+      values.push(anthropicKey ? encryptApiKey(anthropicKey) : null);
     }
     if (openaiKey !== undefined) {
       updates.push(`openai_api_key = $${paramIndex++}`);
-      values.push(openaiKey || null);
+      values.push(openaiKey ? encryptApiKey(openaiKey) : null);
     }
     if (googleKey !== undefined) {
       updates.push(`google_api_key = $${paramIndex++}`);
-      values.push(googleKey || null);
+      values.push(googleKey ? encryptApiKey(googleKey) : null);
     }
     if (preferredProvider) {
       updates.push(`preferred_ai_provider = $${paramIndex++}`);
@@ -6479,14 +6786,15 @@ app.post('/api/agent/analyze-card', authenticateToken, async (req, res) => {
       });
     }
 
-    // 2. GET API KEY (from request or user's saved key)
+    // 2. GET API KEY (from request or user's saved key - decrypt if stored)
     let userApiKey = apiKey;
     if (!userApiKey) {
       const keyResult = await pool.query(
         `SELECT ${provider}_api_key as api_key FROM users WHERE id = $1`,
         [userId]
       );
-      userApiKey = keyResult.rows[0]?.api_key;
+      const encryptedKey = keyResult.rows[0]?.api_key;
+      userApiKey = encryptedKey ? decryptApiKey(encryptedKey) : null;
     }
 
     if (!userApiKey) {
