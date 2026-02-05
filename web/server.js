@@ -292,11 +292,6 @@ const passwordResetLimiter = rateLimit({
 // MIDDLEWARE
 // ============================================
 
-// Sentry request handler (must be first middleware)
-if (process.env.SENTRY_DSN) {
-  app.use(Sentry.Handlers.requestHandler());
-}
-
 app.use(cors({
   origin: process.env.NODE_ENV === 'production'
     ? ['https://cardflow.be1st.io', 'https://www.cardflow.be1st.io']
@@ -8214,10 +8209,12 @@ app.get('/api/admin/costs/export', authenticateToken, requireAdmin, async (req, 
 });
 
 // ============================================
-// SENTRY ERROR HANDLER (must be after all routes)
+// ERROR HANDLERS (must be after all routes)
 // ============================================
+
+// Sentry error handler (v8 API)
 if (process.env.SENTRY_DSN) {
-  app.use(Sentry.Handlers.errorHandler());
+  Sentry.setupExpressErrorHandler(app);
 }
 
 // Generic error handler (catches anything Sentry didn't)
