@@ -484,63 +484,6 @@
       box-shadow: 0 0 10px rgba(0, 246, 255, 0.2);
     }
 
-    /* Active Set Banner */
-    .set-context-banner {
-      background: rgba(0, 246, 255, 0.08);
-      border-bottom: 1px solid rgba(0, 246, 255, 0.2);
-      padding: 8px 24px;
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      font-size: 13px;
-    }
-    .set-context-label {
-      color: var(--text-muted);
-      font-weight: 500;
-    }
-    .set-context-name {
-      color: var(--cyan);
-      font-weight: 700;
-    }
-    .set-context-clear {
-      margin-left: auto;
-      padding: 4px 12px;
-      background: rgba(255, 255, 255, 0.06);
-      border: 1px solid rgba(255, 255, 255, 0.15);
-      border-radius: 6px;
-      color: var(--text-muted);
-      font-size: 11px;
-      cursor: pointer;
-      transition: all 0.15s;
-    }
-    .set-context-clear:hover {
-      background: rgba(255, 68, 102, 0.15);
-      border-color: var(--error);
-      color: var(--error);
-    }
-
-    /* Parallel chips */
-    .parallel-chips {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 6px;
-      margin-top: 8px;
-    }
-    .parallel-chip {
-      padding: 4px 10px;
-      background: rgba(0, 246, 255, 0.1);
-      border: 1px solid rgba(0, 246, 255, 0.25);
-      border-radius: 20px;
-      font-size: 11px;
-      color: var(--cyan);
-      cursor: pointer;
-      transition: all 0.15s;
-    }
-    .parallel-chip:hover {
-      background: rgba(0, 246, 255, 0.2);
-      border-color: var(--cyan);
-    }
-
     .form-row {
       display: grid;
       grid-template-columns: 1fr 1fr;
@@ -1035,13 +978,6 @@
     </div>
   </div>
 
-  <!-- Active Set Banner -->
-  <div class="set-context-banner" id="set-context-banner" style="display: none;">
-    <span class="set-context-label">Active Set:</span>
-    <span class="set-context-name" id="set-context-name"></span>
-    <button class="set-context-clear" onclick="clearSetContext()">Clear</button>
-  </div>
-
   <div class="main-layout">
     <!-- Left Sidebar -->
     <div class="sidebar-left">
@@ -1196,7 +1132,6 @@
         <div class="form-group">
           <label>Parallel / Variation</label>
           <input type="text" id="edit-parallel" placeholder="e.g., Refractor, Gold /50">
-          <div class="parallel-chips" id="parallel-chips" style="display: none;"></div>
         </div>
 
         <div class="form-row">
@@ -1287,7 +1222,6 @@
     let heroCardId = null; // Currently displayed card in hero view
     let heroAutoDismissTimer = null;
     let heroMaxTimer = null; // Safety net timer
-    let activeSetContext = null; // Set context from phone back-scan
 
     // Check auth
     if (!token) {
@@ -1482,42 +1416,7 @@
             addLogEntry(`Identified: ${data.player || 'Unknown'}`, 'identified');
           }
           break;
-
-        case 'set_context_updated':
-          // Phone scanned a card back to identify the set
-          activeSetContext = data.setContext;
-          showSetContextBanner(data.setContext);
-          populateParallelChips(data.setContext.parallels || []);
-          addLogEntry(`Set context: ${data.setContext.set_name}`, 'check');
-          break;
       }
-    }
-
-    function showSetContextBanner(ctx) {
-      const banner = document.getElementById('set-context-banner');
-      const nameEl = document.getElementById('set-context-name');
-      const label = [ctx.year, ctx.set_name].filter(Boolean).join(' ');
-      nameEl.textContent = label;
-      banner.style.display = 'flex';
-    }
-
-    function clearSetContext() {
-      activeSetContext = null;
-      document.getElementById('set-context-banner').style.display = 'none';
-      document.getElementById('parallel-chips').style.display = 'none';
-      document.getElementById('parallel-chips').innerHTML = '';
-    }
-
-    function populateParallelChips(parallels) {
-      const container = document.getElementById('parallel-chips');
-      if (!parallels || parallels.length === 0) {
-        container.style.display = 'none';
-        return;
-      }
-      container.innerHTML = parallels.map(p =>
-        `<span class="parallel-chip" onclick="document.getElementById('edit-parallel').value='${p.replace(/'/g, "\\'")}';">${p}</span>`
-      ).join('');
-      container.style.display = 'flex';
     }
 
     function updateScannerStatus(status, text, detail) {
