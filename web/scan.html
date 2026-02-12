@@ -648,11 +648,38 @@
     .set-selection-screen .subtitle {
       color: rgba(255,255,255,0.5);
       font-size: 13px;
-      margin-bottom: 24px;
+      margin-bottom: 16px;
     }
+    .set-tab-bar {
+      display: flex;
+      gap: 0;
+      width: 100%;
+      max-width: 400px;
+      margin-bottom: 20px;
+      border-radius: 10px;
+      overflow: hidden;
+      border: 1px solid rgba(255,255,255,0.12);
+    }
+    .set-tab {
+      flex: 1;
+      padding: 10px;
+      background: rgba(255,255,255,0.04);
+      border: none;
+      color: rgba(255,255,255,0.5);
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .set-tab.active {
+      background: rgba(0, 246, 255, 0.12);
+      color: #00f6ff;
+    }
+    .set-tab-content { display: none; width: 100%; align-items: center; flex-direction: column; }
+    .set-tab-content.active { display: flex; }
     .set-id-video-container {
-      width: 60%;
-      max-width: 280px;
+      width: 75%;
+      max-width: 320px;
       aspect-ratio: 2.5/3.5;
       border-radius: 16px;
       overflow: hidden;
@@ -661,17 +688,17 @@
     }
     .set-id-video-container video { width: 100%; height: 100%; object-fit: cover; }
     .set-id-capture-btn {
-      width: 56px; height: 56px; border-radius: 50%;
+      width: 64px; height: 64px; border-radius: 50%;
       border: 3px solid #fff; background: rgba(123, 47, 247, 0.6);
-      cursor: pointer; margin-top: 14px; transition: all 0.15s;
+      cursor: pointer; margin-top: 16px; transition: all 0.15s;
     }
     .set-id-capture-btn:active { transform: scale(0.92); background: rgba(123, 47, 247, 0.9); }
     .set-id-capture-btn:disabled { opacity: 0.4; }
-    .set-id-loading { display: flex; flex-direction: column; align-items: center; gap: 10px; margin-top: 14px; }
-    .set-id-spinner { width: 28px; height: 28px; border: 3px solid rgba(255,255,255,0.15); border-top-color: #7b2ff7; border-radius: 50%; animation: setidspin 0.8s linear infinite; }
+    .set-id-loading { display: flex; flex-direction: column; align-items: center; gap: 10px; margin-top: 16px; }
+    .set-id-spinner { width: 32px; height: 32px; border: 3px solid rgba(255,255,255,0.15); border-top-color: #7b2ff7; border-radius: 50%; animation: setidspin 0.8s linear infinite; }
     @keyframes setidspin { to { transform: rotate(360deg); } }
     .set-id-error { color: #ff4466; font-size: 13px; margin-top: 10px; text-align: center; }
-    .set-id-or { color: rgba(255,255,255,0.3); font-size: 12px; margin: 16px 0 8px; text-transform: uppercase; letter-spacing: 1px; }
+    .set-id-hint { color: rgba(255,255,255,0.35); font-size: 12px; margin-top: 12px; }
     .set-search-box {
       width: 100%;
       max-width: 400px;
@@ -853,34 +880,43 @@
   <!-- Set Selection Screen -->
   <div class="set-selection-screen" id="set-selection-screen" style="display: none;">
     <h2>What set are you scanning?</h2>
-    <p class="subtitle">Scan the back of a card, or search below</p>
+    <p class="subtitle">Identify the set before scanning cards</p>
 
-    <!-- Camera capture for set identification -->
-    <div class="set-id-video-container" id="set-id-video-container">
-      <video id="set-id-video" autoplay playsinline muted></video>
-    </div>
-    <button class="set-id-capture-btn" id="set-id-capture-btn" onclick="captureSetImage()"></button>
-    <div class="set-id-loading" id="set-id-loading" style="display: none;">
-      <div class="set-id-spinner"></div>
-      <span style="color: rgba(255,255,255,0.6); font-size: 13px;">Identifying set...</span>
-    </div>
-    <div class="set-id-error" id="set-id-error" style="display: none;"></div>
-    <canvas id="set-id-canvas" style="display: none;"></canvas>
-
-    <div class="set-id-or">— or search —</div>
-
-    <div class="set-search-box">
-      <input type="text" id="set-search-input" placeholder="Search sets... e.g. Topps Chrome" autocomplete="off">
+    <div class="set-tab-bar">
+      <button class="set-tab active" id="set-tab-scan" onclick="switchSetTab('scan')">Scan Card Back</button>
+      <button class="set-tab" id="set-tab-search" onclick="switchSetTab('search')">Type / Search</button>
     </div>
 
-    <!-- Popular sets - always visible as quick picks -->
-    <div class="set-popular" id="set-popular">
-      <div style="font-size: 11px; color: rgba(255,255,255,0.35); margin-bottom: 8px; text-transform: uppercase; letter-spacing: 1px;">Popular Sets</div>
-      <div class="set-popular-grid" id="set-popular-grid"></div>
+    <!-- Tab 1: Scan -->
+    <div class="set-tab-content active" id="set-tab-scan-content">
+      <div class="set-id-video-container" id="set-id-video-container">
+        <video id="set-id-video" autoplay playsinline muted></video>
+      </div>
+      <button class="set-id-capture-btn" id="set-id-capture-btn" onclick="captureSetImage()"></button>
+      <div class="set-id-loading" id="set-id-loading" style="display: none;">
+        <div class="set-id-spinner"></div>
+        <span style="color: rgba(255,255,255,0.6); font-size: 13px;">Identifying set...</span>
+      </div>
+      <div class="set-id-error" id="set-id-error" style="display: none;"></div>
+      <canvas id="set-id-canvas" style="display: none;"></canvas>
+      <div class="set-id-hint">Hold up the back of any card from the set</div>
     </div>
 
-    <div class="set-results" id="set-results"></div>
+    <!-- Tab 2: Search -->
+    <div class="set-tab-content" id="set-tab-search-content">
+      <div class="set-search-box">
+        <input type="text" id="set-search-input" placeholder="Search sets... e.g. Topps Chrome" autocomplete="off">
+      </div>
 
+      <div class="set-popular" id="set-popular">
+        <div style="font-size: 11px; color: rgba(255,255,255,0.35); margin-bottom: 8px; text-transform: uppercase; letter-spacing: 1px;">Popular Sets</div>
+        <div class="set-popular-grid" id="set-popular-grid"></div>
+      </div>
+
+      <div class="set-results" id="set-results"></div>
+    </div>
+
+    <!-- Shared: confirm card + actions (visible on both tabs) -->
     <div class="set-confirm-card" id="set-confirm-card" style="display: none;">
       <h3 id="set-confirm-name"></h3>
       <div class="year-sport" id="set-confirm-meta"></div>
@@ -2043,6 +2079,16 @@
     // SET SELECTION FUNCTIONS
     // ============================================
 
+    function switchSetTab(tab) {
+      document.getElementById('set-tab-scan').classList.toggle('active', tab === 'scan');
+      document.getElementById('set-tab-search').classList.toggle('active', tab === 'search');
+      document.getElementById('set-tab-scan-content').classList.toggle('active', tab === 'scan');
+      document.getElementById('set-tab-search-content').classList.toggle('active', tab === 'search');
+      if (tab === 'search') {
+        document.getElementById('set-search-input').focus();
+      }
+    }
+
     async function startSetIdCamera() {
       try {
         setIdStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment', width: { ideal: 1920 }, height: { ideal: 1080 } } });
@@ -2135,6 +2181,7 @@
       document.getElementById('set-id-error').style.display = 'none';
       document.getElementById('set-id-capture-btn').style.display = '';
       document.getElementById('set-id-video-container').style.display = '';
+      switchSetTab('scan');
 
       // Render popular sets grid
       const grid = document.getElementById('set-popular-grid');
