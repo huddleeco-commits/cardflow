@@ -48,7 +48,7 @@ const multer = require('multer');
 const ExcelJS = require('exceljs');
 
 const app = express();
-app.set('trust proxy', 1); // Railway/Heroku runs behind a reverse proxy
+app.set('trust proxy', 1); // Railway runs behind a reverse proxy
 const server = http.createServer(app);
 const wss = new WebSocket.Server({ server });
 
@@ -119,6 +119,34 @@ const STRIPE_WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET;
 
 // SlabTrack API
 const SLABTRACK_API = process.env.SLABTRACK_API_URL || 'https://slabtrack.io/api';
+
+// SportsCardsPro API
+const SPORTSCARDSPRO_TOKEN = process.env.SPORTSCARDSPRO_TOKEN;
+const SCP_API_BASE = 'https://www.sportscardspro.com/api';
+
+// In-memory cache for set search results (30-min TTL, max 500 entries)
+const setCache = new Map();
+const SET_CACHE_TTL = 30 * 60 * 1000; // 30 minutes
+const SET_CACHE_MAX = 500;
+
+function getCachedSet(key) {
+  const entry = setCache.get(key);
+  if (!entry) return null;
+  if (Date.now() - entry.ts > SET_CACHE_TTL) {
+    setCache.delete(key);
+    return null;
+  }
+  return entry.data;
+}
+
+function setCachedSet(key, data) {
+  // Evict oldest if at max
+  if (setCache.size >= SET_CACHE_MAX) {
+    const oldest = setCache.keys().next().value;
+    setCache.delete(oldest);
+  }
+  setCache.set(key, { data, ts: Date.now() });
+}
 
 // eBay OAuth Config
 const EBAY_APP_ID = process.env.EBAY_APP_ID;
@@ -273,7 +301,7 @@ const generalLimiter = rateLimit({
 // Strict limiter for authentication endpoints (brute force protection)
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 50, // 50 attempts per window
+  max: 10, // 10 attempts per window
   message: { error: 'Too many login attempts, please try again in 15 minutes' },
   standardHeaders: true,
   legacyHeaders: false,
@@ -2372,13 +2400,31 @@ app.post('/api/upload-pair', authenticateToken, (req, res) => {
       const isBatchMode = req.body && req.body.batch === 'true';
       const uploadSource = req.body && req.body.source ? req.body.source : 'web'; // phone, desktop, or web
       console.log(`[Upload] Body fields:`, req.body); // Debug: see what's in req.body
+
+      // Parse optional set_context for focused identification
+      let setContext = null;
+      if (req.body && req.body.set_context) {
+        try {
+          setContext = typeof req.body.set_context === 'string'
+            ? JSON.parse(req.body.set_context)
+            : req.body.set_context;
+        } catch (e) {
+          console.log('[Upload] Invalid set_context, ignoring:', e.message);
+        }
+      }
+
+      const cardMeta = { uploaded_at: new Date().toISOString(), cloudinary: useCloudinary, batch: isBatchMode, source: uploadSource };
+      if (setContext) {
+        cardMeta.set_context = setContext;
+      }
+
       const insertResult = await pool.query(`
         INSERT INTO cards (user_id, card_data, front_image_path, back_image_path, status)
         VALUES ($1, $2, $3, $4, 'pending')
         RETURNING id
       `, [
         req.user.id,
-        JSON.stringify({ uploaded_at: new Date().toISOString(), cloudinary: useCloudinary, batch: isBatchMode, source: uploadSource }),
+        JSON.stringify(cardMeta),
         frontUrl,
         backUrl || null
       ]);
@@ -2792,9 +2838,43 @@ async function identifySingleCard(userId, cardId) {
       }
     }
 
-    content.push({
-      type: 'text',
-      text: `CAREFULLY analyze this sports card image and identify it accurately.
+    // Build prompt - focused if set_context provided, generic otherwise
+    const setCtx = cardMeta.set_context;
+    let promptText;
+
+    if (setCtx && setCtx.set_name) {
+      // Focused prompt with known set context
+      const parallelList = (setCtx.parallels && setCtx.parallels.length > 0)
+        ? setCtx.parallels.join(', ')
+        : 'Base, and any visible parallel/variation';
+      const sport = setCtx.sport || 'sports';
+      const yearStr = setCtx.year ? `${setCtx.year} ` : '';
+      console.log(`[Batch] Using focused prompt for card ${cardId}: ${yearStr}${setCtx.set_name} (${parallelList.split(',').length} parallels)`);
+
+      promptText = `Identify this ${sport} card from the set: ${yearStr}${setCtx.set_name}.
+Known parallels for this set: ${parallelList}
+
+${hasBack ? 'I have provided both the FRONT and BACK of the card. Use both images.' : 'This is a single image. Read any label text carefully.'}
+
+Return ONLY a JSON object (no other text):
+{
+  "player": "Full player name AS SHOWN ON CARD",
+  "year": ${setCtx.year || 2024},
+  "set_name": "${setCtx.set_name}",
+  "card_number": "Card number",
+  "parallel": "Pick from known parallels above, or describe if not listed",
+  "serial_number": "If numbered (e.g., 25/99) or null",
+  "is_autograph": false,
+  "is_graded": true,
+  "grading_company": "PSA, BGS, SGC, or null",
+  "grade": "10, 9.5, 9, etc. or null",
+  "cert_number": "Certification number or null",
+  "sport": "${setCtx.sport || 'baseball'}",
+  "confidence": "high, medium, or low"
+}`;
+    } else {
+      // Generic prompt (unchanged)
+      promptText = `CAREFULLY analyze this sports card image and identify it accurately.
 
 IMPORTANT INSTRUCTIONS:
 1. LOOK AT THE ACTUAL CARD IMAGE - identify the player shown on the card
@@ -2823,8 +2903,10 @@ Return ONLY a JSON object with these fields (no other text):
   "cert_number": "Certification number from label or null",
   "sport": "baseball, basketball, football, hockey, soccer",
   "confidence": "high, medium, or low"
-}`
-    });
+}`;
+    }
+
+    content.push({ type: 'text', text: promptText });
 
     const response = await anthropic.messages.create({
       model: 'claude-sonnet-4-20250514',
@@ -8206,6 +8288,221 @@ app.get('/api/admin/costs/export', authenticateToken, requireAdmin, async (req, 
   } catch (e) {
     console.error('[Admin Costs] Export error:', e);
     res.status(500).json({ error: 'Failed to export costs' });
+  }
+});
+
+// ============================================
+// SET CONTEXT MODE - Search & Parallels
+// ============================================
+
+// Hardcoded known parallels for common sets
+const KNOWN_SET_PARALLELS = {
+  'topps chrome': ['Base', 'Refractor', 'Pink Refractor', 'Sepia Refractor', 'Prism Refractor', 'Blue Refractor', 'Green Refractor', 'Gold Refractor', 'Orange Refractor', 'Red Refractor', 'Purple Refractor', 'Black Refractor', 'Superfractor', 'X-Fractor', 'Aqua Refractor', 'Negative Refractor'],
+  'bowman chrome': ['Base', 'Refractor', 'Blue Refractor', 'Green Refractor', 'Gold Refractor', 'Orange Refractor', 'Purple Refractor', 'Red Refractor', 'Black Refractor', 'Superfractor', 'Aqua Refractor', 'Shimmer Refractor', 'Speckle Refractor'],
+  'prizm': ['Base', 'Silver', 'Red White & Blue', 'Blue', 'Blue Shimmer', 'Green', 'Pink', 'Orange', 'Red', 'Purple', 'Gold', 'Black', 'Neon Green', 'Snakeskin', 'Mojo', 'Tiger Stripe', 'Camo', 'Disco', 'Fast Break', 'Choice', 'Green Shimmer'],
+  'select': ['Base', 'Silver', 'Tri-Color', 'Blue', 'Maroon', 'Green', 'Orange', 'Red', 'Gold', 'Black', 'White', 'Tie-Dye', 'Zebra', 'Disco', 'Scope', 'Neon Green'],
+  'donruss optic': ['Base', 'Holo', 'Red', 'Blue', 'Purple', 'Pink', 'Orange', 'Green', 'Gold', 'Black', 'Lime Green', 'Shock', 'White Sparkle', 'Purple Shock', 'Blue Velocity', 'Red Velocity'],
+  'topps': ['Base', 'Gold', 'Rainbow Foil', 'Vintage Stock', 'Independence Day', 'Platinum', 'Printing Plate Black', 'Printing Plate Cyan', 'Printing Plate Magenta', 'Printing Plate Yellow', 'Clear', 'Mother\'s Day Pink', 'Father\'s Day Blue'],
+  'bowman': ['Base', 'Blue', 'Green', 'Orange', 'Gold', 'Red', 'Purple', 'Yellow', 'Sky Blue', 'Camo'],
+  'topps heritage': ['Base', 'Chrome', 'Chrome Refractor', 'Black Border', 'Mini', 'Red Border', 'Blue Border', 'French Text', 'Action Variation', 'Short Print'],
+  'mosaic': ['Base', 'Silver', 'Blue', 'Green', 'Pink', 'Orange', 'Red', 'Gold', 'Black', 'Camo', 'Genesis', 'Disco', 'Fluorescent Green', 'Fluorescent Orange', 'Fluorescent Pink', 'Reactive Blue', 'Reactive Orange'],
+  'panini prizm': ['Base', 'Silver', 'Red White & Blue', 'Blue', 'Blue Shimmer', 'Green', 'Pink', 'Orange', 'Red', 'Purple', 'Gold', 'Black', 'Neon Green', 'Snakeskin', 'Mojo', 'Tiger Stripe', 'Camo', 'Disco', 'Fast Break', 'Choice', 'Green Shimmer'],
+  'topps series 1': ['Base', 'Gold', 'Rainbow Foil', 'Vintage Stock', 'Independence Day', 'Platinum', 'Clear'],
+  'topps series 2': ['Base', 'Gold', 'Rainbow Foil', 'Vintage Stock', 'Independence Day', 'Platinum', 'Clear'],
+  'topps update': ['Base', 'Gold', 'Rainbow Foil', 'Vintage Stock', 'Independence Day', 'Platinum', 'Clear'],
+};
+
+// GET /api/sets/search?q=topps+chrome
+app.get('/api/sets/search', authenticateToken, async (req, res) => {
+  try {
+    const query = (req.query.q || '').trim();
+    if (!query || query.length < 2) {
+      return res.json({ sets: [] });
+    }
+
+    const cacheKey = `search:${query.toLowerCase()}`;
+    const cached = getCachedSet(cacheKey);
+    if (cached) return res.json(cached);
+
+    const results = [];
+    const seen = new Set();
+
+    // Source 1: Local DB - distinct set names from previously identified cards
+    if (dbAvailable) {
+      const dbResult = await pool.query(`
+        SELECT DISTINCT
+          card_data->>'set_name' as set_name,
+          card_data->>'year' as year,
+          card_data->>'sport' as sport,
+          COUNT(*) as card_count
+        FROM cards
+        WHERE card_data->>'set_name' IS NOT NULL
+          AND card_data->>'set_name' != ''
+          AND card_data->>'set_name' ILIKE $1
+        GROUP BY card_data->>'set_name', card_data->>'year', card_data->>'sport'
+        ORDER BY card_count DESC
+        LIMIT 20
+      `, [`%${query}%`]);
+
+      for (const row of dbResult.rows) {
+        const key = `${row.year || ''}-${row.set_name}`.toLowerCase();
+        if (!seen.has(key)) {
+          seen.add(key);
+          results.push({
+            set_name: row.set_name,
+            year: row.year || null,
+            sport: row.sport || null,
+            card_count: parseInt(row.card_count),
+            source: 'local'
+          });
+        }
+      }
+    }
+
+    // Source 2: SCP API
+    if (SPORTSCARDSPRO_TOKEN) {
+      try {
+        const scpRes = await axios.get(`${SCP_API_BASE}/products`, {
+          params: { q: query, t: SPORTSCARDSPRO_TOKEN },
+          timeout: 5000
+        });
+        const products = scpRes.data || [];
+        for (const product of products.slice(0, 20)) {
+          const name = product.name || product.title || '';
+          // Extract set name from product - typically "YEAR SETNAME #NUM PLAYER"
+          const yearMatch = name.match(/^(19|20)\d{2}/);
+          const year = yearMatch ? yearMatch[0] : null;
+          // Try to extract set name (text between year and card number)
+          let setName = name;
+          if (year) {
+            setName = name.substring(year.length).trim();
+          }
+          // Remove card number and player info (after #)
+          const hashIdx = setName.indexOf('#');
+          if (hashIdx > 0) {
+            setName = setName.substring(0, hashIdx).trim();
+          }
+
+          if (setName) {
+            const key = `${year || ''}-${setName}`.toLowerCase();
+            if (!seen.has(key)) {
+              seen.add(key);
+              results.push({
+                set_name: setName,
+                year: year || null,
+                sport: null,
+                card_count: 0,
+                source: 'scp'
+              });
+            }
+          }
+        }
+      } catch (e) {
+        console.log('[SCP] Search failed, using DB-only results:', e.message);
+      }
+    }
+
+    const response = { sets: results.slice(0, 20) };
+    setCachedSet(cacheKey, response);
+    res.json(response);
+
+  } catch (e) {
+    console.error('[Sets Search] Error:', e.message);
+    res.status(500).json({ error: 'Search failed' });
+  }
+});
+
+// GET /api/sets/parallels?set=Topps+Chrome&year=2020
+app.get('/api/sets/parallels', authenticateToken, async (req, res) => {
+  try {
+    const setName = (req.query.set || '').trim();
+    const year = (req.query.year || '').trim();
+
+    if (!setName) {
+      return res.json({ parallels: [] });
+    }
+
+    const cacheKey = `parallels:${setName.toLowerCase()}:${year}`;
+    const cached = getCachedSet(cacheKey);
+    if (cached) return res.json(cached);
+
+    const parallels = new Set();
+
+    // Source 1: Hardcoded known parallels
+    const setLower = setName.toLowerCase();
+    for (const [key, values] of Object.entries(KNOWN_SET_PARALLELS)) {
+      if (setLower.includes(key) || key.includes(setLower)) {
+        values.forEach(v => parallels.add(v));
+        break;
+      }
+    }
+
+    // Source 2: Local DB
+    if (dbAvailable) {
+      const params = [`%${setName}%`];
+      let yearFilter = '';
+      if (year) {
+        yearFilter = `AND card_data->>'year' = $2`;
+        params.push(year);
+      }
+      const dbResult = await pool.query(`
+        SELECT DISTINCT card_data->>'parallel' as parallel
+        FROM cards
+        WHERE card_data->>'set_name' ILIKE $1
+          AND card_data->>'parallel' IS NOT NULL
+          AND card_data->>'parallel' != ''
+          ${yearFilter}
+      `, params);
+
+      for (const row of dbResult.rows) {
+        if (row.parallel) parallels.add(row.parallel);
+      }
+    }
+
+    // Source 3: SCP product search for parallel keywords
+    if (SPORTSCARDSPRO_TOKEN) {
+      try {
+        const searchQ = year ? `${year} ${setName}` : setName;
+        const scpRes = await axios.get(`${SCP_API_BASE}/products`, {
+          params: { q: searchQ, t: SPORTSCARDSPRO_TOKEN },
+          timeout: 5000
+        });
+        const products = scpRes.data || [];
+        const parallelKeywords = ['Refractor', 'Silver', 'Gold', 'Prizm', 'Holo', 'Chrome', 'Pink', 'Blue', 'Green', 'Red', 'Orange', 'Purple', 'Black', 'Mojo', 'Shimmer', 'Camo', 'Disco', 'Scope', 'Tie-Dye', 'Neon', 'Genesis', 'Fluorescent', 'Velocity', 'Sparkle'];
+        for (const product of products) {
+          const name = product.name || product.title || '';
+          for (const kw of parallelKeywords) {
+            if (name.toLowerCase().includes(kw.toLowerCase())) {
+              // Try to extract the full parallel name (word(s) around the keyword)
+              const regex = new RegExp(`(\\w+\\s+)?${kw}(\\s+\\w+)?`, 'i');
+              const match = name.match(regex);
+              if (match) {
+                parallels.add(match[0].trim());
+              }
+            }
+          }
+        }
+      } catch (e) {
+        console.log('[SCP] Parallels search failed:', e.message);
+      }
+    }
+
+    // Always include Base if we have any results
+    if (parallels.size > 0) parallels.add('Base');
+
+    const sorted = Array.from(parallels).sort((a, b) => {
+      if (a === 'Base') return -1;
+      if (b === 'Base') return 1;
+      return a.localeCompare(b);
+    });
+
+    const response = { parallels: sorted };
+    setCachedSet(cacheKey, response);
+    res.json(response);
+
+  } catch (e) {
+    console.error('[Sets Parallels] Error:', e.message);
+    res.status(500).json({ error: 'Parallels lookup failed' });
   }
 });
 
