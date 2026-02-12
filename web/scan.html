@@ -1387,12 +1387,14 @@
     }
 
     async function capturePairMode(blob) {
+      console.log('[Capture] pairPhase:', pairPhase, 'blob size:', blob?.size);
       if (pairPhase === 'front') {
         pairFrontBlob = blob;
         playSound('front');
         pairPhase = 'back';
       } else {
         playSound('back');
+        console.log('[Capture] Got back, uploading pair now...');
         await uploadPair(pairFrontBlob, blob);
         playSound('complete');
         totalCards++;
@@ -1490,6 +1492,7 @@
     }
 
     async function uploadPair(front, back) {
+      console.log('[Upload] Starting upload...', { front: !!front, back: !!back, token: !!token, url: `${API_URL}/upload-pair` });
       const formData = new FormData();
       formData.append('front', front, 'front.jpg');
       formData.append('back', back, 'back.jpg');
@@ -1503,12 +1506,15 @@
           headers: { 'Authorization': `Bearer ${token}` },
           body: formData
         });
+        console.log('[Upload] Response:', res.status, res.statusText);
         const data = await res.json();
+        console.log('[Upload] Data:', data);
 
         if (ws && ws.readyState === WebSocket.OPEN) {
           ws.send(JSON.stringify({ type: 'batch_card', cardId: data.cardId }));
         }
       } catch (e) {
+        console.error('[Upload] FAILED:', e.message, e);
         playSound('error');
       }
     }
