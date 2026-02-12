@@ -623,199 +623,6 @@
       border-color: #7b2ff7;
       color: #7b2ff7;
     }
-
-    /* Set Selection Screen */
-    .set-selection-screen {
-      position: fixed;
-      top: 0; left: 0; right: 0; bottom: 0;
-      background: #0a0e1a;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      padding: 24px;
-      z-index: 190;
-      overflow-y: auto;
-    }
-    .set-selection-screen h2 {
-      font-size: 22px;
-      font-weight: 700;
-      background: linear-gradient(135deg, #00f6ff, #7b2ff7);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-      margin-top: 60px;
-      margin-bottom: 8px;
-    }
-    .set-selection-screen .subtitle {
-      color: rgba(255,255,255,0.5);
-      font-size: 13px;
-      margin-bottom: 24px;
-    }
-    .set-search-box {
-      width: 100%;
-      max-width: 400px;
-      position: relative;
-    }
-    .set-search-box input {
-      width: 100%;
-      padding: 14px 16px;
-      border-radius: 12px;
-      border: 1px solid rgba(255,255,255,0.15);
-      background: rgba(255,255,255,0.08);
-      color: #fff;
-      font-size: 16px;
-      outline: none;
-    }
-    .set-search-box input:focus {
-      border-color: #00f6ff;
-    }
-    .set-search-box input::placeholder { color: rgba(255,255,255,0.35); }
-    .set-results {
-      width: 100%;
-      max-width: 400px;
-      margin-top: 8px;
-      max-height: 300px;
-      overflow-y: auto;
-    }
-    .set-result-item {
-      padding: 12px 16px;
-      background: rgba(255,255,255,0.05);
-      border: 1px solid rgba(255,255,255,0.08);
-      border-radius: 10px;
-      margin-bottom: 6px;
-      cursor: pointer;
-      transition: background 0.15s;
-    }
-    .set-result-item:active,
-    .set-result-item:hover {
-      background: rgba(0, 246, 255, 0.1);
-      border-color: rgba(0, 246, 255, 0.3);
-    }
-    .set-result-name {
-      font-weight: 600;
-      font-size: 15px;
-    }
-    .set-result-meta {
-      font-size: 12px;
-      color: rgba(255,255,255,0.45);
-      margin-top: 2px;
-    }
-    .set-confirm-card {
-      width: 100%;
-      max-width: 400px;
-      background: rgba(255,255,255,0.05);
-      border: 1px solid rgba(0, 246, 255, 0.3);
-      border-radius: 14px;
-      padding: 20px;
-      margin-top: 16px;
-    }
-    .set-confirm-card h3 {
-      font-size: 17px;
-      margin-bottom: 4px;
-    }
-    .set-confirm-card .year-sport {
-      font-size: 13px;
-      color: rgba(255,255,255,0.45);
-      margin-bottom: 12px;
-    }
-    .parallel-tags {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 6px;
-      margin-bottom: 16px;
-    }
-    .parallel-tag {
-      padding: 4px 10px;
-      background: rgba(0, 246, 255, 0.1);
-      border: 1px solid rgba(0, 246, 255, 0.25);
-      border-radius: 20px;
-      font-size: 11px;
-      color: #00f6ff;
-    }
-    .set-actions {
-      display: flex;
-      gap: 12px;
-      width: 100%;
-      max-width: 400px;
-      margin-top: 20px;
-    }
-    .set-actions button {
-      flex: 1;
-      padding: 14px;
-      border-radius: 12px;
-      border: none;
-      font-size: 15px;
-      font-weight: 700;
-      cursor: pointer;
-    }
-    .btn-skip {
-      background: rgba(255,255,255,0.1);
-      color: rgba(255,255,255,0.6);
-      border: 1px solid rgba(255,255,255,0.15) !important;
-    }
-    .btn-start-scanning {
-      background: linear-gradient(135deg, #00f6ff, #7b2ff7);
-      color: #000;
-    }
-    .btn-start-scanning:disabled {
-      opacity: 0.4;
-      cursor: default;
-    }
-    .set-search-loading {
-      text-align: center;
-      padding: 16px;
-      color: rgba(255,255,255,0.4);
-      font-size: 13px;
-    }
-
-    /* Popular sets grid */
-    .set-popular {
-      width: 100%;
-      max-width: 400px;
-      margin-top: 16px;
-    }
-    .set-popular-grid {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
-    }
-    .set-popular-btn {
-      padding: 10px 16px;
-      background: rgba(255,255,255,0.06);
-      border: 1px solid rgba(255,255,255,0.12);
-      border-radius: 10px;
-      color: #fff;
-      font-size: 13px;
-      font-weight: 500;
-      cursor: pointer;
-      transition: all 0.15s;
-    }
-    .set-popular-btn:active {
-      background: rgba(0, 246, 255, 0.15);
-      border-color: rgba(0, 246, 255, 0.4);
-      color: #00f6ff;
-    }
-
-    /* Set badge on scanner */
-    .set-badge {
-      position: absolute;
-      top: 56px;
-      left: 50%;
-      transform: translateX(-50%);
-      padding: 5px 14px;
-      background: rgba(0, 246, 255, 0.15);
-      border: 1px solid rgba(0, 246, 255, 0.4);
-      border-radius: 20px;
-      color: #00f6ff;
-      font-size: 11px;
-      font-weight: 600;
-      z-index: 15;
-      cursor: pointer;
-      white-space: nowrap;
-      max-width: 80%;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      display: none;
-    }
   </style>
 </head>
 <body>
@@ -828,35 +635,6 @@
     <button onclick="doLogin()">Start Scanning</button>
   </div>
 
-  <!-- Set Selection Screen -->
-  <div class="set-selection-screen" id="set-selection-screen" style="display: none;">
-    <h2>What set are you scanning?</h2>
-    <p class="subtitle">Pre-selecting a set improves parallel detection accuracy</p>
-
-    <div class="set-search-box">
-      <input type="text" id="set-search-input" placeholder="Search sets... e.g. Topps Chrome" autocomplete="off">
-    </div>
-
-    <!-- Popular sets - always visible as quick picks -->
-    <div class="set-popular" id="set-popular">
-      <div style="font-size: 11px; color: rgba(255,255,255,0.35); margin-bottom: 8px; text-transform: uppercase; letter-spacing: 1px;">Popular Sets</div>
-      <div class="set-popular-grid" id="set-popular-grid"></div>
-    </div>
-
-    <div class="set-results" id="set-results"></div>
-
-    <div class="set-confirm-card" id="set-confirm-card" style="display: none;">
-      <h3 id="set-confirm-name"></h3>
-      <div class="year-sport" id="set-confirm-meta"></div>
-      <div class="parallel-tags" id="set-confirm-parallels"></div>
-    </div>
-
-    <div class="set-actions">
-      <button class="btn-skip" onclick="skipSetSelection()">Skip</button>
-      <button class="btn-start-scanning" id="btn-start-scanning" onclick="confirmSetSelection()" disabled>Start Scanning</button>
-    </div>
-  </div>
-
   <!-- Scanner -->
   <div class="scanner" id="scanner" style="display: none;">
     <video id="video" autoplay playsinline muted></video>
@@ -867,9 +645,6 @@
       <span class="zoom-label" id="zoom-label">1.0x</span>
       <input type="range" class="zoom-slider" id="zoom-slider" min="1" max="5" step="0.1" value="1" oninput="setZoom(parseFloat(this.value))">
     </div>
-
-    <!-- Set context badge -->
-    <div class="set-badge" id="set-badge" onclick="openSetSelection()"></div>
 
     <div class="status-bar">
       <div>
@@ -1082,12 +857,8 @@
     let initialPinchDistance = null;
     let pinchZoomStart = 1;
 
-    // Set context state
-    let selectedSetContext = null;
-    let setSearchTimeout = null;
-
     if (token) {
-      showSetSelection();
+      initScanner();
     }
 
     async function doLogin() {
@@ -1105,7 +876,7 @@
         if (data.token) {
           token = data.token;
           localStorage.setItem('token', token);
-          showSetSelection();
+          initScanner();
         } else {
           alert(data.error || 'Login failed');
         }
@@ -1116,17 +887,7 @@
 
     async function initScanner() {
       document.getElementById('login-screen').style.display = 'none';
-      document.getElementById('set-selection-screen').style.display = 'none';
       document.getElementById('scanner').style.display = 'block';
-
-      // Show set badge if a set was selected
-      const badge = document.getElementById('set-badge');
-      if (selectedSetContext) {
-        badge.textContent = (selectedSetContext.year ? selectedSetContext.year + ' ' : '') + selectedSetContext.set_name;
-        badge.style.display = 'block';
-      } else {
-        badge.style.display = 'none';
-      }
 
       video = document.getElementById('video');
       canvas = document.getElementById('canvas');
@@ -1481,7 +1242,6 @@
       formData.append('back', back, 'back.jpg');
       formData.append('batch', 'true');
       formData.append('source', 'phone');
-      if (selectedSetContext) formData.append('set_context', JSON.stringify(selectedSetContext));
 
       try {
         const res = await fetch(`${API_URL}/upload-pair`, {
@@ -1980,219 +1740,6 @@
         indicator.classList.add('show');
         setTimeout(() => indicator.classList.remove('show'), 1200);
       }
-    }
-
-    // ============================================
-    // SET SELECTION FUNCTIONS
-    // ============================================
-
-    // Popular sets with known parallels (matches server.js KNOWN_SET_PARALLELS keys)
-    const POPULAR_SETS = [
-      { set_name: 'Topps Chrome', sport: 'baseball' },
-      { set_name: 'Bowman Chrome', sport: 'baseball' },
-      { set_name: 'Topps', sport: 'baseball' },
-      { set_name: 'Topps Heritage', sport: 'baseball' },
-      { set_name: 'Bowman', sport: 'baseball' },
-      { set_name: 'Prizm', sport: 'basketball' },
-      { set_name: 'Select', sport: 'basketball' },
-      { set_name: 'Mosaic', sport: 'basketball' },
-      { set_name: 'Donruss Optic', sport: 'football' },
-      { set_name: 'Panini Prizm', sport: 'football' },
-    ];
-
-    function showSetSelection() {
-      document.getElementById('login-screen').style.display = 'none';
-      document.getElementById('set-selection-screen').style.display = 'flex';
-      document.getElementById('scanner').style.display = 'none';
-
-      // Reset state
-      selectedSetContext = null;
-      document.getElementById('set-search-input').value = '';
-      document.getElementById('set-results').innerHTML = '';
-      document.getElementById('set-confirm-card').style.display = 'none';
-      document.getElementById('btn-start-scanning').disabled = true;
-
-      // Render popular sets grid
-      const grid = document.getElementById('set-popular-grid');
-      grid.innerHTML = POPULAR_SETS.map((s, i) =>
-        `<button class="set-popular-btn" onclick="selectPopularSet(${i})">${s.set_name}</button>`
-      ).join('');
-      document.getElementById('set-popular').style.display = 'block';
-
-      // Set up search input with debounce
-      const input = document.getElementById('set-search-input');
-      input.removeEventListener('input', handleSetSearchInput);
-      input.addEventListener('input', handleSetSearchInput);
-      input.focus();
-    }
-
-    function selectPopularSet(index) {
-      const set = POPULAR_SETS[index];
-      if (!set) return;
-      // Put it in the search box and treat it like a custom set selection
-      document.getElementById('set-search-input').value = set.set_name;
-      document.getElementById('set-popular').style.display = 'none';
-      document.getElementById('set-results').innerHTML = '';
-
-      selectedSetContext = {
-        set_name: set.set_name,
-        year: null,
-        sport: set.sport,
-        parallels: []
-      };
-
-      // Show confirmation card
-      document.getElementById('set-confirm-name').textContent = set.set_name;
-      document.getElementById('set-confirm-meta').textContent = set.sport || '';
-      document.getElementById('set-confirm-card').style.display = 'block';
-      document.getElementById('btn-start-scanning').disabled = false;
-
-      // Fetch parallels from backend (will hit hardcoded list)
-      fetchAndShowParallels(set.set_name, null);
-    }
-
-    function handleSetSearchInput() {
-      clearTimeout(setSearchTimeout);
-      const query = document.getElementById('set-search-input').value.trim();
-      if (query.length < 2) {
-        document.getElementById('set-results').innerHTML = '';
-        document.getElementById('set-popular').style.display = 'block';
-        return;
-      }
-      document.getElementById('set-popular').style.display = 'none';
-      setSearchTimeout = setTimeout(() => searchSets(query), 300);
-    }
-
-    async function searchSets(query) {
-      const resultsEl = document.getElementById('set-results');
-      resultsEl.innerHTML = '<div class="set-search-loading">Searching...</div>';
-
-      try {
-        const res = await fetch(`${API_URL}/sets/search?q=${encodeURIComponent(query)}`, {
-          headers: { 'Authorization': `Bearer ${token}` }
-        });
-        const data = await res.json();
-
-        // Always show "Use as typed" option so users can enter any set
-        const typed = document.getElementById('set-search-input').value.trim();
-        const useTypedHtml = `
-          <div class="set-result-item" onclick="selectCustomSet()" style="border-color: rgba(0,246,255,0.25);">
-            <div class="set-result-name" style="color: #00f6ff;">Use "${escapeHtml(typed)}"</div>
-            <div class="set-result-meta">Enter as custom set name</div>
-          </div>
-        `;
-
-        if (!data.sets || data.sets.length === 0) {
-          resultsEl.innerHTML = useTypedHtml;
-          window._setResults = [];
-          return;
-        }
-
-        resultsEl.innerHTML = data.sets.map((s, i) => `
-          <div class="set-result-item" onclick="selectSet(${i})">
-            <div class="set-result-name">${escapeHtml(s.set_name)}</div>
-            <div class="set-result-meta">
-              ${s.year ? s.year + ' ' : ''}${s.sport ? '&middot; ' + s.sport : ''}${s.card_count ? ' &middot; ' + s.card_count + ' cards' : ''}
-            </div>
-          </div>
-        `).join('') + useTypedHtml;
-
-        // Store results for selection
-        window._setResults = data.sets;
-      } catch (e) {
-        resultsEl.innerHTML = '<div class="set-search-loading">Search failed</div>';
-      }
-    }
-
-    // Shared: fetch parallels and show in confirmation card
-    async function fetchAndShowParallels(setName, year) {
-      const parallelsEl = document.getElementById('set-confirm-parallels');
-      parallelsEl.innerHTML = '<span style="color: rgba(255,255,255,0.4); font-size: 12px;">Loading parallels...</span>';
-
-      try {
-        const params = new URLSearchParams({ set: setName });
-        if (year) params.append('year', year);
-        const res = await fetch(`${API_URL}/sets/parallels?${params}`, {
-          headers: { 'Authorization': `Bearer ${token}` }
-        });
-        const data = await res.json();
-
-        if (data.parallels && data.parallels.length > 0) {
-          selectedSetContext.parallels = data.parallels;
-          parallelsEl.innerHTML = data.parallels.map(p =>
-            `<span class="parallel-tag">${escapeHtml(p)}</span>`
-          ).join('');
-        } else {
-          parallelsEl.innerHTML = '<span style="color: rgba(255,255,255,0.4); font-size: 12px;">No known parallels</span>';
-        }
-      } catch (e) {
-        parallelsEl.innerHTML = '<span style="color: rgba(255,255,255,0.4); font-size: 12px;">Could not load parallels</span>';
-      }
-    }
-
-    function showConfirmCard(setName, meta) {
-      document.getElementById('set-confirm-name').textContent = setName;
-      document.getElementById('set-confirm-meta').textContent = meta;
-      document.getElementById('set-confirm-card').style.display = 'block';
-      document.getElementById('set-results').innerHTML = '';
-      document.getElementById('set-popular').style.display = 'none';
-      document.getElementById('btn-start-scanning').disabled = false;
-    }
-
-    async function selectSet(index) {
-      const set = window._setResults[index];
-      if (!set) return;
-
-      selectedSetContext = {
-        set_name: set.set_name,
-        year: set.year || null,
-        sport: set.sport || null,
-        parallels: []
-      };
-
-      showConfirmCard(set.set_name, (set.year ? set.year + ' ' : '') + (set.sport || ''));
-      fetchAndShowParallels(set.set_name, set.year);
-    }
-
-    async function selectCustomSet() {
-      const typed = document.getElementById('set-search-input').value.trim();
-      if (!typed) return;
-
-      const yearMatch = typed.match(/^(19|20)\d{2}\b/);
-      const year = yearMatch ? yearMatch[0] : null;
-      const setName = year ? typed.substring(year.length).trim() : typed;
-
-      selectedSetContext = {
-        set_name: setName || typed,
-        year: year || null,
-        sport: null,
-        parallels: []
-      };
-
-      showConfirmCard(selectedSetContext.set_name, year || '');
-      fetchAndShowParallels(selectedSetContext.set_name, year);
-    }
-
-    function skipSetSelection() {
-      selectedSetContext = null;
-      initScanner();
-    }
-
-    function confirmSetSelection() {
-      if (!selectedSetContext) return;
-      initScanner();
-    }
-
-    function openSetSelection() {
-      // Re-open set selection from scanner (via badge tap)
-      document.getElementById('scanner').style.display = 'none';
-      showSetSelection();
-    }
-
-    function escapeHtml(text) {
-      const div = document.createElement('div');
-      div.textContent = text;
-      return div.innerHTML;
     }
   </script>
 </body>

@@ -886,41 +886,6 @@
       text-transform: uppercase;
       letter-spacing: 1px;
     }
-
-    /* Set autocomplete dropdown */
-    .set-autocomplete-dropdown {
-      display: none;
-      position: absolute;
-      top: 100%;
-      left: 0;
-      right: 0;
-      background: #1a1f2e;
-      border: 1px solid var(--glass-border);
-      border-radius: 8px;
-      max-height: 200px;
-      overflow-y: auto;
-      z-index: 50;
-      margin-top: 2px;
-    }
-    .set-autocomplete-dropdown.show {
-      display: block;
-    }
-    .set-ac-item {
-      padding: 8px 12px;
-      cursor: pointer;
-      font-size: 13px;
-      border-bottom: 1px solid rgba(255,255,255,0.05);
-    }
-    .set-ac-item:hover {
-      background: rgba(0, 246, 255, 0.1);
-    }
-    .set-ac-item:last-child {
-      border-bottom: none;
-    }
-    .set-ac-meta {
-      font-size: 11px;
-      color: var(--text-muted);
-    }
   </style>
 </head>
 <body>
@@ -1123,10 +1088,9 @@
           </div>
         </div>
 
-        <div class="form-group" style="position: relative;">
+        <div class="form-group">
           <label>Set / Brand</label>
-          <input type="text" id="edit-set" placeholder="e.g., Topps Chrome" autocomplete="off">
-          <div class="set-autocomplete-dropdown" id="set-autocomplete-dropdown"></div>
+          <input type="text" id="edit-set" placeholder="e.g., Topps Chrome">
         </div>
 
         <div class="form-group">
@@ -2066,64 +2030,6 @@
 
     // Update the checkCardIdentification to use hero view
     const originalCheckCardIdentification = checkCardIdentification;
-
-    // ============================================
-    // SET AUTOCOMPLETE
-    // ============================================
-    (function initSetAutocomplete() {
-      const input = document.getElementById('edit-set');
-      const dropdown = document.getElementById('set-autocomplete-dropdown');
-      if (!input || !dropdown) return;
-
-      let acTimeout = null;
-
-      input.addEventListener('input', function() {
-        clearTimeout(acTimeout);
-        const query = this.value.trim();
-        if (query.length < 2) {
-          dropdown.classList.remove('show');
-          return;
-        }
-        acTimeout = setTimeout(() => fetchSetSuggestions(query), 300);
-      });
-
-      input.addEventListener('blur', function() {
-        // Delay to allow click on dropdown item
-        setTimeout(() => dropdown.classList.remove('show'), 200);
-      });
-
-      input.addEventListener('focus', function() {
-        if (dropdown.children.length > 0 && this.value.trim().length >= 2) {
-          dropdown.classList.add('show');
-        }
-      });
-
-      async function fetchSetSuggestions(query) {
-        try {
-          const res = await fetch(`${API_URL}/sets/search?q=${encodeURIComponent(query)}`, {
-            headers: { 'Authorization': `Bearer ${token}` }
-          });
-          const data = await res.json();
-
-          if (!data.sets || data.sets.length === 0) {
-            dropdown.classList.remove('show');
-            return;
-          }
-
-          dropdown.innerHTML = data.sets.map(s => {
-            const label = (s.year ? s.year + ' ' : '') + s.set_name;
-            const meta = [s.sport, s.card_count ? s.card_count + ' cards' : ''].filter(Boolean).join(' · ');
-            return `<div class="set-ac-item" onmousedown="document.getElementById('edit-set').value='${label.replace(/'/g, "\\'")}'; document.getElementById('set-autocomplete-dropdown').classList.remove('show');">
-              ${label}${meta ? '<div class="set-ac-meta">' + meta + '</div>' : ''}
-            </div>`;
-          }).join('');
-
-          dropdown.classList.add('show');
-        } catch (e) {
-          dropdown.classList.remove('show');
-        }
-      }
-    })();
 
     // Initialize
     connectWebSocket();
