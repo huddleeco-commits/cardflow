@@ -1086,6 +1086,20 @@
     let selectedSetContext = null;
     let setSearchTimeout = null;
 
+    // Popular sets with known parallels (matches server.js KNOWN_SET_PARALLELS keys)
+    const POPULAR_SETS = [
+      { set_name: 'Topps Chrome', sport: 'baseball' },
+      { set_name: 'Bowman Chrome', sport: 'baseball' },
+      { set_name: 'Topps', sport: 'baseball' },
+      { set_name: 'Topps Heritage', sport: 'baseball' },
+      { set_name: 'Bowman', sport: 'baseball' },
+      { set_name: 'Prizm', sport: 'basketball' },
+      { set_name: 'Select', sport: 'basketball' },
+      { set_name: 'Mosaic', sport: 'basketball' },
+      { set_name: 'Donruss Optic', sport: 'football' },
+      { set_name: 'Panini Prizm', sport: 'football' },
+    ];
+
     if (token) {
       showSetSelection();
     }
@@ -1985,20 +1999,6 @@
     // ============================================
     // SET SELECTION FUNCTIONS
     // ============================================
-
-    // Popular sets with known parallels (matches server.js KNOWN_SET_PARALLELS keys)
-    const POPULAR_SETS = [
-      { set_name: 'Topps Chrome', sport: 'baseball' },
-      { set_name: 'Bowman Chrome', sport: 'baseball' },
-      { set_name: 'Topps', sport: 'baseball' },
-      { set_name: 'Topps Heritage', sport: 'baseball' },
-      { set_name: 'Bowman', sport: 'baseball' },
-      { set_name: 'Prizm', sport: 'basketball' },
-      { set_name: 'Select', sport: 'basketball' },
-      { set_name: 'Mosaic', sport: 'basketball' },
-      { set_name: 'Donruss Optic', sport: 'football' },
-      { set_name: 'Panini Prizm', sport: 'football' },
-    ];
 
     function showSetSelection() {
       document.getElementById('login-screen').style.display = 'none';
