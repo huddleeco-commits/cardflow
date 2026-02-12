@@ -7456,7 +7456,7 @@ wss.on('connection', (ws, req) => {
 
       // Handle authentication
       if (data.type === 'auth' && data.token) {
-        jwt.verify(data.token, JWT_SECRET, (err, user) => {
+        jwt.verify(data.token, EFFECTIVE_JWT_SECRET, (err, user) => {
           if (!err) {
             userId = user.id;
             if (!clients.has(userId)) {
@@ -7470,7 +7470,7 @@ wss.on('connection', (ws, req) => {
 
       // Handle scanner agent authentication
       if (data.type === 'scanner_auth' && data.token) {
-        jwt.verify(data.token, JWT_SECRET, (err, user) => {
+        jwt.verify(data.token, EFFECTIVE_JWT_SECRET, (err, user) => {
           if (!err) {
             userId = user.id;
             isScanner = true;
