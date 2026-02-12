@@ -8505,6 +8505,197 @@ app.get('/api/sets/parallels', authenticateToken, async (req, res) => {
   }
 });
 
+// POST /api/sets/identify-from-image — Scan card back to identify set
+app.post('/api/sets/identify-from-image', authenticateToken, upload.single('image'), async (req, res) => {
+  const userId = req.user.id;
+
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'No image provided' });
+    }
+
+    const imageBase64 = req.file.buffer.toString('base64');
+    const mimeType = req.file.mimetype || 'image/jpeg';
+
+    // Dual-path: SlabTrack or BYOK
+    const slabTrackCheck = await canUseSlabTrackScan(userId);
+    const apiKey = await getUserApiKey(userId);
+
+    if (!slabTrackCheck.canUse && !apiKey) {
+      return res.status(400).json({ error: 'No scanning method available. Connect SlabTrack Power/Dealer or add your Anthropic API key.' });
+    }
+
+    let setInfo = null;
+    let inputTokens = 0, outputTokens = 0, cost = 0;
+    let scanMode = 'byok';
+
+    // Try SlabTrack first
+    if (slabTrackCheck.canUse) {
+      try {
+        const imageData = `data:${mimeType};base64,${imageBase64}`;
+        const stResponse = await axios.post(`${SLABTRACK_API}/scanner/scan`, {
+          backImage: imageData,
+          source: 'cardflow_set_identify'
+        }, {
+          headers: {
+            'Content-Type': 'application/json',
+            'X-API-Token': slabTrackCheck.token
+          },
+          timeout: 30000
+        });
+
+        if (stResponse.data?.success && stResponse.data.card) {
+          const card = stResponse.data.card;
+          setInfo = {
+            set_name: card.set_name || null,
+            year: card.year || null,
+            sport: card.sport || null,
+            manufacturer: card.manufacturer || null
+          };
+          scanMode = 'slabtrack';
+        }
+      } catch (e) {
+        console.log('[Set Identify] SlabTrack failed, falling back to BYOK:', e.message);
+      }
+    }
+
+    // BYOK fallback
+    if (!setInfo && apiKey) {
+      const Anthropic = require('@anthropic-ai/sdk');
+      const anthropic = new Anthropic({ apiKey });
+
+      const response = await anthropic.messages.create({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 512,
+        messages: [{
+          role: 'user',
+          content: [
+            { type: 'image', source: { type: 'base64', media_type: mimeType, data: imageBase64 } },
+            { type: 'text', text: 'This is the BACK of a sports card. Identify the set it belongs to by reading any logos, text, copyright info, or design patterns visible.\n\nReturn ONLY a JSON object (no other text):\n{\n  "set_name": "Full set name (e.g., Topps Chrome, Panini Prizm)",\n  "year": 2024,\n  "sport": "baseball, basketball, football, hockey, or soccer",\n  "manufacturer": "Topps, Panini, Upper Deck, etc."\n}' }
+          ]
+        }]
+      });
+
+      const responseText = response.content[0].text;
+      const jsonMatch = responseText.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        setInfo = JSON.parse(jsonMatch[0]);
+      }
+
+      inputTokens = response.usage?.input_tokens || 0;
+      outputTokens = response.usage?.output_tokens || 0;
+      cost = (inputTokens * 0.003 + outputTokens * 0.015) / 1000;
+    }
+
+    if (!setInfo || !setInfo.set_name) {
+      return res.status(422).json({ error: 'Could not identify set from image. Try a clearer photo of the card back.' });
+    }
+
+    // Build parallels list (same logic as /api/sets/parallels)
+    const parallels = new Set();
+    const setLower = setInfo.set_name.toLowerCase();
+
+    // Source 1: Hardcoded known parallels
+    for (const [key, values] of Object.entries(KNOWN_SET_PARALLELS)) {
+      if (setLower.includes(key) || key.includes(setLower)) {
+        values.forEach(v => parallels.add(v));
+        break;
+      }
+    }
+
+    // Source 2: Local DB
+    if (dbAvailable) {
+      const params = [`%${setInfo.set_name}%`];
+      let yearFilter = '';
+      if (setInfo.year) {
+        yearFilter = `AND card_data->>'year' = $2`;
+        params.push(String(setInfo.year));
+      }
+      const dbResult = await pool.query(`
+        SELECT DISTINCT card_data->>'parallel' as parallel
+        FROM cards
+        WHERE card_data->>'set_name' ILIKE $1
+          AND card_data->>'parallel' IS NOT NULL
+          AND card_data->>'parallel' != ''
+          ${yearFilter}
+      `, params);
+      for (const row of dbResult.rows) {
+        if (row.parallel) parallels.add(row.parallel);
+      }
+    }
+
+    // Source 3: SCP
+    if (SPORTSCARDSPRO_TOKEN) {
+      try {
+        const searchQ = setInfo.year ? `${setInfo.year} ${setInfo.set_name}` : setInfo.set_name;
+        const scpRes = await axios.get(`${SCP_API_BASE}/products`, {
+          params: { q: searchQ, t: SPORTSCARDSPRO_TOKEN },
+          timeout: 5000
+        });
+        const products = scpRes.data || [];
+        const parallelKeywords = ['Refractor', 'Silver', 'Gold', 'Prizm', 'Holo', 'Chrome', 'Pink', 'Blue', 'Green', 'Red', 'Orange', 'Purple', 'Black', 'Mojo', 'Shimmer', 'Camo', 'Disco', 'Scope', 'Tie-Dye', 'Neon', 'Genesis', 'Fluorescent', 'Velocity', 'Sparkle'];
+        for (const product of products) {
+          const name = product.name || product.title || '';
+          for (const kw of parallelKeywords) {
+            if (name.includes(kw)) {
+              const regex = new RegExp(`(\\w+\\s+)?${kw}(\\s+\\w+)?`, 'i');
+              const match = name.match(regex);
+              if (match) parallels.add(match[0].trim());
+            }
+          }
+        }
+      } catch (e) {
+        console.log('[Set Identify] SCP parallels search failed:', e.message);
+      }
+    }
+
+    if (parallels.size > 0) parallels.add('Base');
+    const sortedParallels = Array.from(parallels).sort((a, b) => {
+      if (a === 'Base') return -1;
+      if (b === 'Base') return 1;
+      return a.localeCompare(b);
+    });
+
+    // Track usage
+    const metadata = {
+      set_identified: setInfo,
+      scan_mode: scanMode,
+      scanned_at: new Date().toISOString()
+    };
+    await pool.query(`
+      INSERT INTO api_usage (user_id, operation, model_used, tokens_input, tokens_output, cost, metadata)
+      VALUES ($1, 'set_identify', $2, $3, $4, $5, $6)
+    `, [userId, scanMode === 'slabtrack' ? 'slabtrack_api' : 'sonnet4', inputTokens, outputTokens, cost, JSON.stringify(metadata)]);
+
+    // WebSocket broadcast to desktop
+    broadcast({
+      type: 'set_context_updated',
+      userId,
+      setContext: {
+        set_name: setInfo.set_name,
+        year: setInfo.year,
+        sport: setInfo.sport,
+        parallels: sortedParallels
+      }
+    });
+
+    console.log(`[Set Identify] User ${userId}: ${setInfo.year || ''} ${setInfo.set_name} (${sortedParallels.length} parallels) via ${scanMode}`);
+
+    res.json({
+      success: true,
+      set_name: setInfo.set_name,
+      year: setInfo.year,
+      sport: setInfo.sport,
+      manufacturer: setInfo.manufacturer,
+      parallels: sortedParallels
+    });
+
+  } catch (e) {
+    console.error('[Set Identify] Error:', e.message);
+    res.status(500).json({ error: 'Set identification failed: ' + e.message });
+  }
+});
+
 // ============================================
 // ERROR HANDLERS (must be after all routes)
 // ============================================
