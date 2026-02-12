@@ -484,6 +484,10 @@
       box-shadow: 0 0 10px rgba(0, 246, 255, 0.2);
     }
 
+    .set-context-banner { background: rgba(0,246,255,0.08); border-bottom: 1px solid rgba(0,246,255,0.2); padding: 8px 24px; display: flex; align-items: center; gap: 10px; font-size: 13px; }
+    .parallel-chip { padding: 4px 10px; background: rgba(0,246,255,0.1); border: 1px solid rgba(0,246,255,0.25); border-radius: 20px; font-size: 11px; color: var(--cyan); cursor: pointer; transition: all 0.15s; }
+    .parallel-chip:hover { background: rgba(0,246,255,0.2); border-color: var(--cyan); }
+
     .form-row {
       display: grid;
       grid-template-columns: 1fr 1fr;
@@ -978,6 +982,12 @@
     </div>
   </div>
 
+  <div class="set-context-banner" id="set-context-banner" style="display: none;">
+    <span style="color: var(--text-muted); font-weight: 500;">Active Set:</span>
+    <span id="set-context-name" style="color: var(--cyan); font-weight: 700;"></span>
+    <button onclick="clearSetContext()" style="margin-left: auto; padding: 4px 12px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.15); border-radius: 6px; color: var(--text-muted); font-size: 11px; cursor: pointer;">Clear</button>
+  </div>
+
   <div class="main-layout">
     <!-- Left Sidebar -->
     <div class="sidebar-left">
@@ -1132,6 +1142,7 @@
         <div class="form-group">
           <label>Parallel / Variation</label>
           <input type="text" id="edit-parallel" placeholder="e.g., Refractor, Gold /50">
+          <div id="parallel-chips" style="display: none; flex-wrap: wrap; gap: 6px; margin-top: 8px;"></div>
         </div>
 
         <div class="form-row">
@@ -1220,6 +1231,7 @@
     let selectedCardId = null;
     let currentFilter = 'all';
     let heroCardId = null; // Currently displayed card in hero view
+    let activeSetContext = null;
     let heroAutoDismissTimer = null;
     let heroMaxTimer = null; // Safety net timer
 
@@ -1416,7 +1428,26 @@
             addLogEntry(`Identified: ${data.player || 'Unknown'}`, 'identified');
           }
           break;
+
+        case 'set_context_updated':
+          activeSetContext = data.setContext;
+          document.getElementById('set-context-name').textContent = [data.setContext.year, data.setContext.set_name].filter(Boolean).join(' ');
+          document.getElementById('set-context-banner').style.display = 'flex';
+          const chips = document.getElementById('parallel-chips');
+          if (data.setContext.parallels && data.setContext.parallels.length > 0) {
+            chips.innerHTML = data.setContext.parallels.map(p => `<span class="parallel-chip" onclick="document.getElementById('edit-parallel').value='${p.replace(/'/g, "\\'")}';">${p}</span>`).join('');
+            chips.style.display = 'flex';
+          }
+          addLogEntry(`Set context: ${data.setContext.set_name}`, 'check');
+          break;
       }
+    }
+
+    function clearSetContext() {
+      activeSetContext = null;
+      document.getElementById('set-context-banner').style.display = 'none';
+      document.getElementById('parallel-chips').style.display = 'none';
+      document.getElementById('parallel-chips').innerHTML = '';
     }
 
     function updateScannerStatus(status, text, detail) {

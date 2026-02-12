@@ -650,6 +650,28 @@
       font-size: 13px;
       margin-bottom: 24px;
     }
+    .set-id-video-container {
+      width: 60%;
+      max-width: 280px;
+      aspect-ratio: 2.5/3.5;
+      border-radius: 16px;
+      overflow: hidden;
+      border: 2px solid rgba(123, 47, 247, 0.5);
+      background: #111;
+    }
+    .set-id-video-container video { width: 100%; height: 100%; object-fit: cover; }
+    .set-id-capture-btn {
+      width: 56px; height: 56px; border-radius: 50%;
+      border: 3px solid #fff; background: rgba(123, 47, 247, 0.6);
+      cursor: pointer; margin-top: 14px; transition: all 0.15s;
+    }
+    .set-id-capture-btn:active { transform: scale(0.92); background: rgba(123, 47, 247, 0.9); }
+    .set-id-capture-btn:disabled { opacity: 0.4; }
+    .set-id-loading { display: flex; flex-direction: column; align-items: center; gap: 10px; margin-top: 14px; }
+    .set-id-spinner { width: 28px; height: 28px; border: 3px solid rgba(255,255,255,0.15); border-top-color: #7b2ff7; border-radius: 50%; animation: setidspin 0.8s linear infinite; }
+    @keyframes setidspin { to { transform: rotate(360deg); } }
+    .set-id-error { color: #ff4466; font-size: 13px; margin-top: 10px; text-align: center; }
+    .set-id-or { color: rgba(255,255,255,0.3); font-size: 12px; margin: 16px 0 8px; text-transform: uppercase; letter-spacing: 1px; }
     .set-search-box {
       width: 100%;
       max-width: 400px;
@@ -831,7 +853,21 @@
   <!-- Set Selection Screen -->
   <div class="set-selection-screen" id="set-selection-screen" style="display: none;">
     <h2>What set are you scanning?</h2>
-    <p class="subtitle">Pre-selecting a set improves parallel detection accuracy</p>
+    <p class="subtitle">Scan the back of a card, or search below</p>
+
+    <!-- Camera capture for set identification -->
+    <div class="set-id-video-container" id="set-id-video-container">
+      <video id="set-id-video" autoplay playsinline muted></video>
+    </div>
+    <button class="set-id-capture-btn" id="set-id-capture-btn" onclick="captureSetImage()"></button>
+    <div class="set-id-loading" id="set-id-loading" style="display: none;">
+      <div class="set-id-spinner"></div>
+      <span style="color: rgba(255,255,255,0.6); font-size: 13px;">Identifying set...</span>
+    </div>
+    <div class="set-id-error" id="set-id-error" style="display: none;"></div>
+    <canvas id="set-id-canvas" style="display: none;"></canvas>
+
+    <div class="set-id-or">— or search —</div>
 
     <div class="set-search-box">
       <input type="text" id="set-search-input" placeholder="Search sets... e.g. Topps Chrome" autocomplete="off">
@@ -1085,6 +1121,7 @@
     // Set context state
     let selectedSetContext = null;
     let setSearchTimeout = null;
+    let setIdStream = null;
 
     // Popular sets with known parallels (matches server.js KNOWN_SET_PARALLELS keys)
     const POPULAR_SETS = [
@@ -2006,6 +2043,83 @@
     // SET SELECTION FUNCTIONS
     // ============================================
 
+    async function startSetIdCamera() {
+      try {
+        setIdStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment', width: { ideal: 1920 }, height: { ideal: 1080 } } });
+        document.getElementById('set-id-video').srcObject = setIdStream;
+        await document.getElementById('set-id-video').play();
+      } catch (e) {
+        try {
+          setIdStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+          document.getElementById('set-id-video').srcObject = setIdStream;
+          await document.getElementById('set-id-video').play();
+        } catch (e2) {
+          // Camera unavailable — hide camera UI, search still works
+          document.getElementById('set-id-video-container').style.display = 'none';
+          document.getElementById('set-id-capture-btn').style.display = 'none';
+        }
+      }
+    }
+
+    function stopSetIdCamera() {
+      if (setIdStream) { setIdStream.getTracks().forEach(t => t.stop()); setIdStream = null; }
+      const vid = document.getElementById('set-id-video');
+      if (vid) vid.srcObject = null;
+    }
+
+    async function captureSetImage() {
+      const vid = document.getElementById('set-id-video');
+      const canvas = document.getElementById('set-id-canvas');
+      if (!vid || !vid.videoWidth) return;
+
+      canvas.width = vid.videoWidth;
+      canvas.height = vid.videoHeight;
+      canvas.getContext('2d').drawImage(vid, 0, 0);
+
+      document.getElementById('set-id-capture-btn').style.display = 'none';
+      document.getElementById('set-id-loading').style.display = 'flex';
+      document.getElementById('set-id-error').style.display = 'none';
+
+      try {
+        const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.85));
+        const formData = new FormData();
+        formData.append('image', blob, 'card-back.jpg');
+
+        const res = await fetch(`${API_URL}/sets/identify-from-image`, {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${token}` },
+          body: formData
+        });
+        const data = await res.json();
+        document.getElementById('set-id-loading').style.display = 'none';
+
+        if (!res.ok || !data.success) throw new Error(data.error || 'Could not identify set');
+
+        stopSetIdCamera();
+        document.getElementById('set-id-video-container').style.display = 'none';
+        document.getElementById('set-id-capture-btn').style.display = 'none';
+
+        selectedSetContext = { set_name: data.set_name, year: data.year || null, sport: data.sport || null, parallels: data.parallels || [] };
+
+        document.getElementById('set-confirm-name').textContent = data.set_name;
+        document.getElementById('set-confirm-meta').textContent = [data.year, data.sport, data.manufacturer].filter(Boolean).join(' \u00b7 ');
+        const parallelsEl = document.getElementById('set-confirm-parallels');
+        parallelsEl.innerHTML = (data.parallels && data.parallels.length > 0)
+          ? data.parallels.map(p => `<span class="parallel-tag">${escapeHtml(p)}</span>`).join('')
+          : '<span style="color: rgba(255,255,255,0.4); font-size: 12px;">No known parallels</span>';
+        document.getElementById('set-confirm-card').style.display = 'block';
+        document.getElementById('btn-start-scanning').disabled = false;
+        // Hide search UI since we have a result
+        document.getElementById('set-popular').style.display = 'none';
+        document.getElementById('set-results').innerHTML = '';
+      } catch (e) {
+        document.getElementById('set-id-loading').style.display = 'none';
+        document.getElementById('set-id-error').textContent = e.message || 'Identification failed';
+        document.getElementById('set-id-error').style.display = 'block';
+        document.getElementById('set-id-capture-btn').style.display = '';
+      }
+    }
+
     function showSetSelection() {
       document.getElementById('login-screen').style.display = 'none';
       document.getElementById('set-selection-screen').style.display = 'flex';
@@ -2017,6 +2131,10 @@
       document.getElementById('set-results').innerHTML = '';
       document.getElementById('set-confirm-card').style.display = 'none';
       document.getElementById('btn-start-scanning').disabled = true;
+      document.getElementById('set-id-loading').style.display = 'none';
+      document.getElementById('set-id-error').style.display = 'none';
+      document.getElementById('set-id-capture-btn').style.display = '';
+      document.getElementById('set-id-video-container').style.display = '';
 
       // Render popular sets grid
       const grid = document.getElementById('set-popular-grid');
@@ -2029,7 +2147,9 @@
       const input = document.getElementById('set-search-input');
       input.removeEventListener('input', handleSetSearchInput);
       input.addEventListener('input', handleSetSearchInput);
-      input.focus();
+
+      // Start set-ID camera
+      startSetIdCamera();
     }
 
     function selectPopularSet(index) {
@@ -2180,17 +2300,20 @@
     }
 
     function skipSetSelection() {
+      stopSetIdCamera();
       selectedSetContext = null;
       initScanner();
     }
 
     function confirmSetSelection() {
       if (!selectedSetContext) return;
+      stopSetIdCamera();
       initScanner();
     }
 
     function openSetSelection() {
       // Re-open set selection from scanner (via badge tap)
+      if (video && video.srcObject) { video.srcObject.getTracks().forEach(t => t.stop()); video.srcObject = null; }
       document.getElementById('scanner').style.display = 'none';
       showSetSelection();
     }
