@@ -4229,8 +4229,8 @@
         <div style="text-align: left; background: var(--glass); padding: 16px; border-radius: 12px;">
           <h4 style="color: var(--cyan); margin-bottom: 12px;">How it works:</h4>
           <ol style="color: var(--text-muted); font-size: 13px; padding-left: 20px; line-height: 1.8;">
-            <li>Open the link on your phone</li>
-            <li>Login with your CardFlow account</li>
+            <li>Open the link on your phone (auto-logs you in)</li>
+            <li>Select the set you're scanning</li>
             <li>Point camera at card, tap to capture <strong>FRONT</strong></li>
             <li>Flip card, tap to capture <strong>BACK</strong></li>
             <li>Card auto-uploads with sound confirmation</li>
@@ -4724,8 +4724,8 @@
       document.getElementById('cards-grid').style.display = 'none';
       document.getElementById('batch-count').textContent = '0 cards scanned';
 
-      // Generate QR code URL for scan page
-      const scanUrl = `${window.location.origin}/scan.html`;
+      // Generate QR code URL for scan page (include token so phone auto-authenticates)
+      const scanUrl = token ? `${window.location.origin}/scan?token=${encodeURIComponent(token)}` : `${window.location.origin}/scan`;
       const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(scanUrl)}`;
 
       document.getElementById('batch-grid').innerHTML = `
@@ -8188,8 +8188,8 @@
     }
 
     function generateQRCode() {
-      const scanUrl = window.location.origin + '/scan';
-      document.getElementById('scan-url').textContent = scanUrl;
+      const scanUrl = token ? `${window.location.origin}/scan?token=${encodeURIComponent(token)}` : `${window.location.origin}/scan`;
+      document.getElementById('scan-url').textContent = window.location.origin + '/scan';
 
       // Simple QR code generation using canvas
       const canvas = document.getElementById('qr-canvas');
@@ -8238,7 +8238,7 @@
     }
 
     function copyScanUrl() {
-      const url = window.location.origin + '/scan';
+      const url = token ? `${window.location.origin}/scan?token=${encodeURIComponent(token)}` : `${window.location.origin}/scan`;
       navigator.clipboard.writeText(url).then(() => {
         showToast('URL copied to clipboard!', 'success');
       }).catch(() => {

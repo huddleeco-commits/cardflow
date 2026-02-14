@@ -279,7 +279,7 @@
       color: #fff;
       font-size: 16px;
     }
-    .login-screen button {
+    .login-screen button.login-btn {
       width: 100%;
       max-width: 300px;
       padding: 16px;
@@ -290,6 +290,69 @@
       font-size: 16px;
       font-weight: 600;
       cursor: pointer;
+    }
+    .login-divider {
+      display: flex;
+      align-items: center;
+      width: 100%;
+      max-width: 300px;
+      margin: 20px 0;
+      color: rgba(255,255,255,0.3);
+      font-size: 12px;
+    }
+    .login-divider::before,
+    .login-divider::after {
+      content: '';
+      flex: 1;
+      height: 1px;
+      background: rgba(255,255,255,0.1);
+    }
+    .login-divider span { padding: 0 12px; }
+    .btn-slabtrack-scan {
+      width: 100%;
+      max-width: 300px;
+      padding: 14px 16px;
+      background: linear-gradient(135deg, #7b2ff7, #5a1fd6);
+      border: 1px solid rgba(123, 47, 247, 0.5);
+      border-radius: 8px;
+      color: #fff;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .slabtrack-token-area {
+      width: 100%;
+      max-width: 300px;
+      display: none;
+    }
+    .slabtrack-token-area input {
+      width: 100%;
+      padding: 14px;
+      margin-bottom: 10px;
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(123, 47, 247, 0.4);
+      border-radius: 8px;
+      color: #fff;
+      font-size: 14px;
+    }
+    .slabtrack-token-area button {
+      width: 100%;
+      padding: 14px;
+      background: linear-gradient(135deg, #7b2ff7, #5a1fd6);
+      border: none;
+      border-radius: 8px;
+      color: #fff;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .btn-back-link {
+      background: none;
+      border: none;
+      color: rgba(255,255,255,0.4);
+      font-size: 13px;
+      cursor: pointer;
+      margin-top: 10px;
     }
 
     .flash {
@@ -872,9 +935,21 @@
   <div class="login-screen" id="login-screen">
     <h1>CardFlow</h1>
     <p>Phone Scanner</p>
-    <input type="email" id="login-email" placeholder="Email">
-    <input type="password" id="login-password" placeholder="Password">
-    <button onclick="doLogin()">Start Scanning</button>
+
+    <div id="login-main-options">
+      <button class="btn-slabtrack-scan" onclick="openSlabtrackPhone()">Sign in with SlabTrack</button>
+      <div class="login-divider"><span>or sign in with email</span></div>
+      <input type="email" id="login-email" placeholder="Email">
+      <input type="password" id="login-password" placeholder="Password">
+      <button class="login-btn" onclick="doLogin()">Start Scanning</button>
+    </div>
+
+    <div class="slabtrack-token-area" id="slabtrack-token-area">
+      <p style="font-size: 13px; color: rgba(255,255,255,0.5); margin-bottom: 12px; text-align: center;">Paste the token from SlabTrack</p>
+      <input type="text" id="st-token-input" placeholder="Paste SlabTrack token..." autocomplete="off">
+      <button onclick="loginWithSlabtrackPhone()">Connect & Start Scanning</button>
+      <button class="btn-back-link" onclick="cancelSlabtrackPhone()">Back to login options</button>
+    </div>
   </div>
 
   <!-- Set Selection Screen -->
@@ -1115,6 +1190,16 @@
 
   <script>
     const API_URL = window.location.origin + '/api';
+
+    // Check URL for token param (passed via QR code from desktop)
+    const urlParams = new URLSearchParams(window.location.search);
+    const urlToken = urlParams.get('token');
+    if (urlToken) {
+      localStorage.setItem('token', urlToken);
+      // Clean token from URL bar for security
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+
     let token = localStorage.getItem('token');
     let ws = null;
     let video, canvas, ctx;
@@ -1200,6 +1285,48 @@
         alert('Login failed');
       }
     }
+
+    // SlabTrack phone login
+    function openSlabtrackPhone() {
+      window.open('https://slabtrack.io/connect/cardflow', '_blank');
+      document.getElementById('login-main-options').style.display = 'none';
+      document.getElementById('slabtrack-token-area').style.display = 'block';
+      setTimeout(() => document.getElementById('st-token-input').focus(), 100);
+    }
+
+    function cancelSlabtrackPhone() {
+      document.getElementById('login-main-options').style.display = '';
+      document.getElementById('slabtrack-token-area').style.display = 'none';
+      document.getElementById('st-token-input').value = '';
+    }
+
+    async function loginWithSlabtrackPhone() {
+      const stToken = document.getElementById('st-token-input').value.trim();
+      if (!stToken) { alert('Please paste your SlabTrack token'); return; }
+      try {
+        const res = await fetch(`${API_URL}/auth/slabtrack-login`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ slabtrackToken: stToken })
+        });
+        const data = await res.json();
+        if (data.token) {
+          token = data.token;
+          localStorage.setItem('token', token);
+          if (data.slabtrackTier) localStorage.setItem('slabtrack_tier', data.slabtrackTier);
+          showSetSelection();
+        } else {
+          alert(data.error || 'SlabTrack login failed');
+        }
+      } catch (e) {
+        alert('SlabTrack login failed');
+      }
+    }
+
+    // Allow Enter key on token input
+    document.getElementById('st-token-input')?.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') loginWithSlabtrackPhone();
+    });
 
     async function initScanner() {
       document.getElementById('login-screen').style.display = 'none';
