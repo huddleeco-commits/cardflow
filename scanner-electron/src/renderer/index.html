@@ -137,31 +137,79 @@
         <div class="sidebar-section" id="direct-scanner-panel">
           <label class="section-label">Scanner</label>
           <div class="scanner-select-row">
-            <select id="scanner-select" class="setting-select scanner-dropdown">
-              <option value="">Select scanner...</option>
+            <select id="scanner-select" class="scanner-dropdown">
+              <option value="">Detecting scanners...</option>
             </select>
-            <button class="btn btn-secondary btn-small" id="btn-refresh-scanners" title="Refresh">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M1 4v6h6M23 20v-6h-6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M20.49 9A9 9 0 005.64 5.64L1 10M23 14l-4.64 4.36A9 9 0 013.51 15" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+            <button class="btn btn-secondary btn-icon-only" id="btn-refresh-scanners" title="Refresh">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M23 4v6h-6M1 20v-6h6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
             </button>
           </div>
-
-          <div class="scanner-options">
-            <div class="scanner-option">
-              <span>DPI</span>
-              <select id="scan-dpi" class="setting-select small-select">
+          <div class="scanner-settings-row">
+            <div class="setting-group">
+              <label for="scan-dpi">DPI</label>
+              <select id="scan-dpi" class="scanner-dropdown">
+                <option value="150">150</option>
                 <option value="200">200</option>
                 <option value="300" selected>300</option>
-                <option value="400">400</option>
                 <option value="600">600</option>
               </select>
             </div>
-            <div class="scanner-option">
-              <span>Duplex</span>
-              <label class="toggle toggle-small">
+            <div class="setting-group">
+              <label class="checkbox-label compact">
                 <input type="checkbox" id="scan-duplex" checked>
-                <span class="toggle-slider"></span>
+                <span class="checkbox-custom"></span>
+                Duplex
               </label>
             </div>
+          </div>
+
+          <!-- Scan Presets -->
+          <div class="scanner-settings-row" style="margin-top:8px">
+            <div class="setting-group" style="flex:1">
+              <label for="scan-preset">Preset</label>
+              <select id="scan-preset" class="scanner-dropdown">
+                <option value="standard">Standard Card</option>
+                <option value="holo">Holographic</option>
+                <option value="thick">Thick / Oversized</option>
+                <option value="vintage">Vintage</option>
+                <option value="custom">Custom</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Quick Toggle: Holo Mode -->
+          <label class="checkbox-label compact holo-toggle" style="margin-top:8px">
+            <input type="checkbox" id="scan-holo-mode">
+            <span class="checkbox-custom"></span>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+              <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            Holo Mode
+          </label>
+
+          <button class="btn btn-secondary btn-full btn-small scanner-setup-btn" id="btn-scanner-setup">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+              <path d="M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94l-3.76 3.76z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            Scanner Setup
+          </button>
+        </div>
+
+        <!-- Multifeed Help Banner (hidden by default) -->
+        <div class="multifeed-help hidden" id="multifeed-help">
+          <div class="multifeed-help-content">
+            <svg class="multifeed-help-icon" width="18" height="18" viewBox="0 0 24 24" fill="none">
+              <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2"/>
+              <path d="M12 8v4M12 16h.01" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+            </svg>
+            <div class="multifeed-help-text">
+              <strong>Multifeed detection is blocking card scans.</strong>
+              Cards are thicker than paper, triggering the overlap sensor. Open Scanner Setup and disable "Multifeed Detection".
+            </div>
+          </div>
+          <div class="multifeed-help-actions">
+            <button class="btn btn-primary btn-small" id="btn-fix-multifeed">Open Scanner Setup</button>
+            <button class="btn btn-ghost btn-small" id="btn-dismiss-multifeed">Dismiss</button>
           </div>
         </div>
 
@@ -169,8 +217,8 @@
         <div class="sidebar-section hidden" id="folder-watch-panel">
           <label class="section-label">Scan Folder</label>
           <div class="folder-picker">
-            <input type="text" id="folder-path" placeholder="Select a folder..." readonly>
-            <button class="btn btn-secondary" id="btn-browse">Browse</button>
+            <input type="text" id="folder-path-alt" placeholder="Select a folder..." readonly>
+            <button class="btn btn-secondary" id="btn-browse-alt">Browse</button>
           </div>
         </div>
 
@@ -483,15 +531,66 @@
               </div>
             </div>
 
+          </div>
+
+          <div class="settings-section">
+            <h4>Image Processing</h4>
+
             <div class="setting-item">
               <div class="setting-info">
-                <label>Auto-rotate Back</label>
-                <span class="setting-desc">Automatically rotate back images if needed</span>
+                <label>Auto-Crop</label>
+                <span class="setting-desc">Remove scanner bed border from edges</span>
+              </div>
+              <label class="toggle">
+                <input type="checkbox" id="setting-auto-crop" checked>
+                <span class="toggle-slider"></span>
+              </label>
+            </div>
+
+            <div class="setting-item">
+              <div class="setting-info">
+                <label>Auto-Rotate Back</label>
+                <span class="setting-desc">Rotate duplex back image 180°</span>
               </div>
               <label class="toggle">
                 <input type="checkbox" id="setting-auto-rotate">
                 <span class="toggle-slider"></span>
               </label>
+            </div>
+
+            <div class="setting-item">
+              <div class="setting-info">
+                <label>Remove Streak Lines</label>
+                <span class="setting-desc">Fix horizontal lines from scanner sensor dust</span>
+              </div>
+              <label class="toggle">
+                <input type="checkbox" id="setting-remove-streaks">
+                <span class="toggle-slider"></span>
+              </label>
+            </div>
+
+            <div class="setting-item">
+              <div class="setting-info">
+                <label>Card Dimensions</label>
+                <span class="setting-desc">Scan area size (inches)</span>
+              </div>
+              <select id="setting-card-size" class="setting-select">
+                <option value="2.5x3.5">Standard (2.5" × 3.5")</option>
+                <option value="3.0x4.0">Oversized (3" × 4")</option>
+                <option value="3.5x5.0">Tall Boy (3.5" × 5")</option>
+                <option value="custom">Custom...</option>
+              </select>
+            </div>
+
+            <!-- Custom dimensions (shown when "Custom" selected) -->
+            <div class="setting-item hidden" id="custom-dimensions">
+              <div class="setting-info">
+                <label>Custom Size</label>
+              </div>
+              <div class="dimension-inputs">
+                <input type="number" id="setting-card-width" step="0.1" min="1" max="10" value="2.5" class="dimension-input"> ×
+                <input type="number" id="setting-card-height" step="0.1" min="1" max="14" value="3.5" class="dimension-input"> in
+              </div>
             </div>
           </div>
 

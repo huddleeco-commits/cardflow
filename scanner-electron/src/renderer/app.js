@@ -57,8 +57,12 @@ const elements = {
   folderWatchPanel: document.getElementById('folder-watch-panel'),
   scannerSelect: document.getElementById('scanner-select'),
   btnRefreshScanners: document.getElementById('btn-refresh-scanners'),
+  btnScannerSetup: document.getElementById('btn-scanner-setup'),
   scanDpi: document.getElementById('scan-dpi'),
   scanDuplex: document.getElementById('scan-duplex'),
+  multifeedHelp: document.getElementById('multifeed-help'),
+  btnFixMultifeed: document.getElementById('btn-fix-multifeed'),
+  btnDismissMultifeed: document.getElementById('btn-dismiss-multifeed'),
   statScanned: document.getElementById('stat-scanned'),
   statIdentified: document.getElementById('stat-identified'),
   statErrors: document.getElementById('stat-errors'),
@@ -138,8 +142,27 @@ const elements = {
   settingBrightness: document.getElementById('setting-brightness'),
   brightnessValue: document.getElementById('brightness-value'),
   settingAutoRotate: document.getElementById('setting-auto-rotate'),
+  settingAutoCrop: document.getElementById('setting-auto-crop'),
+  settingRemoveStreaks: document.getElementById('setting-remove-streaks'),
+  settingCardSize: document.getElementById('setting-card-size'),
+  settingCardWidth: document.getElementById('setting-card-width'),
+  settingCardHeight: document.getElementById('setting-card-height'),
+  customDimensions: document.getElementById('custom-dimensions'),
   settingStartMinimized: document.getElementById('setting-start-minimized'),
-  settingStartWindows: document.getElementById('setting-start-windows')
+  settingStartWindows: document.getElementById('setting-start-windows'),
+
+  // Sidebar presets & holo
+  scanPreset: document.getElementById('scan-preset'),
+  scanHoloMode: document.getElementById('scan-holo-mode')
+};
+
+// Scan Presets — bundle of settings applied at once
+const SCAN_PRESETS = {
+  standard: { cardWidth: 2.5, cardHeight: 3.5, holoMode: false, autoCrop: true, removeStreaks: false, scanDpi: 300 },
+  holo:     { cardWidth: 2.5, cardHeight: 3.5, holoMode: true,  autoCrop: true, removeStreaks: false, scanDpi: 600 },
+  thick:    { cardWidth: 3.0, cardHeight: 4.0, holoMode: false, autoCrop: true, removeStreaks: false, scanDpi: 300 },
+  vintage:  { cardWidth: 2.5, cardHeight: 3.5, holoMode: false, autoCrop: true, removeStreaks: true,  scanDpi: 600 },
+  custom:   null  // uses current settings as-is
 };
 
 // Initialize
@@ -171,18 +194,53 @@ function setupEventListeners() {
 
   // Scanner controls
   elements.btnRefreshScanners.addEventListener('click', discoverScanners);
-  elements.scannerSelect.addEventListener('change', (e) => {
-    window.api.saveSettings({ scannerId: e.target.value });
+  elements.btnScannerSetup.addEventListener('click', openScannerSettings);
+  elements.btnFixMultifeed.addEventListener('click', openScannerSettings);
+  elements.btnDismissMultifeed.addEventListener('click', () => {
+    elements.multifeedHelp.classList.add('hidden');
   });
-  elements.scanDpi.addEventListener('change', (e) => {
-    window.api.saveSettings({ scanDpi: parseInt(e.target.value, 10) });
+  elements.scanDpi.addEventListener('change', () => {
+    window.api.saveSettings({ scanDpi: parseInt(elements.scanDpi.value, 10) });
   });
-  elements.scanDuplex.addEventListener('change', (e) => {
-    window.api.saveSettings({ scanDuplex: e.target.checked });
+  elements.scanDuplex.addEventListener('change', () => {
+    window.api.saveSettings({ scanDuplex: elements.scanDuplex.checked });
+  });
+  elements.scannerSelect.addEventListener('change', () => {
+    window.api.saveSettings({ scannerId: elements.scannerSelect.value });
   });
 
-  // Folder picker
-  elements.btnBrowse.addEventListener('click', handleBrowse);
+  // Scan presets
+  elements.scanPreset.addEventListener('change', handlePresetChange);
+
+  // Holo toggle in sidebar
+  elements.scanHoloMode.addEventListener('change', () => {
+    const holoOn = elements.scanHoloMode.checked;
+    window.api.saveSettings({ holoMode: holoOn });
+    settings.holoMode = holoOn;
+    // Sync preset dropdown
+    if (holoOn && elements.scanPreset.value !== 'holo') {
+      elements.scanPreset.value = 'holo';
+      applyPreset('holo');
+    } else if (!holoOn && elements.scanPreset.value === 'holo') {
+      elements.scanPreset.value = 'standard';
+      applyPreset('standard');
+    }
+  });
+
+  // Card size dropdown in settings — show/hide custom dimensions
+  if (elements.settingCardSize) {
+    elements.settingCardSize.addEventListener('change', () => {
+      elements.customDimensions.classList.toggle('hidden', elements.settingCardSize.value !== 'custom');
+    });
+  }
+
+  // Alt folder picker for folder watch mode
+  const btnBrowseAlt = document.getElementById('btn-browse-alt');
+  if (btnBrowseAlt) btnBrowseAlt.addEventListener('click', handleBrowse);
+
+  // Folder picker (for folder watch mode)
+  const btnBrowse = document.getElementById('btn-browse');
+  if (btnBrowse) btnBrowse.addEventListener('click', handleBrowse);
 
   // Scan button
   elements.btnScan.addEventListener('click', handleScanToggle);
@@ -306,6 +364,10 @@ function setupIPCListeners() {
 
   window.api.onPipelineStatus((data) => {
     updatePipelineBar(data);
+  });
+
+  window.api.onShowMultifeedHelp(() => {
+    elements.multifeedHelp.classList.remove('hidden');
   });
 }
 
@@ -452,70 +514,81 @@ function switchScanMode(mode) {
 
 // Scanner Discovery
 async function discoverScanners() {
-  elements.btnRefreshScanners.classList.add('loading');
-  addLogEntry({ type: 'info', message: 'Searching for scanners...' });
+  elements.scannerSelect.innerHTML = '<option value="">Searching...</option>';
+  elements.btnRefreshScanners.classList.add('spinning');
 
   try {
     const result = await window.api.discoverScanners();
+    elements.scannerSelect.innerHTML = '';
 
-    elements.scannerSelect.innerHTML = '<option value="">Select scanner...</option>';
-
-    if (result.success && result.scanners.length > 0) {
-      result.scanners.forEach(scanner => {
-        const option = document.createElement('option');
-        option.value = scanner.id;
-        option.textContent = `${scanner.name} (${scanner.manufacturer})`;
-        elements.scannerSelect.appendChild(option);
+    if (result.scanners && result.scanners.length > 0) {
+      result.scanners.forEach(s => {
+        const opt = document.createElement('option');
+        opt.value = s.id;
+        opt.textContent = `${s.name} (${s.manufacturer})`;
+        elements.scannerSelect.appendChild(opt);
       });
 
-      // Auto-select saved scanner or first one
-      const savedId = settings.scannerId;
-      if (savedId && result.scanners.some(s => s.id === savedId)) {
-        elements.scannerSelect.value = savedId;
-      } else if (result.scanners.length === 1) {
-        elements.scannerSelect.value = result.scanners[0].id;
-        window.api.saveSettings({ scannerId: result.scanners[0].id });
+      // Restore saved scanner selection
+      if (settings.scannerId) {
+        elements.scannerSelect.value = settings.scannerId;
       }
 
-      addLogEntry({ type: 'success', message: `Found ${result.count} scanner(s)` });
+      addLogEntry({ type: 'success', message: `Found ${result.scanners.length} scanner(s)` });
     } else {
-      addLogEntry({ type: 'warning', message: result.error || 'No scanners found' });
+      elements.scannerSelect.innerHTML = '<option value="">No scanners found</option>';
+      addLogEntry({ type: 'warning', message: 'No scanners detected. Check USB connection.' });
     }
   } catch (error) {
+    elements.scannerSelect.innerHTML = '<option value="">Error detecting scanners</option>';
     addLogEntry({ type: 'error', message: `Scanner discovery failed: ${error.message}` });
   } finally {
-    elements.btnRefreshScanners.classList.remove('loading');
+    elements.btnRefreshScanners.classList.remove('spinning');
   }
 }
 
-// Direct Scan
+// Open Fujitsu Software Operation Panel for scanner hardware settings
+async function openScannerSettings() {
+  addLogEntry({ type: 'info', message: 'Opening scanner hardware settings...' });
+  const result = await window.api.openScannerSettings();
+  if (result.success) {
+    addLogEntry({ type: 'success', message: 'Scanner settings panel opened. Disable "Multifeed Detection" for card scanning.' });
+  } else {
+    addLogEntry({ type: 'error', message: result.error || 'Could not open scanner settings' });
+  }
+}
+
+// Direct Scan — triggers WinRT scan via fi-8170 ADF
 async function handleDirectScan() {
-  const scannerId = elements.scannerSelect.value;
-  if (!scannerId) {
-    addLogEntry({ type: 'error', message: 'Please select a scanner first' });
+  if (isScanning) {
+    addLogEntry({ type: 'warning', message: 'Scan already in progress' });
     return;
   }
 
   elements.btnScan.classList.add('scanning');
-  elements.btnScan.querySelector('span').textContent = 'Scanning...';
-  elements.btnScan.disabled = true;
+  elements.btnScan.querySelector('span').textContent = 'SCANNING...';
+
+  const dpi = parseInt(elements.scanDpi.value, 10) || 300;
+  const duplex = elements.scanDuplex.checked;
 
   try {
-    const result = await window.api.scanDirect({
-      scannerId,
-      dpi: parseInt(elements.scanDpi.value, 10),
-      duplex: elements.scanDuplex.checked
-    });
+    const result = await window.api.scanDirect({ dpi, duplex });
 
     if (!result.success) {
-      addLogEntry({ type: 'error', message: result.error });
+      if (result.isMultifeed) {
+        // Multifeed error already logged by main process; show help banner
+        elements.multifeedHelp.classList.remove('hidden');
+      } else {
+        addLogEntry({ type: 'error', message: result.error });
+      }
+    } else {
+      addLogEntry({ type: 'success', message: `Scan complete: ${result.pagesScanned} page(s)` });
     }
   } catch (error) {
     addLogEntry({ type: 'error', message: `Scan failed: ${error.message}` });
   } finally {
     elements.btnScan.classList.remove('scanning');
     elements.btnScan.querySelector('span').textContent = 'SCAN NOW';
-    elements.btnScan.disabled = false;
   }
 }
 
@@ -553,14 +626,17 @@ async function handleBrowse() {
   const result = await window.api.selectFolder();
 
   if (result.success) {
-    elements.folderPath.value = result.path;
+    // Update all folder path inputs
+    const folderPath = document.getElementById('folder-path');
+    if (folderPath) folderPath.value = result.path;
+    const folderPathAlt = document.getElementById('folder-path-alt');
+    if (folderPathAlt) folderPathAlt.value = result.path;
   }
 }
 
 // Scanning
 async function handleScanToggle() {
   if (scanMode === 'direct') {
-    // Direct scanner mode
     handleDirectScan();
     return;
   }
@@ -569,13 +645,13 @@ async function handleScanToggle() {
   if (isScanning) {
     await window.api.stopScanning();
   } else {
-    if (!elements.folderPath.value) {
+    const folderPath = document.getElementById('folder-path-alt');
+    if (!folderPath || !folderPath.value) {
       addLogEntry({ type: 'error', message: 'Please select a scan folder first' });
       return;
     }
 
     const result = await window.api.startScanning();
-
     if (!result.success) {
       addLogEntry({ type: 'error', message: result.error });
     }
@@ -1285,6 +1361,39 @@ function escapeHtml(text) {
   return div.innerHTML;
 }
 
+// Preset handling
+function handlePresetChange() {
+  const presetName = elements.scanPreset.value;
+  if (presetName === 'custom') return; // Don't change anything
+  applyPreset(presetName);
+}
+
+function applyPreset(presetName) {
+  const preset = SCAN_PRESETS[presetName];
+  if (!preset) return;
+
+  // Apply DPI to sidebar dropdown
+  elements.scanDpi.value = preset.scanDpi;
+  window.api.saveSettings({ scanDpi: preset.scanDpi });
+
+  // Apply holo toggle
+  elements.scanHoloMode.checked = preset.holoMode;
+
+  // Save all preset values
+  const presetSettings = {
+    holoMode: preset.holoMode,
+    autoCrop: preset.autoCrop,
+    removeStreaks: preset.removeStreaks,
+    cardWidth: preset.cardWidth,
+    cardHeight: preset.cardHeight,
+    scanDpi: preset.scanDpi
+  };
+  window.api.saveSettings(presetSettings);
+  Object.assign(settings, presetSettings);
+
+  addLogEntry({ type: 'info', message: `Preset applied: ${presetName}` });
+}
+
 // Settings
 async function loadSettings() {
   settings = await window.api.getSettings();
@@ -1293,22 +1402,46 @@ async function loadSettings() {
   switchScanMode(settings.scanMode || 'direct');
 
   // Restore scanner settings
-  if (settings.scanDpi) elements.scanDpi.value = settings.scanDpi;
-  if (settings.scanDuplex !== undefined) elements.scanDuplex.checked = settings.scanDuplex;
+  elements.scanDpi.value = settings.scanDpi || 300;
+  elements.scanDuplex.checked = settings.scanDuplex !== false;
 
-  // Auto-discover scanners on load
-  if (settings.scanMode !== 'folder') {
-    discoverScanners();
-  }
+  // Folder watch settings
+  const folderPath = document.getElementById('folder-path');
+  if (folderPath) folderPath.value = settings.scanFolder || '';
+  const folderPathAlt = document.getElementById('folder-path-alt');
+  if (folderPathAlt) folderPathAlt.value = settings.scanFolder || '';
 
-  elements.folderPath.value = settings.scanFolder || '';
   elements.settingPairingMode.value = settings.pairingMode || 'sequential';
   elements.settingHoloMode.checked = settings.holoMode || false;
   elements.settingBrightness.value = settings.brightnessBoost || 0;
   elements.brightnessValue.textContent = settings.brightnessBoost || 0;
   elements.settingAutoRotate.checked = settings.autoRotateBack !== false;
+  elements.settingAutoCrop.checked = settings.autoCrop !== false;
+  elements.settingRemoveStreaks.checked = settings.removeStreaks || false;
+
+  // Card dimensions
+  const w = settings.cardWidth || 2.5;
+  const h = settings.cardHeight || 3.5;
+  const sizeKey = `${w}x${h}`;
+  const sizeOption = Array.from(elements.settingCardSize.options).find(o => o.value === sizeKey);
+  if (sizeOption) {
+    elements.settingCardSize.value = sizeKey;
+    elements.customDimensions.classList.add('hidden');
+  } else {
+    elements.settingCardSize.value = 'custom';
+    elements.customDimensions.classList.remove('hidden');
+  }
+  elements.settingCardWidth.value = w;
+  elements.settingCardHeight.value = h;
+
   elements.settingStartMinimized.checked = settings.startMinimized || false;
   elements.settingStartWindows.checked = settings.startWithWindows || false;
+
+  // Sidebar holo toggle
+  elements.scanHoloMode.checked = settings.holoMode || false;
+
+  // Auto-discover scanners
+  discoverScanners();
 }
 
 function openSettings() {
@@ -1321,17 +1454,36 @@ function closeSettings() {
 }
 
 async function saveSettings() {
+  // Parse card dimensions from dropdown or custom inputs
+  let cardWidth, cardHeight;
+  if (elements.settingCardSize.value === 'custom') {
+    cardWidth = parseFloat(elements.settingCardWidth.value) || 2.5;
+    cardHeight = parseFloat(elements.settingCardHeight.value) || 3.5;
+  } else {
+    const [w, h] = elements.settingCardSize.value.split('x').map(Number);
+    cardWidth = w;
+    cardHeight = h;
+  }
+
   const newSettings = {
     pairingMode: elements.settingPairingMode.value,
     holoMode: elements.settingHoloMode.checked,
     brightnessBoost: parseInt(elements.settingBrightness.value, 10),
     autoRotateBack: elements.settingAutoRotate.checked,
+    autoCrop: elements.settingAutoCrop.checked,
+    removeStreaks: elements.settingRemoveStreaks.checked,
+    cardWidth,
+    cardHeight,
     startMinimized: elements.settingStartMinimized.checked,
     startWithWindows: elements.settingStartWindows.checked
   };
 
   await window.api.saveSettings(newSettings);
   settings = { ...settings, ...newSettings };
+
+  // Sync sidebar holo toggle
+  elements.scanHoloMode.checked = newSettings.holoMode;
+
   closeSettings();
   addLogEntry({ type: 'success', message: 'Settings saved' });
 }

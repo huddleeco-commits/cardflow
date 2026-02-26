@@ -23,6 +23,11 @@ const store = new Store({
       holoMode: false,
       brightnessBoost: 0,
       autoRotateBack: true,
+      autoCrop: true,           // trim scanner bed edges
+      cardWidth: 2.5,           // scan width in inches
+      cardHeight: 3.5,          // scan height in inches
+      cropThreshold: 30,        // sensitivity for auto-crop trim
+      removeStreaks: false,      // median filter for sensor dust streaks
       startMinimized: false,
       startWithWindows: false,
       scanMode: 'folder',       // 'direct' or 'folder'
@@ -56,9 +61,42 @@ let directModePendingFiles = []; // Files received via command line
 let scanTempDir = null; // Temp directory for direct scanner output
 let isDirectScanning = false; // True when WIA scan is in progress
 
+const sharp = require('sharp');
+
 const API_BASE = 'https://cardflow.be1st.io';
 const WS_URL = 'wss://cardflow.be1st.io';
 const SCRIPTS_DIR = path.join(__dirname, 'scripts');
+
+// Post-process a scanned image: auto-rotate back, auto-crop, streak removal
+async function processScannedImage(filePath, side, settings) {
+  let img = sharp(filePath);
+
+  // 1. Auto-rotate back 180° (duplex back comes upside-down)
+  if (side === 'back' && settings.autoRotateBack) {
+    img = img.rotate(180);
+  }
+
+  // 2. Streak line removal (median filter removes thin horizontal artifacts)
+  if (settings.removeStreaks) {
+    img = img.median(3); // 3x3 median filter — removes 1-2px streaks
+  }
+
+  // 3. Auto-crop (trim scanner bed border — removes uniform-color edges)
+  if (settings.autoCrop) {
+    img = img.trim({ threshold: settings.cropThreshold || 30 });
+  }
+
+  // Write processed image as high-quality JPEG
+  const outputPath = filePath.replace(/\.(jpg|jpeg|bmp|png)$/i, '_processed.jpg');
+  await img.jpeg({ quality: 95 }).toFile(outputPath);
+
+  // Clean up original if different path
+  if (outputPath !== filePath) {
+    try { fs.unlinkSync(filePath); } catch (e) { /* ignore */ }
+  }
+
+  return outputPath;
+}
 
 // Parse command line arguments for file paths
 function getFilePathsFromArgs(args) {
@@ -403,6 +441,7 @@ function runPowerShellStreaming(scriptPath, args = [], onLine) {
     const psArgs = ['-ExecutionPolicy', 'Bypass', '-File', scriptPath, ...args];
     const proc = spawn('powershell.exe', psArgs);
     let buffer = '';
+    let lastError = null;
 
     proc.stdout.on('data', (data) => {
       buffer += data.toString();
@@ -413,6 +452,7 @@ function runPowerShellStreaming(scriptPath, args = [], onLine) {
         if (!trimmed) continue;
         try {
           const parsed = JSON.parse(trimmed);
+          if (parsed.event === 'error') lastError = parsed.error;
           if (onLine) onLine(parsed);
         } catch (e) {
           // Non-JSON output, ignore
@@ -429,20 +469,18 @@ function runPowerShellStreaming(scriptPath, args = [], onLine) {
       if (buffer.trim()) {
         try {
           const parsed = JSON.parse(buffer.trim());
+          if (parsed.event === 'error') lastError = parsed.error;
           if (onLine) onLine(parsed);
         } catch (e) {}
       }
       if (code === 0 || code === null) {
         resolve();
       } else {
-        reject(new Error(`PowerShell exited with code ${code}`));
+        reject(new Error(lastError || `PowerShell exited with code ${code}`));
       }
     });
 
     proc.on('error', reject);
-
-    // Return the process so it can be killed
-    return proc;
   });
 }
 
@@ -458,109 +496,131 @@ ipcMain.handle('discover-scanners', async () => {
   }
 });
 
-// Direct scan via WIA
+// Direct scan — uses WinRT ImageScanner API via PowerShell
+// Scans cards from the ADF feeder, converts BMP to JPEG, streams progress
 ipcMain.handle('scan-direct', async (event, options = {}) => {
-  if (isDirectScanning) {
-    return { success: false, error: 'Scan already in progress' };
-  }
-
   if (!authToken) {
     return { success: false, error: 'Not authenticated' };
   }
 
-  const settings = store.get('settings');
-  const scannerId = options.scannerId || settings.scannerId;
-
-  if (!scannerId) {
-    return { success: false, error: 'No scanner selected' };
+  if (isDirectScanning) {
+    return { success: false, error: 'Scan already in progress' };
   }
 
+  const settings = store.get('settings');
+  const dpi = options.dpi || settings.scanDpi || 300;
+  const duplex = options.duplex !== undefined ? options.duplex : settings.scanDuplex;
+  const maxPages = options.maxPages || 0; // 0 = scan all in feeder
+
+  // Create a unique temp dir for this scan batch
+  const batchDir = path.join(scanTempDir, `batch-${Date.now()}`);
+  fs.mkdirSync(batchDir, { recursive: true });
+
+  const scriptPath = path.join(SCRIPTS_DIR, 'scan-winrt.ps1');
+  const cardWidth = settings.cardWidth || 2.5;
+  const cardHeight = settings.cardHeight || 3.5;
+  const args = [
+    '-OutputDir', batchDir,
+    '-Dpi', String(dpi),
+    '-MaxPages', String(maxPages),
+    '-CardWidth', String(cardWidth),
+    '-CardHeight', String(cardHeight)
+  ];
+  if (duplex) args.push('-Duplex');
+
+  isDirectScanning = true;
+  sendToRenderer('scanning-status', { scanning: true, mode: 'direct' });
+  updateTrayStatus('scanning');
+
+  let pagesScanned = 0;
+  const scannedPages = []; // Collect pages during scan, process after
+
   try {
-    isDirectScanning = true;
-
-    // Create temp output directory
-    scanTempDir = path.join(os.tmpdir(), `slabtrack-scan-${Date.now()}`);
-    fs.mkdirSync(scanTempDir, { recursive: true });
-
-    const dpi = options.dpi || settings.scanDpi || 300;
-    const duplex = options.duplex !== undefined ? options.duplex : (settings.scanDuplex !== false);
-
-    const scriptPath = path.join(SCRIPTS_DIR, 'scan-wia.ps1');
-    const psArgs = [
-      '-ScannerId', scannerId,
-      '-OutputDir', scanTempDir,
-      '-Dpi', dpi.toString()
-    ];
-    if (duplex) psArgs.push('-Duplex');
-
-    sendToRenderer('scanning-status', { scanning: true, mode: 'direct-scan' });
-    sendToRenderer('log', { type: 'info', message: 'Starting direct scan...' });
-    updateTrayStatus('scanning');
-
-    // Reset counters for this scan session
-    pendingFiles = [];
-    if (cardCounter === 0) stats = { scanned: 0, identified: 0, errors: 0 };
-
-    let pagesScanned = 0;
-    const scannedPages = [];
-
-    await runPowerShellStreaming(scriptPath, psArgs, (line) => {
-      switch (line.type) {
+    await runPowerShellStreaming(scriptPath, args, (msg) => {
+      switch (msg.event) {
         case 'status':
-          sendToRenderer('log', { type: 'info', message: line.message });
-          break;
-
-        case 'scanning':
-          sendToRenderer('log', { type: 'info', message: line.message });
-          sendToRenderer('scan-progress', { page: line.page, side: line.side, status: 'scanning' });
+          sendToRenderer('scan-progress', { status: msg.status, message: msg.message });
+          sendToRenderer('log', { type: 'info', message: msg.message });
           break;
 
         case 'page_scanned':
           pagesScanned++;
-          scannedPages.push(line);
-          sendToRenderer('log', { type: 'success', message: `Page ${line.page} (${line.side}) scanned` });
-          sendToRenderer('scan-progress', { page: line.page, side: line.side, status: 'scanned', file: line.file });
-
-          // Auto-pair in duplex mode: odd=front, even=back
-          if (duplex) {
-            if (pagesScanned % 2 === 0) {
-              const frontPage = scannedPages[scannedPages.length - 2];
-              const backPage = scannedPages[scannedPages.length - 1];
-              cardCounter++;
-              queueUpload(frontPage.file, backPage.file, cardCounter);
-            }
-          } else {
-            // Single-sided: each page is a front, need manual back pairing or auto
-            pendingFiles.push(line.file);
-            if (pendingFiles.length >= 2) {
-              const frontFile = pendingFiles.shift();
-              const backFile = pendingFiles.shift();
-              cardCounter++;
-              queueUpload(frontFile, backFile, cardCounter);
-            }
-          }
+          scannedPages.push({ path: msg.path, side: msg.side, page: msg.page });
+          sendToRenderer('scan-progress', {
+            status: 'page_scanned',
+            page: msg.page,
+            side: msg.side,
+            path: msg.path
+          });
+          sendToRenderer('log', { type: 'success', message: `Page ${msg.page} scanned (${msg.side})` });
           break;
 
         case 'scan_complete':
-          sendToRenderer('log', { type: 'success', message: `Scan complete: ${line.totalPages} pages` });
-          sendToRenderer('scan-complete', { totalPages: line.totalPages });
+          sendToRenderer('scan-progress', {
+            status: 'complete',
+            totalPages: msg.totalPages,
+            dpi: msg.dpi,
+            duplex: msg.duplex
+          });
           break;
 
         case 'error':
-          sendToRenderer('log', { type: 'error', message: `Scan error: ${line.message}` });
+          sendToRenderer('log', { type: 'error', message: msg.error });
           break;
       }
     });
 
+    // Post-process all scanned pages
+    sendToRenderer('log', { type: 'info', message: `Processing ${scannedPages.length} scanned page(s)...` });
+    for (const pg of scannedPages) {
+      try {
+        pg.path = await processScannedImage(pg.path, pg.side, settings);
+      } catch (err) {
+        sendToRenderer('log', { type: 'warning', message: `Post-processing failed for page ${pg.page}: ${err.message}` });
+      }
+    }
+
+    // Pair and queue uploads
+    for (const pg of scannedPages) {
+      pendingFiles.push(pg.path);
+      const side = pendingFiles.length % 2 === 1 ? 'front' : 'back';
+      sendScannerEvent(side === 'front' ? 'scanner_front_captured' : 'scanner_back_captured', {
+        filename: path.basename(pg.path)
+      });
+      if (pendingFiles.length >= 2) {
+        const frontFile = pendingFiles.shift();
+        const backFile = pendingFiles.shift();
+        cardCounter++;
+        queueUpload(frontFile, backFile, cardCounter);
+      }
+    }
+
     isDirectScanning = false;
+    sendToRenderer('scanning-status', { scanning: false });
     updateTrayStatus(ws && ws.readyState === WebSocket.OPEN ? 'connected' : 'gray');
+
+    // Handle any remaining unpaired file
+    if (pendingFiles.length === 1) {
+      sendToRenderer('log', { type: 'warning', message: 'Odd number of pages scanned — last page has no pair. Load the back side and scan again.' });
+    }
+
     return { success: true, pagesScanned };
   } catch (error) {
     isDirectScanning = false;
+    sendToRenderer('scanning-status', { scanning: false });
     updateTrayStatus(ws && ws.readyState === WebSocket.OPEN ? 'connected' : 'gray');
-    console.error('Direct scan error:', error);
-    sendToRenderer('log', { type: 'error', message: `Scan failed: ${error.message}` });
-    return { success: false, error: error.message };
+
+    // Detect multifeed/overlap errors and show helpful message
+    const msg = error.message || '';
+    const isMultifeed = /multifeed|overlap|double.?feed|paper.?problem/i.test(msg);
+    if (isMultifeed) {
+      sendToRenderer('log', { type: 'error', message: 'Multifeed detection triggered — the scanner thinks multiple pages are overlapping.' });
+      sendToRenderer('log', { type: 'warning', message: 'Trading cards are thicker than paper and trigger this sensor. Open Scanner Setup to disable multifeed detection.' });
+      sendToRenderer('show-multifeed-help', {});
+    } else {
+      sendToRenderer('log', { type: 'error', message: `Scan error: ${msg}` });
+    }
+    return { success: false, error: msg, isMultifeed };
   }
 });
 
@@ -756,6 +816,27 @@ ipcMain.handle('get-scanner-status', () => {
   };
 });
 
+// Open Fujitsu Software Operation Panel for scanner hardware settings
+ipcMain.handle('open-scanner-settings', async () => {
+  const sopPaths = [
+    'C:\\Windows\\twain_32\\fjscan32\\SOP\\FjLaunch.exe',
+    'C:\\Windows\\twain_32\\fjscan32\\SOP\\FtLnSOP.exe'
+  ];
+
+  for (const sopPath of sopPaths) {
+    if (fs.existsSync(sopPath)) {
+      try {
+        execFile(sopPath, [], { detached: true, stdio: 'ignore' });
+        return { success: true, path: sopPath };
+      } catch (error) {
+        console.error('Failed to launch SOP:', error);
+      }
+    }
+  }
+
+  return { success: false, error: 'Fujitsu Software Operation Panel not found. Install PaperStream IP driver.' };
+});
+
 // File watcher and scanning logic
 
 function startScanning() {
@@ -825,7 +906,7 @@ function stopScanning() {
   return { success: true };
 }
 
-function handleNewFile(filePath) {
+async function handleNewFile(filePath) {
   const ext = path.extname(filePath).toLowerCase();
 
   // Only process image files
@@ -838,6 +919,13 @@ function handleNewFile(filePath) {
 
   sendToRenderer('log', { type: 'info', message: `New file detected: ${fileName}` });
   sendScannerEvent('scanner_file_detected', { filename: fileName });
+
+  // Post-process the image before pairing
+  try {
+    filePath = await processScannedImage(filePath, 'front', settings);
+  } catch (err) {
+    sendToRenderer('log', { type: 'warning', message: `Post-processing failed: ${err.message}` });
+  }
 
   if (settings.pairingMode === 'sequential') {
     // Sequential pairing: odd = front, even = back

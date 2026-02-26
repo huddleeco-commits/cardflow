@@ -539,6 +539,13 @@ body {
   border-color: var(--border-focus);
 }
 
+.section-hint {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 8px;
+  line-height: 1.4;
+}
+
 /* Stats Section */
 .stats-section {
   display: grid;
@@ -1498,41 +1505,119 @@ body {
 .scanner-dropdown {
   flex: 1;
   min-width: 0;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px 12px;
+  color: var(--text-primary);
+  font-size: 13px;
 }
 
-.scanner-options {
+.scanner-dropdown:focus {
+  border-color: var(--cyan);
+  outline: none;
+}
+
+.scanner-settings-row {
   display: flex;
   gap: 16px;
+  align-items: center;
 }
 
-.scanner-option {
+.scanner-settings-row .setting-group {
   display: flex;
   align-items: center;
   gap: 8px;
+}
+
+.scanner-settings-row label {
   font-size: 12px;
   color: var(--text-secondary);
 }
 
-.small-select {
-  padding: 4px 8px;
-  min-width: 70px;
+.scanner-settings-row .scanner-dropdown {
+  padding: 6px 10px;
   font-size: 12px;
+  min-width: 70px;
 }
 
-.toggle-small {
-  width: 36px;
-  height: 20px;
+.scanner-settings-row .checkbox-label.compact {
+  font-size: 12px;
+  margin: 0;
+  gap: 6px;
 }
 
-.toggle-small .toggle-slider::before {
-  height: 14px;
-  width: 14px;
-  left: 2px;
-  bottom: 2px;
+.btn-icon-only {
+  padding: 8px;
+  min-width: auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
-.toggle-small input:checked + .toggle-slider::before {
-  transform: translateX(16px);
+.btn-icon-only.spinning svg {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* Scanner Setup Button */
+.scanner-setup-btn {
+  margin-top: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font-size: 12px;
+  opacity: 0.7;
+  transition: opacity 0.2s;
+}
+
+.scanner-setup-btn:hover {
+  opacity: 1;
+}
+
+/* Multifeed Help Banner */
+.multifeed-help {
+  background: rgba(255, 170, 0, 0.1);
+  border: 1px solid rgba(255, 170, 0, 0.3);
+  border-radius: var(--radius-md);
+  padding: 12px;
+  margin: 0 12px 8px;
+}
+
+.multifeed-help-content {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  margin-bottom: 10px;
+}
+
+.multifeed-help-icon {
+  color: #ffaa00;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+.multifeed-help-text {
+  font-size: 12px;
+  color: var(--text-secondary);
+  line-height: 1.4;
+}
+
+.multifeed-help-text strong {
+  color: #ffaa00;
+  display: block;
+  margin-bottom: 4px;
+}
+
+.multifeed-help-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
 }
 
 /* Big SCAN Button */
@@ -1607,4 +1692,51 @@ body {
 
 .card-item {
   animation: fadeIn 0.3s ease;
+}
+
+/* Holo Toggle in sidebar */
+.holo-toggle {
+  color: var(--text-secondary);
+  font-size: 12px;
+  gap: 6px;
+}
+
+.holo-toggle svg {
+  flex-shrink: 0;
+  opacity: 0.6;
+}
+
+.holo-toggle input:checked ~ svg {
+  color: var(--cyan);
+  opacity: 1;
+}
+
+/* Dimension inputs for custom card size */
+.dimension-inputs {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.dimension-input {
+  width: 65px;
+  padding: 6px 8px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-size: 13px;
+  text-align: center;
+}
+
+.dimension-input:focus {
+  outline: none;
+  border-color: var(--border-focus);
+}
+
+/* Preset dropdown in sidebar */
+#scan-preset {
+  width: 100%;
 }
