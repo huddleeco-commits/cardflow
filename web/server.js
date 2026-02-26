@@ -2873,7 +2873,7 @@ Return ONLY a JSON object (no other text):
   "confidence": "high, medium, or low"
 }`;
     } else {
-      // Generic prompt (unchanged)
+      // Generic prompt with full identification guidance
       promptText = `CAREFULLY analyze this sports card image and identify it accurately.
 
 IMPORTANT INSTRUCTIONS:
@@ -2886,6 +2886,36 @@ IMPORTANT INSTRUCTIONS:
 4. Do NOT guess or assume - only report what you can actually see in the image
 5. If you cannot clearly identify something, set confidence to "low"
 
+YEAR DETECTION (CRITICAL - CHECK CAREFULLY):
+- For GRADED cards: the slab label shows the year — read it, most reliable source
+- For RAW cards: check the BACK of the card, bottom fine print, for copyright year (e.g., "© 2024 Panini" or "© 2026 Topps")
+- The copyright year on the back IS the card year — USE IT
+- Do NOT use years from the set name on the front (e.g., "2025 All Topps Team" is a SET NAME, not the card year)
+- Do NOT guess the year from the player's rookie year or jersey number
+- Modern cards (2023-2026) are common — do not default to older years
+
+SET NAME vs MANUFACTURER (CRITICAL):
+- set_name must be the PRODUCT name, NOT the manufacturer/brand
+- Manufacturers: Topps, Panini, Upper Deck, Leaf, Bowman (these are NOT set names alone)
+- "Topps" alone is WRONG — look for: Topps Chrome, Topps Finest, Topps Heritage, etc.
+- "Panini" alone is WRONG — look for: Prizm, Mosaic, Select, Donruss, Optic, etc.
+- If you see "Panini Mosaic" the set_name is "Mosaic"
+- If you see "Topps Chrome" the set_name is "Chrome" or "Topps Chrome"
+
+COLOR/PARALLEL DETECTION:
+- Look at the card border, background, and refractor pattern
+- Common colors: Silver, Gold, Red, Blue, Green, Orange, Pink, Purple, Black, Aqua, Teal
+- AQUA/TEAL is NOT Green — aqua is blue-green, distinctly different from green
+- If you see a colored border or refractor pattern, name the color
+- "Base" means no special color variant
+
+SPORT DETECTION:
+- Baseball: MLB logos, diamond/bat imagery, Topps products common
+- Basketball: NBA logos, court imagery, Panini products common
+- Football: NFL logos, helmet/field imagery, both Topps and Panini
+- Hockey: NHL logos, ice/puck imagery, Upper Deck products common
+- Soccer/Football: FIFA/Premier League logos
+
 ${hasBack ? 'I have provided both the FRONT and BACK of the card. Use both images.' : 'This is a single image (likely a graded/slabbed card). Read the label text carefully.'}
 
 Return ONLY a JSON object with these fields (no other text):
@@ -2894,7 +2924,7 @@ Return ONLY a JSON object with these fields (no other text):
   "year": 2024,
   "set_name": "Full set name (e.g., Topps Chrome, Panini Prizm)",
   "card_number": "Card number from label or card",
-  "parallel": "Parallel type if any (Base, Refractor, Silver, Gold, etc.)",
+  "parallel": "Parallel type if any (Base, Refractor, Silver, Gold, Aqua, etc.)",
   "serial_number": "If numbered card, the serial (e.g., 25/99) or null",
   "is_autograph": false,
   "is_graded": true,
@@ -2909,7 +2939,7 @@ Return ONLY a JSON object with these fields (no other text):
     content.push({ type: 'text', text: promptText });
 
     const response = await anthropic.messages.create({
-      model: 'claude-sonnet-4-20250514',
+      model: 'claude-sonnet-4-5-20250929',
       max_tokens: 1024,
       messages: [{ role: 'user', content }]
     });
@@ -3108,6 +3138,29 @@ IMPORTANT INSTRUCTIONS:
 4. Do NOT guess or assume - only report what you can actually see in the image
 5. If you cannot clearly identify something, set confidence to "low"
 
+YEAR DETECTION (CRITICAL - CHECK CAREFULLY):
+- For GRADED cards: the slab label shows the year — read it, most reliable source
+- For RAW cards: check the BACK of the card, bottom fine print, for copyright year (e.g., "© 2024 Panini" or "© 2026 Topps")
+- The copyright year on the back IS the card year — USE IT
+- Do NOT use years from the set name on the front (e.g., "2025 All Topps Team" is a SET NAME, not the card year)
+- Do NOT guess the year from the player's rookie year or jersey number
+- Modern cards (2023-2026) are common — do not default to older years
+
+SET NAME vs MANUFACTURER (CRITICAL):
+- set_name must be the PRODUCT name, NOT the manufacturer/brand
+- Manufacturers: Topps, Panini, Upper Deck, Leaf, Bowman (these are NOT set names alone)
+- "Topps" alone is WRONG — look for: Topps Chrome, Topps Finest, Topps Heritage, etc.
+- "Panini" alone is WRONG — look for: Prizm, Mosaic, Select, Donruss, Optic, etc.
+- If you see "Panini Mosaic" the set_name is "Mosaic"
+- If you see "Topps Chrome" the set_name is "Chrome" or "Topps Chrome"
+
+COLOR/PARALLEL DETECTION:
+- Look at the card border, background, and refractor pattern
+- Common colors: Silver, Gold, Red, Blue, Green, Orange, Pink, Purple, Black, Aqua, Teal
+- AQUA/TEAL is NOT Green — aqua is blue-green, distinctly different from green
+- If you see a colored border or refractor pattern, name the color
+- "Base" means no special color variant
+
 ${hasBack ? 'I have provided both the FRONT and BACK of the card. Use both images.' : 'This is a single image (likely a graded/slabbed card). Read the label text carefully.'}
 
 Return ONLY a JSON object with these fields (no other text):
@@ -3116,7 +3169,7 @@ Return ONLY a JSON object with these fields (no other text):
   "year": 2024,
   "set_name": "Full set name (e.g., Topps Chrome, Panini Prizm)",
   "card_number": "Card number from label or card",
-  "parallel": "Parallel type if any (Base, Refractor, Silver, Gold, etc.)",
+  "parallel": "Parallel type if any (Base, Refractor, Silver, Gold, Aqua, etc.)",
   "serial_number": "If numbered card, the serial (e.g., 25/99) or null",
   "is_autograph": false,
   "team": "Team name visible on card",
@@ -3131,7 +3184,7 @@ Return ONLY a JSON object with these fields (no other text):
         });
 
         const response = await anthropic.messages.create({
-          model: 'claude-sonnet-4-20250514',
+          model: 'claude-sonnet-4-5-20250929',
           max_tokens: 1024,
           messages: [{ role: 'user', content }]
         });
@@ -7550,6 +7603,11 @@ function broadcast(message) {
         }
       });
     }
+    // Also send to scanner client for this user
+    const scannerWs = scannerClients.get(message.userId);
+    if (scannerWs && scannerWs.readyState === WebSocket.OPEN) {
+      scannerWs.send(data);
+    }
   } else {
     // Broadcast to all
     clients.forEach((userClients) => {
@@ -7558,6 +7616,12 @@ function broadcast(message) {
           client.send(data);
         }
       });
+    });
+    // Also broadcast to all scanner clients
+    scannerClients.forEach((scannerWs) => {
+      if (scannerWs.readyState === WebSocket.OPEN) {
+        scannerWs.send(data);
+      }
     });
   }
 }
@@ -8555,7 +8619,7 @@ app.post('/api/sets/identify-from-image', authenticateToken, upload.single('imag
       const anthropic = new Anthropic({ apiKey });
 
       const response = await anthropic.messages.create({
-        model: 'claude-sonnet-4-20250514',
+        model: 'claude-sonnet-4-5-20250929',
         max_tokens: 512,
         messages: [{
           role: 'user',
