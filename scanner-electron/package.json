@@ -1,10 +1,10 @@
 {
-  "name": "cardflow-scanner",
-  "productName": "CardFlow Scanner",
-  "version": "1.0.1",
-  "description": "Desktop scanner agent for CardFlow - Upload and identify trading cards",
+  "name": "slabtrack-scanner",
+  "productName": "SlabTrack Scanner",
+  "version": "2.0.0",
+  "description": "Desktop bulk scanner for SlabTrack - Scan, identify, and manage trading cards",
   "main": "src/main.js",
-  "author": "CardFlow",
+  "author": "SlabTrack",
   "license": "MIT",
   "scripts": {
     "start": "electron-forge start",

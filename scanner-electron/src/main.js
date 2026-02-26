@@ -1,6 +1,8 @@
 const { app, BrowserWindow, Tray, Menu, ipcMain, dialog, nativeImage, Notification, shell } = require('electron');
 const path = require('path');
 const fs = require('fs');
+const os = require('os');
+const { execFile, spawn } = require('child_process');
 const chokidar = require('chokidar');
 const axios = require('axios');
 const FormData = require('form-data');
@@ -22,10 +24,15 @@ const store = new Store({
       brightnessBoost: 0,
       autoRotateBack: true,
       startMinimized: false,
-      startWithWindows: false
+      startWithWindows: false,
+      scanMode: 'folder',       // 'direct' or 'folder'
+      scannerId: null,          // Selected WIA scanner device ID
+      scanDpi: 300,
+      scanDuplex: true
     },
     credentials: null,
-    authToken: null
+    authToken: null,
+    slabtrackInfo: null
   }
 });
 
@@ -41,12 +48,17 @@ let cardCounter = 0;
 let stats = { scanned: 0, identified: 0, errors: 0 };
 let uploadQueue = [];
 let isUploading = false;
+let activeUploads = 0;
+const MAX_CONCURRENT_UPLOADS = 3;
 let reconnectTimer = null;
 let directModeEnabled = false; // True when receiving files directly from PaperStream
 let directModePendingFiles = []; // Files received via command line
+let scanTempDir = null; // Temp directory for direct scanner output
+let isDirectScanning = false; // True when WIA scan is in progress
 
 const API_BASE = 'https://cardflow.be1st.io';
 const WS_URL = 'wss://cardflow.be1st.io';
+const SCRIPTS_DIR = path.join(__dirname, 'scripts');
 
 // Parse command line arguments for file paths
 function getFilePathsFromArgs(args) {
@@ -120,7 +132,7 @@ function createTray() {
 
   updateTrayMenu();
 
-  tray.setToolTip('CardFlow Scanner');
+  tray.setToolTip('SlabTrack Scanner');
 
   tray.on('click', () => {
     if (mainWindow) {
@@ -241,11 +253,46 @@ ipcMain.handle('login', async (event, email, password) => {
   }
 });
 
+// SlabTrack Login (token-based)
+ipcMain.handle('slabtrack-login', async (event, token) => {
+  try {
+    const response = await axios.post(`${API_BASE}/api/auth/slabtrack-login`, {
+      token
+    });
+
+    if (response.data.token) {
+      authToken = response.data.token;
+      store.set('authToken', authToken);
+
+      // Store SlabTrack-specific info (tier, username, etc.)
+      const slabtrackInfo = {
+        username: response.data.user?.username || response.data.user?.email,
+        tier: response.data.user?.tier || 'free',
+        slabtrackId: response.data.user?.slabtrackId
+      };
+      store.set('slabtrackInfo', slabtrackInfo);
+
+      connectWebSocket();
+
+      return { success: true, user: response.data.user, slabtrackInfo };
+    }
+
+    return { success: false, error: 'Invalid response from server' };
+  } catch (error) {
+    console.error('SlabTrack login error:', error.response?.data || error.message);
+    return {
+      success: false,
+      error: error.response?.data?.error || 'SlabTrack login failed. Check your token.'
+    };
+  }
+});
+
 // Logout
 ipcMain.handle('logout', async () => {
   authToken = null;
   store.delete('authToken');
   store.delete('credentials');
+  store.delete('slabtrackInfo');
   stopScanning();
   disconnectWebSocket();
   return { success: true };
@@ -264,7 +311,8 @@ ipcMain.handle('check-auth', async () => {
 
     if (response.data.id) {
       connectWebSocket();
-      return { authenticated: true, user: response.data };
+      const slabtrackInfo = store.get('slabtrackInfo') || null;
+      return { authenticated: true, user: response.data, slabtrackInfo };
     }
   } catch (error) {
     console.error('Auth check error:', error.message);
@@ -328,6 +376,384 @@ ipcMain.handle('stop-scanning', () => {
 // Get stats
 ipcMain.handle('get-stats', () => {
   return stats;
+});
+
+// PowerShell helpers for WIA scanner integration
+
+function runPowerShell(scriptPath, args = []) {
+  return new Promise((resolve, reject) => {
+    const psArgs = ['-ExecutionPolicy', 'Bypass', '-File', scriptPath, ...args];
+    execFile('powershell.exe', psArgs, { maxBuffer: 10 * 1024 * 1024 }, (error, stdout, stderr) => {
+      if (error && !stdout) {
+        reject(new Error(stderr || error.message));
+        return;
+      }
+      try {
+        const result = JSON.parse(stdout.trim());
+        resolve(result);
+      } catch (parseError) {
+        reject(new Error(`Failed to parse output: ${stdout}`));
+      }
+    });
+  });
+}
+
+function runPowerShellStreaming(scriptPath, args = [], onLine) {
+  return new Promise((resolve, reject) => {
+    const psArgs = ['-ExecutionPolicy', 'Bypass', '-File', scriptPath, ...args];
+    const proc = spawn('powershell.exe', psArgs);
+    let buffer = '';
+
+    proc.stdout.on('data', (data) => {
+      buffer += data.toString();
+      const lines = buffer.split('\n');
+      buffer = lines.pop(); // Keep incomplete line in buffer
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed) continue;
+        try {
+          const parsed = JSON.parse(trimmed);
+          if (onLine) onLine(parsed);
+        } catch (e) {
+          // Non-JSON output, ignore
+        }
+      }
+    });
+
+    proc.stderr.on('data', (data) => {
+      console.error('PowerShell stderr:', data.toString());
+    });
+
+    proc.on('close', (code) => {
+      // Process any remaining buffer
+      if (buffer.trim()) {
+        try {
+          const parsed = JSON.parse(buffer.trim());
+          if (onLine) onLine(parsed);
+        } catch (e) {}
+      }
+      if (code === 0 || code === null) {
+        resolve();
+      } else {
+        reject(new Error(`PowerShell exited with code ${code}`));
+      }
+    });
+
+    proc.on('error', reject);
+
+    // Return the process so it can be killed
+    return proc;
+  });
+}
+
+// Discover available scanners
+ipcMain.handle('discover-scanners', async () => {
+  try {
+    const scriptPath = path.join(SCRIPTS_DIR, 'discover-scanners.ps1');
+    const result = await runPowerShell(scriptPath);
+    return result;
+  } catch (error) {
+    console.error('Scanner discovery error:', error);
+    return { success: false, error: error.message, scanners: [], count: 0 };
+  }
+});
+
+// Direct scan via WIA
+ipcMain.handle('scan-direct', async (event, options = {}) => {
+  if (isDirectScanning) {
+    return { success: false, error: 'Scan already in progress' };
+  }
+
+  if (!authToken) {
+    return { success: false, error: 'Not authenticated' };
+  }
+
+  const settings = store.get('settings');
+  const scannerId = options.scannerId || settings.scannerId;
+
+  if (!scannerId) {
+    return { success: false, error: 'No scanner selected' };
+  }
+
+  try {
+    isDirectScanning = true;
+
+    // Create temp output directory
+    scanTempDir = path.join(os.tmpdir(), `slabtrack-scan-${Date.now()}`);
+    fs.mkdirSync(scanTempDir, { recursive: true });
+
+    const dpi = options.dpi || settings.scanDpi || 300;
+    const duplex = options.duplex !== undefined ? options.duplex : (settings.scanDuplex !== false);
+
+    const scriptPath = path.join(SCRIPTS_DIR, 'scan-wia.ps1');
+    const psArgs = [
+      '-ScannerId', scannerId,
+      '-OutputDir', scanTempDir,
+      '-Dpi', dpi.toString()
+    ];
+    if (duplex) psArgs.push('-Duplex');
+
+    sendToRenderer('scanning-status', { scanning: true, mode: 'direct-scan' });
+    sendToRenderer('log', { type: 'info', message: 'Starting direct scan...' });
+    updateTrayStatus('scanning');
+
+    // Reset counters for this scan session
+    pendingFiles = [];
+    if (cardCounter === 0) stats = { scanned: 0, identified: 0, errors: 0 };
+
+    let pagesScanned = 0;
+    const scannedPages = [];
+
+    await runPowerShellStreaming(scriptPath, psArgs, (line) => {
+      switch (line.type) {
+        case 'status':
+          sendToRenderer('log', { type: 'info', message: line.message });
+          break;
+
+        case 'scanning':
+          sendToRenderer('log', { type: 'info', message: line.message });
+          sendToRenderer('scan-progress', { page: line.page, side: line.side, status: 'scanning' });
+          break;
+
+        case 'page_scanned':
+          pagesScanned++;
+          scannedPages.push(line);
+          sendToRenderer('log', { type: 'success', message: `Page ${line.page} (${line.side}) scanned` });
+          sendToRenderer('scan-progress', { page: line.page, side: line.side, status: 'scanned', file: line.file });
+
+          // Auto-pair in duplex mode: odd=front, even=back
+          if (duplex) {
+            if (pagesScanned % 2 === 0) {
+              const frontPage = scannedPages[scannedPages.length - 2];
+              const backPage = scannedPages[scannedPages.length - 1];
+              cardCounter++;
+              queueUpload(frontPage.file, backPage.file, cardCounter);
+            }
+          } else {
+            // Single-sided: each page is a front, need manual back pairing or auto
+            pendingFiles.push(line.file);
+            if (pendingFiles.length >= 2) {
+              const frontFile = pendingFiles.shift();
+              const backFile = pendingFiles.shift();
+              cardCounter++;
+              queueUpload(frontFile, backFile, cardCounter);
+            }
+          }
+          break;
+
+        case 'scan_complete':
+          sendToRenderer('log', { type: 'success', message: `Scan complete: ${line.totalPages} pages` });
+          sendToRenderer('scan-complete', { totalPages: line.totalPages });
+          break;
+
+        case 'error':
+          sendToRenderer('log', { type: 'error', message: `Scan error: ${line.message}` });
+          break;
+      }
+    });
+
+    isDirectScanning = false;
+    updateTrayStatus(ws && ws.readyState === WebSocket.OPEN ? 'connected' : 'gray');
+    return { success: true, pagesScanned };
+  } catch (error) {
+    isDirectScanning = false;
+    updateTrayStatus(ws && ws.readyState === WebSocket.OPEN ? 'connected' : 'gray');
+    console.error('Direct scan error:', error);
+    sendToRenderer('log', { type: 'error', message: `Scan failed: ${error.message}` });
+    return { success: false, error: error.message };
+  }
+});
+
+// Card operations (proxy to server API)
+ipcMain.handle('fetch-cards', async (event, params = {}) => {
+  try {
+    const response = await axios.get(`${API_BASE}/api/cards`, {
+      headers: { Authorization: `Bearer ${authToken}` },
+      params
+    });
+    return { success: true, cards: response.data };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('fetch-card', async (event, cardId) => {
+  try {
+    const response = await axios.get(`${API_BASE}/api/cards/${cardId}`, {
+      headers: { Authorization: `Bearer ${authToken}` }
+    });
+    return { success: true, card: response.data };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('update-card', async (event, cardId, updates) => {
+  try {
+    const response = await axios.put(`${API_BASE}/api/cards/${cardId}`, updates, {
+      headers: { Authorization: `Bearer ${authToken}` }
+    });
+    return { success: true, card: response.data };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('approve-card', async (event, cardId) => {
+  try {
+    const response = await axios.post(`${API_BASE}/api/cards/${cardId}/approve`, {}, {
+      headers: { Authorization: `Bearer ${authToken}` }
+    });
+    return { success: true, card: response.data };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('reject-card', async (event, cardId) => {
+  try {
+    const response = await axios.post(`${API_BASE}/api/cards/${cardId}/reject`, {}, {
+      headers: { Authorization: `Bearer ${authToken}` }
+    });
+    return { success: true, card: response.data };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('delete-card', async (event, cardId) => {
+  try {
+    const response = await axios.delete(`${API_BASE}/api/cards/${cardId}`, {
+      headers: { Authorization: `Bearer ${authToken}` }
+    });
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
+// Bulk operations
+ipcMain.handle('bulk-approve', async (event, cardIds) => {
+  const results = { success: 0, failed: 0 };
+  for (const cardId of cardIds) {
+    try {
+      await axios.post(`${API_BASE}/api/cards/${cardId}/approve`, {}, {
+        headers: { Authorization: `Bearer ${authToken}` }
+      });
+      results.success++;
+    } catch (error) {
+      results.failed++;
+    }
+  }
+  return { success: true, ...results };
+});
+
+ipcMain.handle('bulk-delete', async (event, cardIds) => {
+  const results = { success: 0, failed: 0 };
+  for (const cardId of cardIds) {
+    try {
+      await axios.delete(`${API_BASE}/api/cards/${cardId}`, {
+        headers: { Authorization: `Bearer ${authToken}` }
+      });
+      results.success++;
+    } catch (error) {
+      results.failed++;
+    }
+  }
+  return { success: true, ...results };
+});
+
+ipcMain.handle('bulk-update', async (event, cardIds, updates) => {
+  const results = { success: 0, failed: 0 };
+  for (const cardId of cardIds) {
+    try {
+      await axios.put(`${API_BASE}/api/cards/${cardId}`, updates, {
+        headers: { Authorization: `Bearer ${authToken}` }
+      });
+      results.success++;
+    } catch (error) {
+      results.failed++;
+    }
+  }
+  return { success: true, ...results };
+});
+
+ipcMain.handle('export-cards', async (event, cardIds) => {
+  try {
+    const result = await dialog.showSaveDialog(mainWindow, {
+      title: 'Export Cards',
+      defaultPath: `slabtrack-export-${Date.now()}.csv`,
+      filters: [
+        { name: 'CSV', extensions: ['csv'] },
+        { name: 'All Files', extensions: ['*'] }
+      ]
+    });
+
+    if (result.canceled) return { success: false, canceled: true };
+
+    // Fetch all card data
+    const allCards = [];
+    for (const cardId of cardIds) {
+      try {
+        const response = await axios.get(`${API_BASE}/api/cards/${cardId}`, {
+          headers: { Authorization: `Bearer ${authToken}` }
+        });
+        allCards.push(response.data);
+      } catch (e) {}
+    }
+
+    // Build CSV
+    const headers = ['Player', 'Year', 'Set', 'Card #', 'Parallel', 'Price', 'Status'];
+    const rows = allCards.map(c => [
+      c.player || c.name || '',
+      c.year || '',
+      c.set || c.setName || '',
+      c.cardNumber || c.number || '',
+      c.parallel || '',
+      c.price || c.estimatedValue || '',
+      c.status || ''
+    ].map(v => `"${String(v).replace(/"/g, '""')}"`).join(','));
+
+    const csv = [headers.join(','), ...rows].join('\n');
+    fs.writeFileSync(result.filePath, csv, 'utf8');
+
+    return { success: true, path: result.filePath, count: allCards.length };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('send-to-slabtrack', async (event, cardIds) => {
+  try {
+    const response = await axios.post(`${API_BASE}/api/cards/send-to-slabtrack`, {
+      cardIds
+    }, {
+      headers: { Authorization: `Bearer ${authToken}` }
+    });
+    return { success: true, data: response.data };
+  } catch (error) {
+    return { success: false, error: error.response?.data?.error || error.message };
+  }
+});
+
+ipcMain.handle('swap-card-images', async (event, cardId) => {
+  try {
+    const response = await axios.post(`${API_BASE}/api/cards/${cardId}/swap-images`, {}, {
+      headers: { Authorization: `Bearer ${authToken}` }
+    });
+    return { success: true, card: response.data };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
+// Get scanner status
+ipcMain.handle('get-scanner-status', () => {
+  return {
+    isScanning: isDirectScanning,
+    scannerId: store.get('settings').scannerId,
+    scanMode: store.get('settings').scanMode
+  };
 });
 
 // File watcher and scanning logic
@@ -483,13 +909,26 @@ function queueUpload(frontPath, backPath, cardNum) {
 }
 
 async function processUploadQueue() {
-  if (isUploading || uploadQueue.length === 0) {
-    return;
+  while (uploadQueue.length > 0 && activeUploads < MAX_CONCURRENT_UPLOADS) {
+    const item = uploadQueue.shift();
+    activeUploads++;
+    uploadCard(item).finally(() => {
+      activeUploads--;
+      processUploadQueue();
+    });
   }
 
-  isUploading = true;
-  const { frontPath, backPath, cardNum } = uploadQueue.shift();
+  // Update pipeline status
+  sendToRenderer('pipeline-status', {
+    queued: uploadQueue.length,
+    uploading: activeUploads,
+    scanned: stats.scanned,
+    identified: stats.identified,
+    errors: stats.errors
+  });
+}
 
+async function uploadCard({ frontPath, backPath, cardNum }) {
   try {
     sendToRenderer('card-status', { cardNum, status: 'uploading' });
     sendToRenderer('log', { type: 'info', message: `Uploading card #${cardNum}...` });
@@ -537,9 +976,6 @@ async function processUploadQueue() {
     sendToRenderer('stats', stats);
     sendToRenderer('log', { type: 'error', message: `Card #${cardNum} failed: ${error.message}` });
   }
-
-  isUploading = false;
-  processUploadQueue();
 }
 
 // WebSocket connection for real-time updates
@@ -575,7 +1011,7 @@ function connectWebSocket() {
           console.log('WebSocket authenticated');
           updateTrayStatus(isScanning ? 'scanning' : 'connected');
           sendToRenderer('connection-status', { connected: true });
-          sendToRenderer('log', { type: 'success', message: 'Connected to CardFlow server' });
+          sendToRenderer('log', { type: 'success', message: 'Connected to SlabTrack server' });
 
           if (reconnectTimer) {
             clearTimeout(reconnectTimer);
@@ -659,7 +1095,13 @@ function handleWebSocketMessage(message) {
         name: cardData.name || player,
         year: year,
         set: setName,
-        player: player
+        player: player,
+        cardNumber: cardData.cardNumber || cardData.number || '',
+        parallel: cardData.parallel || '',
+        price: cardData.price || cardData.estimatedValue || '',
+        status: 'identified',
+        thumbnail: cardData.thumbnail || cardData.front || '',
+        back: cardData.back || ''
       });
       sendToRenderer('stats', stats);
 
@@ -711,6 +1153,10 @@ function sendToRenderer(channel, data) {
 // App lifecycle
 
 app.whenReady().then(() => {
+  // Create default temp dir for scans
+  scanTempDir = path.join(os.tmpdir(), 'slabtrack-scans');
+  fs.mkdirSync(scanTempDir, { recursive: true });
+
   createWindow();
   createTray();
 

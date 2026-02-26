@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self' https: wss:;">
-  <title>CardFlow Scanner</title>
+  <title>SlabTrack Scanner</title>
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -22,7 +22,7 @@
             </linearGradient>
           </defs>
         </svg>
-        <span>CardFlow Scanner</span>
+        <span>SlabTrack Scanner</span>
       </div>
     </div>
     <div class="titlebar-controls">
@@ -53,11 +53,31 @@
               </linearGradient>
             </defs>
           </svg>
-          <h1>CardFlow Scanner</h1>
-          <p>Sign in with your CardFlow account</p>
+          <h1>SlabTrack Scanner</h1>
+          <p>Sign in to start scanning</p>
         </div>
 
-        <form id="login-form">
+        <!-- Login Mode Tabs -->
+        <div class="login-tabs">
+          <button class="login-tab active" data-tab="slabtrack">Sign in with SlabTrack</button>
+          <button class="login-tab" data-tab="email">Email &amp; Password</button>
+        </div>
+
+        <!-- SlabTrack Token Login -->
+        <form id="slabtrack-login-form" class="login-tab-content active">
+          <div class="form-group">
+            <label for="slabtrack-token">SlabTrack Token</label>
+            <input type="password" id="slabtrack-token" placeholder="Paste your SlabTrack token..." required>
+          </div>
+          <div id="slabtrack-login-error" class="error-message"></div>
+          <button type="submit" class="btn btn-primary btn-full" id="slabtrack-login-btn">
+            <span class="btn-text">Connect to SlabTrack</span>
+            <span class="btn-loader"></span>
+          </button>
+        </form>
+
+        <!-- Email & Password Login -->
+        <form id="login-form" class="login-tab-content">
           <div class="form-group">
             <label for="email">Email</label>
             <input type="email" id="email" placeholder="you@example.com" required>
@@ -93,7 +113,60 @@
           </div>
         </div>
 
+        <div id="tier-badge-container" class="tier-badge-container hidden">
+          <span class="tier-badge" id="tier-badge">Free</span>
+          <span class="tier-username" id="tier-username"></span>
+        </div>
+
+        <!-- Scanner Mode Toggle -->
         <div class="sidebar-section">
+          <label class="section-label">Scanner Mode</label>
+          <div class="scan-mode-toggle">
+            <button class="mode-btn active" id="mode-direct" data-mode="direct">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><rect x="2" y="6" width="20" height="12" rx="2" stroke="currentColor" stroke-width="2"/><path d="M6 10h12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+              Direct Scan
+            </button>
+            <button class="mode-btn" id="mode-folder" data-mode="folder">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z" stroke="currentColor" stroke-width="2"/></svg>
+              Folder Watch
+            </button>
+          </div>
+        </div>
+
+        <!-- Direct Scanner Panel -->
+        <div class="sidebar-section" id="direct-scanner-panel">
+          <label class="section-label">Scanner</label>
+          <div class="scanner-select-row">
+            <select id="scanner-select" class="setting-select scanner-dropdown">
+              <option value="">Select scanner...</option>
+            </select>
+            <button class="btn btn-secondary btn-small" id="btn-refresh-scanners" title="Refresh">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M1 4v6h6M23 20v-6h-6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M20.49 9A9 9 0 005.64 5.64L1 10M23 14l-4.64 4.36A9 9 0 013.51 15" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+            </button>
+          </div>
+
+          <div class="scanner-options">
+            <div class="scanner-option">
+              <span>DPI</span>
+              <select id="scan-dpi" class="setting-select small-select">
+                <option value="200">200</option>
+                <option value="300" selected>300</option>
+                <option value="400">400</option>
+                <option value="600">600</option>
+              </select>
+            </div>
+            <div class="scanner-option">
+              <span>Duplex</span>
+              <label class="toggle toggle-small">
+                <input type="checkbox" id="scan-duplex" checked>
+                <span class="toggle-slider"></span>
+              </label>
+            </div>
+          </div>
+        </div>
+
+        <!-- Folder Watch Panel (hidden when direct mode) -->
+        <div class="sidebar-section hidden" id="folder-watch-panel">
           <label class="section-label">Scan Folder</label>
           <div class="folder-picker">
             <input type="text" id="folder-path" placeholder="Select a folder..." readonly>
@@ -101,13 +174,14 @@
           </div>
         </div>
 
+        <!-- Big SCAN Button -->
         <div class="sidebar-section">
-          <button class="btn btn-primary btn-full btn-large" id="btn-scan">
-            <svg class="btn-icon" width="20" height="20" viewBox="0 0 24 24" fill="none">
+          <button class="btn btn-scan-now btn-full btn-large" id="btn-scan">
+            <svg class="btn-icon" width="24" height="24" viewBox="0 0 24 24" fill="none">
               <path d="M5 3v4M3 5h4M19 3v4M21 5h-4M5 17v4M3 19h4M19 17v4M21 19h-4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
               <rect x="7" y="7" width="10" height="10" rx="1" stroke="currentColor" stroke-width="2"/>
             </svg>
-            <span>Start Scanning</span>
+            <span>SCAN NOW</span>
           </button>
         </div>
 
@@ -145,11 +219,95 @@
 
       <!-- Main Content -->
       <main class="main-content">
-        <div class="content-header">
-          <h2>Card Feed</h2>
-          <span class="feed-count" id="feed-count">0 cards</span>
+        <!-- Pipeline Status Bar -->
+        <div class="pipeline-bar hidden" id="pipeline-bar">
+          <div class="pipeline-stage" id="pipeline-scanning">
+            <span class="pipeline-icon">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><rect x="2" y="6" width="20" height="12" rx="2" stroke="currentColor" stroke-width="2"/><path d="M6 10h12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+            </span>
+            <span class="pipeline-label">Scanning</span>
+            <span class="pipeline-count" id="pipeline-scan-count">0</span>
+          </div>
+          <div class="pipeline-arrow">&#8594;</div>
+          <div class="pipeline-stage" id="pipeline-uploading">
+            <span class="pipeline-icon">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M17 8l-5-5-5 5M12 3v12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+            </span>
+            <span class="pipeline-label">Uploading</span>
+            <span class="pipeline-count" id="pipeline-upload-count">0</span>
+          </div>
+          <div class="pipeline-arrow">&#8594;</div>
+          <div class="pipeline-stage" id="pipeline-identifying">
+            <span class="pipeline-icon">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="8" stroke="currentColor" stroke-width="2"/><path d="M21 21l-4.35-4.35" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+            </span>
+            <span class="pipeline-label">Identifying</span>
+            <span class="pipeline-count" id="pipeline-identify-count">0</span>
+          </div>
+          <div class="pipeline-arrow">&#8594;</div>
+          <div class="pipeline-stage" id="pipeline-done">
+            <span class="pipeline-icon">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M20 6L9 17l-5-5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </span>
+            <span class="pipeline-label">Done</span>
+            <span class="pipeline-count" id="pipeline-done-count">0</span>
+          </div>
         </div>
 
+        <div class="content-header">
+          <div class="content-header-left">
+            <h2>Card Feed</h2>
+            <span class="feed-count" id="feed-count">0 cards</span>
+          </div>
+          <div class="content-header-right">
+            <!-- Filter Bar -->
+            <div class="filter-bar">
+              <select id="filter-status" class="filter-select">
+                <option value="all">All Status</option>
+                <option value="queued">Queued</option>
+                <option value="uploading">Uploading</option>
+                <option value="identifying">Identifying</option>
+                <option value="identified">Identified</option>
+                <option value="approved">Approved</option>
+                <option value="error">Errors</option>
+              </select>
+              <input type="text" id="filter-search" class="filter-search" placeholder="Search cards...">
+            </div>
+            <!-- View Toggle -->
+            <div class="view-toggle">
+              <button class="view-btn" id="view-table" title="Table View">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M3 3h18v18H3zM3 9h18M3 15h18M9 3v18M15 3v18" stroke="currentColor" stroke-width="2"/></svg>
+              </button>
+              <button class="view-btn active" id="view-grid" title="Grid View">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><rect x="3" y="3" width="7" height="7" stroke="currentColor" stroke-width="2"/><rect x="14" y="3" width="7" height="7" stroke="currentColor" stroke-width="2"/><rect x="3" y="14" width="7" height="7" stroke="currentColor" stroke-width="2"/><rect x="14" y="14" width="7" height="7" stroke="currentColor" stroke-width="2"/></svg>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Table View -->
+        <div class="card-table-container hidden" id="card-table-container">
+          <table class="card-table" id="card-table">
+            <thead>
+              <tr>
+                <th class="th-checkbox"><input type="checkbox" id="select-all"></th>
+                <th class="th-thumb">Image</th>
+                <th class="th-num">#</th>
+                <th class="th-player">Player</th>
+                <th class="th-year">Year</th>
+                <th class="th-set">Set</th>
+                <th class="th-cardnum">Card #</th>
+                <th class="th-parallel">Parallel</th>
+                <th class="th-price">Price</th>
+                <th class="th-status">Status</th>
+                <th class="th-actions">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="card-table-body"></tbody>
+          </table>
+        </div>
+
+        <!-- Grid View -->
         <div class="card-feed" id="card-feed">
           <div class="empty-state" id="empty-state">
             <svg width="64" height="64" viewBox="0 0 24 24" fill="none">
@@ -158,6 +316,109 @@
             </svg>
             <p>No cards scanned yet</p>
             <span>Start scanning to see cards appear here</span>
+          </div>
+        </div>
+
+        <!-- Card Detail Modal -->
+        <div id="card-detail-modal" class="modal hidden">
+          <div class="modal-backdrop"></div>
+          <div class="modal-content modal-detail">
+            <div class="modal-header">
+              <h3 id="detail-title">Card Details</h3>
+              <div class="detail-nav">
+                <button class="btn btn-ghost btn-small" id="detail-prev" title="Previous">&#8592; Prev</button>
+                <button class="btn btn-ghost btn-small" id="detail-next" title="Next">Next &#8594;</button>
+              </div>
+              <button class="btn btn-ghost modal-close" id="btn-close-detail">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+                  <path d="M18 6L6 18M6 6l12 12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                </svg>
+              </button>
+            </div>
+            <div class="modal-body detail-body">
+              <div class="detail-images">
+                <div class="detail-image-wrap">
+                  <label>Front</label>
+                  <img id="detail-front-img" class="detail-img" src="" alt="Front">
+                </div>
+                <div class="detail-image-wrap">
+                  <label>Back</label>
+                  <img id="detail-back-img" class="detail-img" src="" alt="Back">
+                </div>
+              </div>
+              <div class="detail-fields">
+                <div class="detail-field">
+                  <label>Player</label>
+                  <input type="text" id="detail-player" class="detail-input">
+                </div>
+                <div class="detail-field">
+                  <label>Year</label>
+                  <input type="text" id="detail-year" class="detail-input">
+                </div>
+                <div class="detail-field">
+                  <label>Set</label>
+                  <input type="text" id="detail-set" class="detail-input">
+                </div>
+                <div class="detail-field">
+                  <label>Card #</label>
+                  <input type="text" id="detail-card-number" class="detail-input">
+                </div>
+                <div class="detail-field">
+                  <label>Parallel</label>
+                  <input type="text" id="detail-parallel" class="detail-input">
+                </div>
+                <div class="detail-field">
+                  <label>Price</label>
+                  <input type="text" id="detail-price" class="detail-input">
+                </div>
+                <div class="detail-field">
+                  <label>Status</label>
+                  <span class="status-pill" id="detail-status">—</span>
+                </div>
+              </div>
+            </div>
+            <div class="modal-footer">
+              <button class="btn btn-danger" id="detail-delete">Delete</button>
+              <button class="btn btn-secondary" id="detail-reject">Reject</button>
+              <button class="btn btn-secondary" id="detail-save">Save Changes</button>
+              <button class="btn btn-primary" id="detail-approve">Approve</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Bulk Action Toolbar -->
+        <div class="bulk-toolbar hidden" id="bulk-toolbar">
+          <span class="bulk-count" id="bulk-count">0 selected</span>
+          <button class="btn btn-primary btn-small" id="bulk-approve">Approve Selected</button>
+          <button class="btn btn-secondary btn-small" id="bulk-export">Export</button>
+          <button class="btn btn-secondary btn-small" id="bulk-send-slabtrack">Send to SlabTrack</button>
+          <button class="btn btn-danger btn-small" id="bulk-delete">Delete</button>
+        </div>
+
+        <!-- Batch Summary Panel (shown after scan) -->
+        <div class="batch-summary hidden" id="batch-summary">
+          <div class="batch-summary-header">
+            <h3>Scan Complete</h3>
+            <button class="btn btn-ghost btn-small" id="batch-dismiss">Dismiss</button>
+          </div>
+          <div class="batch-summary-stats">
+            <div class="batch-stat">
+              <span class="batch-stat-value" id="batch-total">0</span>
+              <span class="batch-stat-label">Total</span>
+            </div>
+            <div class="batch-stat">
+              <span class="batch-stat-value batch-identified" id="batch-identified">0</span>
+              <span class="batch-stat-label">Identified</span>
+            </div>
+            <div class="batch-stat">
+              <span class="batch-stat-value batch-errors" id="batch-errors">0</span>
+              <span class="batch-stat-label">Errors</span>
+            </div>
+          </div>
+          <div class="batch-summary-actions">
+            <button class="btn btn-primary btn-small" id="batch-approve-all">Approve All Identified</button>
+            <button class="btn btn-secondary btn-small" id="batch-review-errors">Review Errors</button>
+            <button class="btn btn-secondary btn-small" id="batch-export-all">Export All</button>
           </div>
         </div>
 
