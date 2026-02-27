@@ -74,8 +74,8 @@ let isDirectScanning = false; // True when WIA scan is in progress
 
 const sharp = require('sharp');
 
-const API_BASE = 'https://cardflow.be1st.io';
-const WS_URL = 'wss://cardflow.be1st.io';
+const API_BASE = 'https://slabtrack.io';
+const WS_URL = 'wss://slabtrack.io';
 const SCRIPTS_DIR = path.join(__dirname, 'scripts');
 
 // Post-process a scanned image: orientation fix, auto-rotate back, auto-crop, streak removal
@@ -350,11 +350,12 @@ ipcMain.handle('slabtrack-login', async (event, token) => {
       authToken = response.data.token;
       store.set('authToken', authToken);
 
-      // Store SlabTrack-specific info (tier, username, etc.)
+      // Store SlabTrack-specific info (tier, username, api token for desktop-scan)
       const slabtrackInfo = {
         username: response.data.user?.username || response.data.user?.email,
         tier: response.data.user?.tier || 'free',
-        slabtrackId: response.data.user?.slabtrackId
+        slabtrackId: response.data.user?.slabtrackId,
+        apiToken: token // Store the API token for X-API-Token header
       };
       store.set('slabtrackInfo', slabtrackInfo);
 
@@ -407,6 +408,30 @@ ipcMain.handle('check-auth', async () => {
   authToken = null;
   store.delete('authToken');
   return { authenticated: false };
+});
+
+// Desktop scan preflight — check credits + tier
+ipcMain.handle('desktop-scan-preflight', async () => {
+  try {
+    const slabtrackInfo = store.get('slabtrackInfo');
+    const headers = {};
+    if (slabtrackInfo?.apiToken) {
+      headers['X-API-Token'] = slabtrackInfo.apiToken;
+    } else if (authToken) {
+      headers['Authorization'] = `Bearer ${authToken}`;
+    } else {
+      return { success: false, error: 'Not authenticated' };
+    }
+
+    const response = await axios.get(`${API_BASE}/api/desktop-scan/preflight`, { headers });
+    return response.data;
+  } catch (error) {
+    const data = error.response?.data;
+    if (data?.upgradeRequired) {
+      return { success: false, error: data.error, upgradeRequired: true };
+    }
+    return { success: false, error: data?.error || error.message };
+  }
 });
 
 // Select folder
@@ -1067,55 +1092,106 @@ async function processUploadQueue() {
 }
 
 async function uploadCard({ frontPath, backPath, cardNum }) {
-  console.log(`[uploadCard] Starting upload for card #${cardNum}`);
+  console.log(`[uploadCard] Starting scan+upload for card #${cardNum} via SlabTrack`);
   try {
     sendToRenderer('card-status', { cardNum, status: 'uploading' });
-    sendToRenderer('log', { type: 'info', message: `Uploading card #${cardNum}...` });
+    sendToRenderer('log', { type: 'info', message: `Scanning card #${cardNum} via SlabTrack...` });
     sendScannerEvent('scanner_uploading', { cardNum });
 
-    const settings = store.get('settings');
+    // Read images as base64 for SlabTrack's desktop-scan API
+    const frontBase64 = fs.readFileSync(frontPath).toString('base64');
+    const backBase64 = backPath ? fs.readFileSync(backPath).toString('base64') : null;
 
-    // Create form data
-    const form = new FormData();
-    form.append('front', fs.createReadStream(frontPath));
-    form.append('back', fs.createReadStream(backPath));
-    form.append('batch', 'true'); // Auto-identify after upload
-    form.append('source', 'desktop'); // Desktop scanner - no hero view in main app
-    form.append('holoMode', settings.holoMode.toString());
-    form.append('brightnessBoost', settings.brightnessBoost.toString());
-    form.append('autoRotateBack', 'false'); // handled client-side by processScannedImage
+    // Determine auth header — prefer X-API-Token (SlabTrack token), fallback to Bearer JWT
+    const slabtrackInfo = store.get('slabtrackInfo');
+    const headers = { 'Content-Type': 'application/json' };
+    if (slabtrackInfo?.apiToken) {
+      headers['X-API-Token'] = slabtrackInfo.apiToken;
+    } else {
+      headers['Authorization'] = `Bearer ${authToken}`;
+    }
 
-    const response = await axios.post(`${API_BASE}/api/upload-pair`, form, {
-      headers: {
-        ...form.getHeaders(),
-        Authorization: `Bearer ${authToken}`
-      },
+    const response = await axios.post(`${API_BASE}/api/desktop-scan/single`, {
+      frontImage: frontBase64,
+      backImage: backBase64
+    }, {
+      headers,
       maxContentLength: Infinity,
-      maxBodyLength: Infinity
+      maxBodyLength: Infinity,
+      timeout: 120000 // 2 min timeout for Claude Vision processing
     });
 
-    console.log(`[uploadCard] Card #${cardNum} response:`, JSON.stringify(response.data).substring(0, 200));
-    if (response.data.cardId) {
+    const result = response.data;
+    console.log(`[uploadCard] Card #${cardNum} response:`, JSON.stringify(result).substring(0, 300));
+
+    if (result.success && result.card) {
       stats.scanned++;
-      console.log(`[uploadCard] Card #${cardNum} uploaded OK, cardId=${response.data.cardId}, waiting for identification...`);
-      sendToRenderer('card-status', {
+      stats.identified++;
+
+      // SlabTrack returns the fully identified card immediately (no WS wait needed)
+      const card = result.card;
+      sendToRenderer('card-identified', {
         cardNum,
-        status: 'identifying',
-        cardId: response.data.cardId,
-        thumbnail: response.data.front
+        cardId: card.id || `desktop_${cardNum}`,
+        player: card.player || '',
+        name: card.player || '',
+        year: card.year || '',
+        set: card.set_name || '',
+        cardNumber: card.card_number || '',
+        parallel: card.parallel || '',
+        serialNumber: card.serial_number || '',
+        team: card.team || '',
+        sport: card.sport || '',
+        condition: card.condition || '',
+        subset_name: card.subset_name || '',
+        numbered: card.numbered || false,
+        numbered_to: card.numbered_to || '',
+        confidence: card.confidence || 'high',
+        isGraded: card.is_graded || false,
+        gradingCompany: card.grading_company || '',
+        grade: card.grade || '',
+        certNumber: card.cert_number || '',
+        isAutograph: card.is_autographed || false,
+        ebaySearchString: card.ebay_search_string || '',
+        price: card.sportscardspro_raw || '',
+        pricing: {
+          raw: card.sportscardspro_raw,
+          psa7: card.sportscardspro_psa7,
+          psa8: card.sportscardspro_psa8,
+          psa9: card.sportscardspro_psa9,
+          psa10: card.sportscardspro_psa10,
+          bgs10: card.sportscardspro_bgs10,
+          cgc10: card.sportscardspro_cgc10,
+          sgc10: card.sportscardspro_sgc10
+        },
+        status: 'identified',
+        thumbnail: card.front_image_url || '',
+        back: card.back_image_url || ''
       });
+
+      // Update remaining credits display
+      if (result.remaining !== undefined) {
+        sendToRenderer('credits-update', { remaining: result.remaining });
+      }
+
       sendToRenderer('stats', stats);
-      sendToRenderer('log', { type: 'success', message: `Card #${cardNum} uploaded successfully` });
-      sendScannerEvent('scanner_card_uploaded', { cardNum, cardId: response.data.cardId });
+      sendToRenderer('log', { type: 'success', message: `Card #${cardNum}: ${card.player || 'Identified'} — ${result.remaining} scans left` });
+      sendScannerEvent('scanner_card_uploaded', { cardNum });
     } else {
-      throw new Error(response.data.error || 'Upload failed');
+      throw new Error(result.error || 'Scan failed');
     }
   } catch (error) {
-    console.error('Upload error:', error);
+    console.error('Upload/scan error:', error.response?.data || error.message);
+    const errMsg = error.response?.data?.error || error.message;
     stats.errors++;
-    sendToRenderer('card-status', { cardNum, status: 'error', error: error.message });
+    sendToRenderer('card-status', { cardNum, status: 'error', error: errMsg });
     sendToRenderer('stats', stats);
-    sendToRenderer('log', { type: 'error', message: `Card #${cardNum} failed: ${error.message}` });
+    sendToRenderer('log', { type: 'error', message: `Card #${cardNum} failed: ${errMsg}` });
+
+    // Handle upgrade-required error
+    if (error.response?.data?.upgradeRequired) {
+      sendToRenderer('upgrade-required', { message: errMsg });
+    }
   }
 }
 
@@ -1221,6 +1297,7 @@ function scheduleReconnect() {
 function handleWebSocketMessage(message) {
   console.log(`[WS] Received message type: ${message.type}`, message.cardId ? `cardId=${message.cardId}` : '');
   switch (message.type) {
+    case 'desktop_card_identified':
     case 'card_identified':
     case 'batch_card_identified':
       console.log(`[WS] Card identified! cardId=${message.cardId}`, JSON.stringify(message.cardData || {}).substring(0, 200));

@@ -33,6 +33,9 @@ contextBridge.exposeInMainWorld('api', {
   // Stats
   getStats: () => ipcRenderer.invoke('get-stats'),
 
+  // Desktop scan preflight (credits + tier check)
+  desktopScanPreflight: () => ipcRenderer.invoke('desktop-scan-preflight'),
+
   // Card operations
   fetchCards: (params) => ipcRenderer.invoke('fetch-cards', params),
   fetchCard: (cardId) => ipcRenderer.invoke('fetch-card', cardId),
@@ -82,6 +85,12 @@ contextBridge.exposeInMainWorld('api', {
   },
   onShowMultifeedHelp: (callback) => {
     ipcRenderer.on('show-multifeed-help', (event, data) => callback(data));
+  },
+  onCreditsUpdate: (callback) => {
+    ipcRenderer.on('credits-update', (event, data) => callback(data));
+  },
+  onUpgradeRequired: (callback) => {
+    ipcRenderer.on('upgrade-required', (event, data) => callback(data));
   },
 
   // Remove listeners

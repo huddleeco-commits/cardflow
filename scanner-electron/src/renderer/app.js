@@ -343,6 +343,17 @@ function setupIPCListeners() {
   window.api.onShowMultifeedHelp(() => {
     elements.multifeedHelp.classList.remove('hidden');
   });
+
+  // Desktop scan credits
+  window.api.onCreditsUpdate((data) => {
+    updateCreditsDisplay(data.remaining);
+  });
+
+  window.api.onUpgradeRequired((data) => {
+    const scanBtn = document.getElementById('btn-scan');
+    if (scanBtn) scanBtn.disabled = true;
+    addLogEntry({ type: 'error', message: data.message || 'Upgrade required for desktop scanning' });
+  });
 }
 
 // Authentication
@@ -468,6 +479,44 @@ function showLoginView() {
 function showMainView() {
   elements.loginView.classList.add('hidden');
   elements.mainView.classList.remove('hidden');
+  // Fetch scan credits on login
+  fetchScanCredits();
+}
+
+// Desktop scan credits display
+async function fetchScanCredits() {
+  try {
+    const result = await window.api.desktopScanPreflight();
+    if (result.success) {
+      updateCreditsDisplay(result.scansRemaining, result.monthlyLimit, result.tier);
+    } else if (result.upgradeRequired) {
+      updateCreditsDisplay(0, 0, 'free');
+      addLogEntry({ type: 'warning', message: result.error });
+    }
+  } catch (err) {
+    console.error('Preflight error:', err);
+  }
+}
+
+function updateCreditsDisplay(remaining, limit, tier) {
+  // Update or create credits element in the sidebar stats area
+  let creditsEl = document.getElementById('scan-credits-display');
+  if (!creditsEl) {
+    creditsEl = document.createElement('div');
+    creditsEl.id = 'scan-credits-display';
+    creditsEl.className = 'scan-credits';
+    // Insert after tier badge
+    const tierContainer = elements.tierBadgeContainer;
+    if (tierContainer && tierContainer.parentNode) {
+      tierContainer.parentNode.insertBefore(creditsEl, tierContainer.nextSibling);
+    }
+  }
+  const limitText = limit === 'unlimited' ? 'Unlimited' : (limit || '?');
+  creditsEl.innerHTML = `<span class="credits-label">Scans:</span> <span class="credits-value">${remaining ?? '?'}</span>${limit ? ` / ${limitText}` : ''}`;
+  creditsEl.style.cssText = 'padding: 4px 12px; font-size: 11px; color: #94a3b8; text-align: center;';
+  if (remaining !== undefined && remaining <= 5) {
+    creditsEl.querySelector('.credits-value').style.color = '#f87171';
+  }
 }
 
 // Scanner Mode
