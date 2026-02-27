@@ -3,7 +3,9 @@ module.exports = {
     name: 'SlabTrack Desktop Scanner',
     executableName: 'slabtrack-desktop-scanner',
     icon: './assets/icon',
-    asar: true,
+    asar: {
+      unpack: '**/{sharp,@img}/**/*.{node,dll,so,dylib}'
+    },
     appBundleId: 'com.slabtrack.desktop-scanner',
     appCopyright: 'Copyright © 2025 SlabTrack',
     win32metadata: {
