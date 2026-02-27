@@ -340,33 +340,72 @@ async function identifyCard(pair, modelOverride = null) {
     }
   }
 
-  // Add prompt
+  // Add prompt — matches SlabTrack scanner prompt for consistency
   content.push({
     type: 'text',
-    text: `Analyze this sports card image and identify it.
+    text: `Extract card data from ALL images provided.
 
-${backPath ? 'I have provided front and back images.' : 'I have provided the front image only.'}
+${backPath ? 'Front and back images provided.' : 'Front image only.'}
 
-Return ONLY a JSON object with these fields (no other text):
+SPORT DETECTION (CHECK FIRST):
+Look at the TEAM NAME to determine sport:
+- BASEBALL (MLB): Dodgers, Yankees, Cubs, Mets, Cardinals, Red Sox, Giants, Braves, Astros, Phillies, Padres, Mariners, Rangers, Orioles, Twins, Guardians, Royals, Tigers
+- BASKETBALL (NBA): Lakers, Celtics, Heat, Warriors, Bulls, Nets, Knicks, Suns, Bucks, 76ers, Mavericks, Grizzlies, Pelicans, Clippers, Kings, Hawks, Cavaliers, Raptors, Thunder
+- FOOTBALL (NFL): Chiefs, Cowboys, Eagles, 49ers, Bills, Dolphins, Patriots, Packers, Ravens, Bengals, Browns, Steelers, Titans, Colts, Jaguars, Texans, Broncos, Raiders, Chargers
+- HOCKEY (NHL): Bruins, Rangers, Maple Leafs, Canadiens, Penguins, Blackhawks, Red Wings, Flyers, Capitals, Lightning, Panthers, Hurricanes, Devils, Islanders
+
+COLOR (check card BORDER edge, ignore holographic reflections):
+Green=grass/emerald, Red=fire truck, Pink=light red/magenta, Orange=pumpkin, Blue=sky/navy
+Aqua=teal/blue-green (NOT green), Purple=violet/deep purple
+WARNING: Aqua/teal is NOT Green — if the border is blue-green/teal, the parallel is "Aqua" not "Green".
+
+PARALLEL NAMING (use SportsCardsPro format):
+- Use color only, NOT "Color Prizm" or "Color Refractor": Orange, Green, Red, Blue, Pink, Silver, Gold, Aqua, Purple, Teal
+- Exception: "Refractor" for base chrome refractor cards
+- For Mosaic: use "Mosaic" not "Mosaic Prizm"
+- Inserts are NOT parallels: Game Ticket, Fireworks, Kaboom, Downtown = set parallel to "Base"
+
+YEAR DETECTION (CRITICAL):
+- For GRADED cards: the slab label shows the year — read it, most reliable source
+- For RAW cards: check the BACK of the card, bottom fine print, for copyright year (e.g., "© 2024 Panini" or "© 2026 Topps")
+- The copyright year on the back IS the card year — USE IT
+- Do NOT use years from the set name on the front (e.g., "2025 All Topps Team" is a SET NAME, not the card year)
+- Do NOT guess the year from the player's rookie year or jersey number
+
+SET NAME vs MANUFACTURER (CRITICAL):
+- set_name must be the PRODUCT name, NOT the manufacturer/brand
+- Manufacturers: Topps, Panini, Upper Deck, Leaf, Bowman (parent brand)
+- Products: Mosaic, Prizm, Select, Optic, Donruss, Chrome, Heritage, Series 1, Series 2, Bowman Chrome, Finest, Stadium Club, Allen & Ginter, Absolute, Contenders, Hoops, Court Kings, National Treasures, Spectra, Revolution, Score, Prestige, Phoenix
+- "Topps" alone is WRONG — look for the actual product (Chrome, Heritage, Series 1, etc.)
+- "Panini" alone is WRONG — look for the actual product (Mosaic, Prizm, Select, etc.)
+- If you see "Panini Mosaic" the set_name is "Mosaic" (drop the manufacturer)
+- If you see "Topps Chrome" the set_name is "Topps Chrome" (Topps Chrome IS the product name)
+
+CRITICAL:
+- Graded? Extract company/grade/cert from slab label
+- Auto? Set is_autographed=true
+- Serial (15/99)? Extract both numbers
+- Check BACK image for serial numbers, parallel text, copyright year, and set name
+
+JSON only:
 {
   "player": "Full player name",
   "year": 2024,
-  "set_name": "Full set name (e.g., Topps Chrome, Panini Prizm)",
+  "set_name": "Product name (no year, no manufacturer)",
   "card_number": "Card number",
-  "parallel": "Parallel type if any (Base, Refractor, Silver, Gold, etc.)",
-  "numbered": "Serial numbering if any (/99, /25, etc.) or null",
+  "parallel": "Base or color variant",
+  "numbered": "/99 or null",
   "team": "Team name",
-  "sport": "Sport (Baseball, Basketball, Football, Hockey, Soccer, Pokemon)",
+  "sport": "Baseball/Basketball/Football/Hockey/Pokemon",
   "is_graded": true,
-  "grading_company": "PSA, BGS, SGC, CGC, or null if raw",
-  "grade": "Grade number (10, 9.5, 9, etc.) or null",
-  "cert_number": "Certification number or null",
+  "grading_company": "PSA/BGS/SGC/CGC or null",
+  "grade": "10 or null",
+  "cert_number": "12345678 or null",
+  "is_autographed": false,
   "condition": "mint, near_mint, excellent, good, fair, poor",
   "confidence": "high, medium, or low",
   "notes": "Any special observations"
-}
-
-If graded, extract cert number from the slab label. If raw, estimate condition.`
+}`
   });
 
   // Make API call with timeout

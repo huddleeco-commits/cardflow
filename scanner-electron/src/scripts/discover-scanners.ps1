@@ -10,8 +10,10 @@ try {
     $scanners = @()
 
     foreach ($deviceInfo in $deviceManager.DeviceInfos) {
-        # Type 1 = Scanner
-        if ($deviceInfo.Type -eq 1) {
+        # Type 1 = Scanner, but WIA can report flags like 0x10001 (65537) for feeder scanners
+        # Check if bit 0 is set (scanner) — exclude type 2 (camera) and unknown (65535)
+        $devType = $deviceInfo.Type
+        if ($devType -eq 1 -or $devType -eq 65537 -or ($devType -band 1) -eq 1 -and $devType -ne 65535) {
             $scanner = @{
                 id           = $deviceInfo.DeviceID
                 name         = $deviceInfo.Properties("Name").Value

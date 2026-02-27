@@ -24,8 +24,8 @@ const store = new Store({
       brightnessBoost: 0,
       autoRotateBack: true,
       autoCrop: true,           // trim scanner bed edges
-      cardWidth: 2.5,           // scan width in inches
-      cardHeight: 3.5,          // scan height in inches
+      cardWidth: 4.5,           // scan width (becomes card HEIGHT after rotation, 3.5" card + margin)
+      cardHeight: 5.0,          // scan height (becomes card WIDTH after rotation, 2.5" card + margin)
       cropThreshold: 30,        // sensitivity for auto-crop trim
       removeStreaks: false,      // median filter for sensor dust streaks
       startMinimized: false,
@@ -40,6 +40,17 @@ const store = new Store({
     slabtrackInfo: null
   }
 });
+
+// Migrate scan dimensions — cardWidth becomes HEIGHT after rotation, needs margin beyond 3.5" card
+{
+  const s = store.get('settings');
+  if (s.cardWidth < 4.5 || s.cardHeight < 4.0) {
+    s.cardWidth = 4.5;   // perpendicular to feed → becomes card HEIGHT after rotation (3.5" card + 1" margin)
+    s.cardHeight = 5.0;  // feed direction → becomes card WIDTH after rotation (2.5" card + 2.5" margin)
+    store.set('settings', s);
+    console.log('[migrate] Updated scan dimensions to 4.5x5.0 for feeder margin');
+  }
+}
 
 // App state
 let mainWindow = null;
@@ -67,31 +78,53 @@ const API_BASE = 'https://cardflow.be1st.io';
 const WS_URL = 'wss://cardflow.be1st.io';
 const SCRIPTS_DIR = path.join(__dirname, 'scripts');
 
-// Post-process a scanned image: auto-rotate back, auto-crop, streak removal
+// Post-process a scanned image: orientation fix, auto-rotate back, auto-crop, streak removal
 async function processScannedImage(filePath, side, settings) {
+  const metadata = await sharp(filePath).metadata();
   let img = sharp(filePath);
 
-  // 1. Auto-rotate back 180° (duplex back comes upside-down)
+  // 1. ADF orientation fix: fi-8170 outputs content rotated 90° CW within the frame
+  //    Front: rotate -90° (CCW) to correct
+  //    Back:  rotate +90° (CW) = -90° ADF fix + 180° duplex flip
   if (side === 'back' && settings.autoRotateBack) {
-    img = img.rotate(180);
+    img = img.rotate(90);
+  } else {
+    img = img.rotate(-90);
   }
 
   // 2. Streak line removal (median filter removes thin horizontal artifacts)
   if (settings.removeStreaks) {
-    img = img.median(3); // 3x3 median filter — removes 1-2px streaks
+    img = img.median(3);
   }
 
-  // 3. Auto-crop (trim scanner bed border — removes uniform-color edges)
+  // Write rotated image first
+  const rotatedPath = filePath.replace(/\.(jpg|jpeg|bmp|png)$/i, '_rotated.jpg');
+  await img.jpeg({ quality: 95 }).toFile(rotatedPath);
+
+  // 3. Auto-crop: trim scanner bed edges using sharp's trim()
+  let outputPath = rotatedPath;
   if (settings.autoCrop) {
-    img = img.trim({ threshold: settings.cropThreshold || 30 });
+    try {
+      const cropPath = filePath.replace(/\.(jpg|jpeg|bmp|png)$/i, '_processed.jpg');
+      const threshold = settings.cropThreshold || 30;
+      await sharp(rotatedPath)
+        .trim({ background: '#FFFFFF', threshold })
+        .jpeg({ quality: 95 })
+        .toFile(cropPath);
+      outputPath = cropPath;
+      // Clean up rotated intermediate
+      try { fs.unlinkSync(rotatedPath); } catch (e) { /* ignore */ }
+    } catch (err) {
+      console.warn(`[processImage] Auto-crop failed for ${side}, using rotated image: ${err.message}`);
+      outputPath = rotatedPath;
+    }
   }
 
-  // Write processed image as high-quality JPEG
-  const outputPath = filePath.replace(/\.(jpg|jpeg|bmp|png)$/i, '_processed.jpg');
-  await img.jpeg({ quality: 95 }).toFile(outputPath);
+  const outMeta = await sharp(outputPath).metadata();
+  console.log(`[processImage] ${side}: ${metadata.width}x${metadata.height} → ${outMeta.width}x${outMeta.height}`);
 
   // Clean up original if different path
-  if (outputPath !== filePath) {
+  if (outputPath !== filePath && filePath !== rotatedPath) {
     try { fs.unlinkSync(filePath); } catch (e) { /* ignore */ }
   }
 
@@ -111,7 +144,7 @@ function getFilePathsFromArgs(args) {
 }
 
 // Create main window
-function createWindow() {
+async function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1100,
     height: 750,
@@ -129,14 +162,29 @@ function createWindow() {
     show: false
   });
 
-  mainWindow.loadFile(path.join(__dirname, 'renderer/index.html'));
+  const htmlPath = path.join(__dirname, 'renderer/index.html');
+  console.log('[DEBUG] Loading HTML from:', htmlPath);
+  console.log('[DEBUG] File exists:', fs.existsSync(htmlPath));
+  console.log('[DEBUG] __dirname:', __dirname);
+  // Read first 500 chars to check content
+  const htmlContent = fs.readFileSync(htmlPath, 'utf8');
+  console.log('[DEBUG] HTML contains scan-preview:', htmlContent.includes('scan-preview'));
+  console.log('[DEBUG] HTML contains card-detail-panel:', htmlContent.includes('card-detail-panel'));
+  console.log('[DEBUG] HTML contains grid-card-image:', htmlContent.includes('grid-card-image'));
 
-  // Show window when ready
+  // Clear ALL caches before loading to ensure latest files
+  await mainWindow.webContents.session.clearCache();
+  await mainWindow.webContents.session.clearStorageData({ storages: ['cachestorage'] });
+
+  mainWindow.loadFile(htmlPath);
+
+  // Show window when ready, then open DevTools
   mainWindow.once('ready-to-show', () => {
     const settings = store.get('settings');
     if (!settings.startMinimized) {
       mainWindow.show();
     }
+    mainWindow.webContents.openDevTools({ mode: 'bottom' });
   });
 
   // Minimize to tray instead of closing
@@ -984,12 +1032,14 @@ async function handleNewFile(filePath) {
 }
 
 function queueUpload(frontPath, backPath, cardNum) {
+  console.log(`[queueUpload] Card #${cardNum}: front=${frontPath}, back=${backPath}`);
   uploadQueue.push({ frontPath, backPath, cardNum });
 
-  // Add card to UI immediately
+  // Add card to UI immediately with both image paths
   sendToRenderer('card-added', {
     cardNum,
     frontPath,
+    backPath,
     status: 'queued'
   });
 
@@ -1017,6 +1067,7 @@ async function processUploadQueue() {
 }
 
 async function uploadCard({ frontPath, backPath, cardNum }) {
+  console.log(`[uploadCard] Starting upload for card #${cardNum}`);
   try {
     sendToRenderer('card-status', { cardNum, status: 'uploading' });
     sendToRenderer('log', { type: 'info', message: `Uploading card #${cardNum}...` });
@@ -1032,7 +1083,7 @@ async function uploadCard({ frontPath, backPath, cardNum }) {
     form.append('source', 'desktop'); // Desktop scanner - no hero view in main app
     form.append('holoMode', settings.holoMode.toString());
     form.append('brightnessBoost', settings.brightnessBoost.toString());
-    form.append('autoRotateBack', settings.autoRotateBack.toString());
+    form.append('autoRotateBack', 'false'); // handled client-side by processScannedImage
 
     const response = await axios.post(`${API_BASE}/api/upload-pair`, form, {
       headers: {
@@ -1043,8 +1094,10 @@ async function uploadCard({ frontPath, backPath, cardNum }) {
       maxBodyLength: Infinity
     });
 
+    console.log(`[uploadCard] Card #${cardNum} response:`, JSON.stringify(response.data).substring(0, 200));
     if (response.data.cardId) {
       stats.scanned++;
+      console.log(`[uploadCard] Card #${cardNum} uploaded OK, cardId=${response.data.cardId}, waiting for identification...`);
       sendToRenderer('card-status', {
         cardNum,
         status: 'identifying',
@@ -1166,27 +1219,35 @@ function scheduleReconnect() {
 }
 
 function handleWebSocketMessage(message) {
+  console.log(`[WS] Received message type: ${message.type}`, message.cardId ? `cardId=${message.cardId}` : '');
   switch (message.type) {
     case 'card_identified':
     case 'batch_card_identified':
+      console.log(`[WS] Card identified! cardId=${message.cardId}`, JSON.stringify(message.cardData || {}).substring(0, 200));
       stats.identified++;
 
-      // Extract card data from message
+      // Extract card data from message — server sends snake_case field names
       const cardData = message.cardData || message;
-      const player = cardData.player || cardData.name || '';
-      const year = cardData.year || '';
-      const setName = cardData.set || cardData.setName || '';
 
       sendToRenderer('card-identified', {
         cardId: message.cardId,
         cardNum: message.cardNum,
-        name: cardData.name || player,
-        year: year,
-        set: setName,
-        player: player,
-        cardNumber: cardData.cardNumber || cardData.number || '',
+        player: cardData.player || cardData.name || '',
+        name: cardData.player || cardData.name || '',
+        year: cardData.year || '',
+        set: cardData.set_name || cardData.set || cardData.setName || '',
+        cardNumber: cardData.card_number || cardData.cardNumber || '',
         parallel: cardData.parallel || '',
+        serialNumber: cardData.serial_number || '',
+        sport: cardData.sport || '',
+        confidence: cardData.confidence || '',
+        isGraded: cardData.is_graded || false,
+        gradingCompany: cardData.grading_company || '',
+        grade: cardData.grade || '',
+        certNumber: cardData.cert_number || '',
+        isAutograph: cardData.is_autograph || false,
         price: cardData.price || cardData.estimatedValue || '',
+        pricing: cardData.pricing || null,
         status: 'identified',
         thumbnail: cardData.thumbnail || cardData.front || '',
         back: cardData.back || ''

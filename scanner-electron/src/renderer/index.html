@@ -3,9 +3,13 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self' https: wss:;">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' file: data: https:; connect-src 'self' https: wss:;">
   <title>SlabTrack Scanner</title>
-  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="styles.css?v=20260226p">
+  <style>
+    #main-view { min-height: 0 !important; }
+    .main-content { overflow-y: hidden !important; min-height: 0 !important; }
+  </style>
 </head>
 <body>
   <!-- Custom Titlebar -->
@@ -172,6 +176,7 @@
                 <option value="holo">Holographic</option>
                 <option value="thick">Thick / Oversized</option>
                 <option value="vintage">Vintage</option>
+                <option value="raw">Raw (no crop)</option>
                 <option value="custom">Custom</option>
               </select>
             </div>
@@ -306,9 +311,9 @@
           <div class="content-header-left">
             <h2>Card Feed</h2>
             <span class="feed-count" id="feed-count">0 cards</span>
+            <button class="btn btn-ghost btn-small" id="btn-clear-feed" title="Clear all cards from feed">Clear</button>
           </div>
           <div class="content-header-right">
-            <!-- Filter Bar -->
             <div class="filter-bar">
               <select id="filter-status" class="filter-select">
                 <option value="all">All Status</option>
@@ -321,116 +326,96 @@
               </select>
               <input type="text" id="filter-search" class="filter-search" placeholder="Search cards...">
             </div>
-            <!-- View Toggle -->
-            <div class="view-toggle">
-              <button class="view-btn" id="view-table" title="Table View">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M3 3h18v18H3zM3 9h18M3 15h18M9 3v18M15 3v18" stroke="currentColor" stroke-width="2"/></svg>
-              </button>
-              <button class="view-btn active" id="view-grid" title="Grid View">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><rect x="3" y="3" width="7" height="7" stroke="currentColor" stroke-width="2"/><rect x="14" y="3" width="7" height="7" stroke="currentColor" stroke-width="2"/><rect x="3" y="14" width="7" height="7" stroke="currentColor" stroke-width="2"/><rect x="14" y="14" width="7" height="7" stroke="currentColor" stroke-width="2"/></svg>
-              </button>
+          </div>
+        </div>
+
+        <!-- Card Grid: all scanned cards -->
+        <div class="card-grid-container" id="card-grid-container">
+          <div class="card-grid" id="card-grid">
+            <div class="empty-state" id="empty-state">
+              <svg width="64" height="64" viewBox="0 0 24 24" fill="none">
+                <rect x="2" y="4" width="20" height="16" rx="2" stroke="currentColor" stroke-width="1.5" opacity="0.5"/>
+                <path d="M8 12h8M12 8v8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" opacity="0.5"/>
+              </svg>
+              <p>No cards scanned yet</p>
+              <span>Start scanning to see cards appear here</span>
             </div>
           </div>
         </div>
 
-        <!-- Table View -->
-        <div class="card-table-container hidden" id="card-table-container">
-          <table class="card-table" id="card-table">
-            <thead>
-              <tr>
-                <th class="th-checkbox"><input type="checkbox" id="select-all"></th>
-                <th class="th-thumb">Image</th>
-                <th class="th-num">#</th>
-                <th class="th-player">Player</th>
-                <th class="th-year">Year</th>
-                <th class="th-set">Set</th>
-                <th class="th-cardnum">Card #</th>
-                <th class="th-parallel">Parallel</th>
-                <th class="th-price">Price</th>
-                <th class="th-status">Status</th>
-                <th class="th-actions">Actions</th>
-              </tr>
-            </thead>
-            <tbody id="card-table-body"></tbody>
-          </table>
-        </div>
-
-        <!-- Grid View -->
-        <div class="card-feed" id="card-feed">
-          <div class="empty-state" id="empty-state">
-            <svg width="64" height="64" viewBox="0 0 24 24" fill="none">
-              <rect x="2" y="4" width="20" height="16" rx="2" stroke="currentColor" stroke-width="1.5" opacity="0.5"/>
-              <path d="M8 12h8M12 8v8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" opacity="0.5"/>
-            </svg>
-            <p>No cards scanned yet</p>
-            <span>Start scanning to see cards appear here</span>
+        <!-- Card Detail Panel (click-to-expand) -->
+        <div class="card-detail-panel hidden" id="card-detail-panel">
+          <div class="detail-panel-header">
+            <span class="detail-panel-title" id="detail-panel-title">Card Details</span>
+            <button class="btn btn-ghost btn-small" id="detail-close">&times; Close</button>
           </div>
-        </div>
-
-        <!-- Card Detail Modal -->
-        <div id="card-detail-modal" class="modal hidden">
-          <div class="modal-backdrop"></div>
-          <div class="modal-content modal-detail">
-            <div class="modal-header">
-              <h3 id="detail-title">Card Details</h3>
-              <div class="detail-nav">
-                <button class="btn btn-ghost btn-small" id="detail-prev" title="Previous">&#8592; Prev</button>
-                <button class="btn btn-ghost btn-small" id="detail-next" title="Next">Next &#8594;</button>
+          <div class="detail-panel-body">
+            <div class="detail-images">
+              <div class="detail-image-wrap">
+                <label>Front</label>
+                <img id="detail-front" src="" alt="Front">
               </div>
-              <button class="btn btn-ghost modal-close" id="btn-close-detail">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-                  <path d="M18 6L6 18M6 6l12 12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-                </svg>
-              </button>
+              <div class="detail-image-wrap">
+                <label>Back</label>
+                <img id="detail-back" src="" alt="Back">
+              </div>
             </div>
-            <div class="modal-body detail-body">
-              <div class="detail-images">
-                <div class="detail-image-wrap">
-                  <label>Front</label>
-                  <img id="detail-front-img" class="detail-img" src="" alt="Front">
-                </div>
-                <div class="detail-image-wrap">
-                  <label>Back</label>
-                  <img id="detail-back-img" class="detail-img" src="" alt="Back">
-                </div>
+            <div class="detail-fields">
+              <div class="detail-field">
+                <label>Player</label>
+                <input class="detail-input" id="detail-player" data-field="player" placeholder="Player name">
               </div>
-              <div class="detail-fields">
-                <div class="detail-field">
-                  <label>Player</label>
-                  <input type="text" id="detail-player" class="detail-input">
-                </div>
+              <div class="detail-field-row">
                 <div class="detail-field">
                   <label>Year</label>
-                  <input type="text" id="detail-year" class="detail-input">
-                </div>
-                <div class="detail-field">
-                  <label>Set</label>
-                  <input type="text" id="detail-set" class="detail-input">
+                  <input class="detail-input" id="detail-year" data-field="year" placeholder="Year">
                 </div>
                 <div class="detail-field">
                   <label>Card #</label>
-                  <input type="text" id="detail-card-number" class="detail-input">
+                  <input class="detail-input" id="detail-card-number" data-field="cardNumber" placeholder="#">
                 </div>
+              </div>
+              <div class="detail-field">
+                <label>Set</label>
+                <input class="detail-input" id="detail-set" data-field="set" placeholder="Set name">
+              </div>
+              <div class="detail-field-row">
                 <div class="detail-field">
                   <label>Parallel</label>
-                  <input type="text" id="detail-parallel" class="detail-input">
+                  <input class="detail-input" id="detail-parallel" data-field="parallel" placeholder="Base">
+                </div>
+                <div class="detail-field">
+                  <label>Serial #</label>
+                  <input class="detail-input" id="detail-serial" data-field="serialNumber" placeholder="e.g. 25/99">
+                </div>
+              </div>
+              <div class="detail-field-row">
+                <div class="detail-field">
+                  <label>Sport</label>
+                  <input class="detail-input" id="detail-sport" data-field="sport" placeholder="Sport">
                 </div>
                 <div class="detail-field">
                   <label>Price</label>
-                  <input type="text" id="detail-price" class="detail-input">
-                </div>
-                <div class="detail-field">
-                  <label>Status</label>
-                  <span class="status-pill" id="detail-status">—</span>
+                  <input class="detail-input" id="detail-price" data-field="price" placeholder="$0.00">
                 </div>
               </div>
+              <div class="detail-field-row">
+                <div class="detail-field">
+                  <label>Graded</label>
+                  <input class="detail-input" id="detail-graded" data-field="gradingCompany" placeholder="PSA, BGS...">
+                </div>
+                <div class="detail-field">
+                  <label>Grade</label>
+                  <input class="detail-input" id="detail-grade" data-field="grade" placeholder="10, 9.5...">
+                </div>
+              </div>
+              <div class="detail-confidence" id="detail-confidence"></div>
             </div>
-            <div class="modal-footer">
-              <button class="btn btn-danger" id="detail-delete">Delete</button>
-              <button class="btn btn-secondary" id="detail-reject">Reject</button>
-              <button class="btn btn-secondary" id="detail-save">Save Changes</button>
-              <button class="btn btn-primary" id="detail-approve">Approve</button>
-            </div>
+          </div>
+          <div class="detail-panel-footer">
+            <button class="btn btn-primary btn-small" id="detail-save" disabled>Save</button>
+            <button class="btn btn-secondary btn-small" id="detail-approve">Approve</button>
+            <button class="btn btn-danger btn-small" id="detail-delete">Delete</button>
           </div>
         </div>
 
@@ -629,6 +614,6 @@
     </div>
   </div>
 
-  <script src="app.js"></script>
+  <script src="app.js?v=20260226p"></script>
 </body>
 </html>

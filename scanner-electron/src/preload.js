@@ -24,6 +24,7 @@ contextBridge.exposeInMainWorld('api', {
   discoverScanners: () => ipcRenderer.invoke('discover-scanners'),
   scanDirect: (options) => ipcRenderer.invoke('scan-direct', options),
   getScannerStatus: () => ipcRenderer.invoke('get-scanner-status'),
+  openScannerSettings: () => ipcRenderer.invoke('open-scanner-settings'),
 
   // Settings
   getSettings: () => ipcRenderer.invoke('get-settings'),
@@ -78,6 +79,9 @@ contextBridge.exposeInMainWorld('api', {
   },
   onPipelineStatus: (callback) => {
     ipcRenderer.on('pipeline-status', (event, data) => callback(data));
+  },
+  onShowMultifeedHelp: (callback) => {
+    ipcRenderer.on('show-multifeed-help', (event, data) => callback(data));
   },
 
   // Remove listeners

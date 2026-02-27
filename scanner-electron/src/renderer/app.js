@@ -7,11 +7,12 @@ let cards = new Map();
 let settings = {};
 let slabtrackInfo = null;
 let scanMode = 'direct'; // 'direct' or 'folder'
-let viewMode = 'grid'; // 'grid' or 'table'
 let filterStatus = 'all';
 let filterSearch = '';
 let selectedCards = new Set();
-let detailCardNum = null;
+let scanningCardNum = null; // Track which card is currently scanning (gets pulsing border)
+let expandedCardNum = null; // Track which card has the detail panel open
+let dirtyCards = new Map(); // cardNum -> Set of dirty field names
 
 // DOM Elements
 const elements = {
@@ -69,34 +70,23 @@ const elements = {
   btnSettings: document.getElementById('btn-settings'),
   btnLogout: document.getElementById('btn-logout'),
 
-  // View Toggle & Filters
-  viewTableBtn: document.getElementById('view-table'),
-  viewGridBtn: document.getElementById('view-grid'),
+  // Filters
   filterStatusSelect: document.getElementById('filter-status'),
   filterSearchInput: document.getElementById('filter-search'),
-  cardTableContainer: document.getElementById('card-table-container'),
-  cardTableBody: document.getElementById('card-table-body'),
-  selectAll: document.getElementById('select-all'),
 
-  // Card Detail Modal
-  cardDetailModal: document.getElementById('card-detail-modal'),
-  detailTitle: document.getElementById('detail-title'),
-  detailPrev: document.getElementById('detail-prev'),
-  detailNext: document.getElementById('detail-next'),
-  btnCloseDetail: document.getElementById('btn-close-detail'),
-  detailFrontImg: document.getElementById('detail-front-img'),
-  detailBackImg: document.getElementById('detail-back-img'),
-  detailPlayer: document.getElementById('detail-player'),
-  detailYear: document.getElementById('detail-year'),
-  detailSet: document.getElementById('detail-set'),
-  detailCardNumber: document.getElementById('detail-card-number'),
-  detailParallel: document.getElementById('detail-parallel'),
-  detailPrice: document.getElementById('detail-price'),
-  detailStatus: document.getElementById('detail-status'),
-  detailApprove: document.getElementById('detail-approve'),
-  detailReject: document.getElementById('detail-reject'),
-  detailDelete: document.getElementById('detail-delete'),
+  // Card Detail Panel
+  detailPanel: document.getElementById('card-detail-panel'),
+  detailPanelTitle: document.getElementById('detail-panel-title'),
+  detailFront: document.getElementById('detail-front'),
+  detailBack: document.getElementById('detail-back'),
   detailSave: document.getElementById('detail-save'),
+  detailApprove: document.getElementById('detail-approve'),
+  detailDelete: document.getElementById('detail-delete'),
+  detailClose: document.getElementById('detail-close'),
+
+  // Card Grid
+  cardGrid: document.getElementById('card-grid'),
+  cardGridContainer: document.getElementById('card-grid-container'),
 
   // Pipeline Bar
   pipelineBar: document.getElementById('pipeline-bar'),
@@ -105,8 +95,7 @@ const elements = {
   pipelineIdentifyCount: document.getElementById('pipeline-identify-count'),
   pipelineDoneCount: document.getElementById('pipeline-done-count'),
 
-  // Card Feed
-  cardFeed: document.getElementById('card-feed'),
+  // Feed
   emptyState: document.getElementById('empty-state'),
   feedCount: document.getElementById('feed-count'),
 
@@ -158,10 +147,11 @@ const elements = {
 
 // Scan Presets — bundle of settings applied at once
 const SCAN_PRESETS = {
-  standard: { cardWidth: 2.5, cardHeight: 3.5, holoMode: false, autoCrop: true, removeStreaks: false, scanDpi: 300 },
-  holo:     { cardWidth: 2.5, cardHeight: 3.5, holoMode: true,  autoCrop: true, removeStreaks: false, scanDpi: 600 },
-  thick:    { cardWidth: 3.0, cardHeight: 4.0, holoMode: false, autoCrop: true, removeStreaks: false, scanDpi: 300 },
-  vintage:  { cardWidth: 2.5, cardHeight: 3.5, holoMode: false, autoCrop: true, removeStreaks: true,  scanDpi: 600 },
+  standard: { cardWidth: 4.5, cardHeight: 5.0, holoMode: false, autoCrop: true, removeStreaks: false, scanDpi: 300 },
+  holo:     { cardWidth: 4.5, cardHeight: 5.0, holoMode: true,  autoCrop: true, removeStreaks: false, scanDpi: 600 },
+  thick:    { cardWidth: 5.0, cardHeight: 5.5, holoMode: false, autoCrop: true, removeStreaks: false, scanDpi: 300 },
+  vintage:  { cardWidth: 4.5, cardHeight: 5.0, holoMode: false, autoCrop: true, removeStreaks: true,  scanDpi: 600 },
+  raw:      { cardWidth: 5.0, cardHeight: 6.0, holoMode: false, autoCrop: false, removeStreaks: false, scanDpi: 600 },
   custom:   null  // uses current settings as-is
 };
 
@@ -257,10 +247,6 @@ function setupEventListeners() {
     elements.brightnessValue.textContent = e.target.value;
   });
 
-  // View toggle
-  elements.viewTableBtn.addEventListener('click', () => toggleView('table'));
-  elements.viewGridBtn.addEventListener('click', () => toggleView('grid'));
-
   // Filters
   elements.filterStatusSelect.addEventListener('change', () => {
     filterStatus = elements.filterStatusSelect.value;
@@ -270,27 +256,6 @@ function setupEventListeners() {
     filterSearch = elements.filterSearchInput.value.toLowerCase();
     applyFilters();
   });
-
-  // Select all checkbox
-  elements.selectAll.addEventListener('change', (e) => {
-    if (e.target.checked) {
-      cards.forEach((card, key) => selectedCards.add(key));
-    } else {
-      selectedCards.clear();
-    }
-    refreshCurrentView();
-    updateBulkToolbar();
-  });
-
-  // Card detail modal
-  elements.btnCloseDetail.addEventListener('click', closeCardDetail);
-  elements.cardDetailModal.querySelector('.modal-backdrop').addEventListener('click', closeCardDetail);
-  elements.detailPrev.addEventListener('click', () => navigateDetail(-1));
-  elements.detailNext.addEventListener('click', () => navigateDetail(1));
-  elements.detailApprove.addEventListener('click', handleDetailApprove);
-  elements.detailReject.addEventListener('click', handleDetailReject);
-  elements.detailDelete.addEventListener('click', handleDetailDelete);
-  elements.detailSave.addEventListener('click', handleDetailSave);
 
   // Bulk actions
   elements.bulkApproveBtn.addEventListener('click', handleBulkApprove);
@@ -304,11 +269,13 @@ function setupEventListeners() {
   elements.batchReviewErrors.addEventListener('click', () => {
     elements.filterStatusSelect.value = 'error';
     filterStatus = 'error';
-    toggleView('table');
     applyFilters();
     elements.batchSummary.classList.add('hidden');
   });
   elements.batchExportAll.addEventListener('click', handleBatchExportAll);
+
+  // Detail panel
+  wireDetailPanelEvents();
 
   // Keyboard shortcuts
   document.addEventListener('keydown', handleKeyboardShortcuts);
@@ -319,6 +286,13 @@ function setupEventListeners() {
   // Clear log
   elements.btnClearLog.addEventListener('click', () => {
     elements.logContent.innerHTML = '';
+  });
+
+  // Clear feed
+  const btnClearFeed = document.getElementById('btn-clear-feed');
+  if (btnClearFeed) btnClearFeed.addEventListener('click', () => {
+    clearCards();
+    addLogEntry({ type: 'info', message: 'Card feed cleared' });
   });
 }
 
@@ -693,16 +667,39 @@ function updateStats(stats) {
   elements.statErrors.textContent = stats.errors;
 }
 
-// Card Feed
+// Helper: convert local file path to file:// URL for <img> src
+function filePathToUrl(p) {
+  if (!p) return '';
+  if (p.startsWith('http')) return p;
+  // Convert backslashes and prepend file:///
+  return 'file:///' + p.replace(/\\/g, '/');
+}
+
+// =====================================================
+// Card Feed — Scan Preview + Grid System
+// =====================================================
+
 function addCard(data) {
   cards.set(data.cardNum, {
     cardNum: data.cardNum,
     status: data.status,
-    frontPath: data.frontPath
+    frontPath: data.frontPath,
+    backPath: data.backPath
   });
 
-  renderCard(data.cardNum);
-  if (viewMode === 'table') renderTableRow(data.cardNum);
+  // Remove scanning state from previous card
+  if (scanningCardNum !== null && scanningCardNum !== data.cardNum) {
+    const prevEl = document.getElementById(`grid-${scanningCardNum}`);
+    if (prevEl) {
+      prevEl.classList.remove('scanning');
+      const badge = prevEl.querySelector('.grid-card-scanning-badge');
+      if (badge) badge.classList.add('hidden');
+    }
+  }
+
+  // New card goes directly into the grid with scanning state
+  scanningCardNum = data.cardNum;
+  renderGridCard(data.cardNum, true); // true = scanning
   updateFeedCount();
   hideEmptyState();
 }
@@ -716,8 +713,16 @@ function updateCardStatus(data) {
   if (data.thumbnail) card.thumbnail = data.thumbnail;
   if (data.error) card.error = data.error;
 
-  renderCard(card.cardNum);
-  if (viewMode === 'table') renderTableRow(card.cardNum);
+  // Update grid card if it exists
+  const gridEl = document.getElementById(`grid-${card.cardNum}`);
+  if (gridEl) {
+    updateGridCardDOM(gridEl, card);
+  }
+
+  // Update detail panel if this card is expanded
+  if (expandedCardNum === card.cardNum) {
+    populateDetailPanel(card);
+  }
 }
 
 function updateCardIdentified(data) {
@@ -729,14 +734,33 @@ function updateCardIdentified(data) {
   card.player = data.player;
   card.year = data.year;
   card.set = data.set;
-  if (data.cardNumber) card.cardNumber = data.cardNumber;
-  if (data.parallel) card.parallel = data.parallel;
-  if (data.price) card.price = data.price;
+  card.cardNumber = data.cardNumber || '';
+  card.parallel = data.parallel || '';
+  card.serialNumber = data.serialNumber || '';
+  card.sport = data.sport || '';
+  card.confidence = data.confidence || '';
+  card.isGraded = data.isGraded || false;
+  card.gradingCompany = data.gradingCompany || '';
+  card.grade = data.grade || '';
+  card.certNumber = data.certNumber || '';
+  card.isAutograph = data.isAutograph || false;
+  card.price = data.price || '';
+  card.pricing = data.pricing || null;
   if (data.thumbnail) card.thumbnail = data.thumbnail;
   if (data.back) card.back = data.back;
 
-  renderCard(card.cardNum);
-  if (viewMode === 'table') renderTableRow(card.cardNum);
+  // Remove scanning state when identified
+  if (scanningCardNum === card.cardNum) {
+    scanningCardNum = null;
+  }
+
+  // Render/update grid card
+  renderGridCard(card.cardNum);
+
+  // Update detail panel if this card is expanded
+  if (expandedCardNum === card.cardNum) {
+    populateDetailPanel(card);
+  }
 }
 
 function findCardByCardId(cardId) {
@@ -746,51 +770,356 @@ function findCardByCardId(cardId) {
   return null;
 }
 
-function renderCard(cardNum) {
+// =====================================================
+// Card Grid
+// =====================================================
+
+function renderGridCard(cardNum, isScanning = false) {
   const card = cards.get(cardNum);
   if (!card) return;
 
-  let cardEl = document.getElementById(`card-${cardNum}`);
-
-  if (!cardEl) {
-    cardEl = document.createElement('div');
-    cardEl.id = `card-${cardNum}`;
-    cardEl.className = 'card-item';
-    elements.cardFeed.insertBefore(cardEl, elements.cardFeed.firstChild);
+  let el = document.getElementById(`grid-${cardNum}`);
+  if (!el) {
+    el = buildGridCardElement(card, isScanning);
+    wireGridCardEvents(el, cardNum);
+    // Prepend (newest first)
+    const firstCard = elements.cardGrid.querySelector('.grid-card');
+    if (firstCard) {
+      elements.cardGrid.insertBefore(el, firstCard);
+    } else {
+      elements.cardGrid.appendChild(el);
+    }
+  } else {
+    updateGridCardDOM(el, card);
+    // Update scanning state
+    if (isScanning) {
+      el.classList.add('scanning');
+      const badge = el.querySelector('.grid-card-scanning-badge');
+      if (badge) badge.classList.remove('hidden');
+    } else {
+      el.classList.remove('scanning');
+      const badge = el.querySelector('.grid-card-scanning-badge');
+      if (badge) badge.classList.add('hidden');
+    }
   }
+}
 
-  const statusClass = card.status;
-  const statusText = getStatusText(card);
-  const displayName = card.player || card.name || '';
-  const details = card.year && card.set ? `${card.year} ${card.set}` : '';
+function buildGridCardElement(card, isScanning = false) {
+  const el = document.createElement('div');
+  el.id = `grid-${card.cardNum}`;
+  el.className = `grid-card`;
+  if (isScanning) el.classList.add('scanning');
 
-  cardEl.innerHTML = `
-    <div class="card-thumbnail">
-      ${card.thumbnail
-        ? `<img src="${card.thumbnail}" alt="Card ${cardNum}">`
-        : `<span class="placeholder">#${cardNum}</span>`
-      }
+  const frontSrc = card.thumbnail || filePathToUrl(card.frontPath) || '';
+  const player = card.player || card.name || '';
+  const year = card.year || '';
+  const statusClass = card.status || 'queued';
+  const statusIcon = getStatusIcon(card);
+
+  el.innerHTML = `
+    <div class="grid-card-select">
+      <input type="checkbox" class="grid-checkbox" data-card="${card.cardNum}">
     </div>
-    <div class="card-info">
-      <div class="card-number">Card #${cardNum}</div>
-      ${card.status === 'identified'
-        ? `<div class="card-name">${displayName}</div>
-           <div class="card-details">${details}</div>`
-        : `<div class="card-status ${statusClass}">
-             <span class="status-indicator"></span>
-             ${statusText}
-           </div>`
-      }
+    <div class="grid-card-image">
+      <img src="${frontSrc}" alt="" loading="lazy">
+      <span class="grid-card-num-badge">#${card.cardNum}</span>
+      <div class="grid-card-scanning-badge ${isScanning ? '' : 'hidden'}">SCANNING</div>
+    </div>
+    <div class="grid-card-info">
+      <span class="grid-card-name">${escapeHtml(player) || 'Unidentified'}</span>
+      <span class="grid-card-year">${escapeHtml(year)}</span>
+      <span class="grid-card-status status-${statusClass}">${statusIcon}</span>
     </div>
   `;
+
+  return el;
 }
+
+function getStatusIcon(card) {
+  switch (card.status) {
+    case 'queued': return '\u23F3'; // hourglass
+    case 'uploading': return '\u2B06'; // up arrow
+    case 'identifying': return '\uD83D\uDD0D'; // magnifying glass (🔍)
+    case 'identified': return '\u2705'; // green check
+    case 'approved': return '\u2714'; // check mark
+    case 'error': return '\u26A0'; // warning
+    default: return '\u23F3';
+  }
+}
+
+function wireGridCardEvents(el, cardNum) {
+  // Click on card tile → expand detail panel (but not on checkbox)
+  el.addEventListener('click', (e) => {
+    if (e.target.classList.contains('grid-checkbox')) return;
+    expandCard(cardNum);
+  });
+
+  // Checkbox for bulk selection
+  const checkbox = el.querySelector('.grid-checkbox');
+  if (checkbox) {
+    checkbox.addEventListener('change', (e) => {
+      e.stopPropagation();
+      if (checkbox.checked) {
+        selectedCards.add(cardNum);
+      } else {
+        selectedCards.delete(cardNum);
+      }
+      updateBulkToolbar();
+    });
+  }
+}
+
+function updateGridCardDOM(el, card) {
+  // Update front image
+  const img = el.querySelector('.grid-card-image img');
+  const frontSrc = card.thumbnail || filePathToUrl(card.frontPath) || '';
+  if (img && frontSrc && img.src !== frontSrc) img.src = frontSrc;
+
+  // Update name & year
+  const nameEl = el.querySelector('.grid-card-name');
+  if (nameEl) nameEl.textContent = card.player || card.name || 'Unidentified';
+  const yearEl = el.querySelector('.grid-card-year');
+  if (yearEl) yearEl.textContent = card.year || '';
+
+  // Update status icon
+  const statusEl = el.querySelector('.grid-card-status');
+  if (statusEl) {
+    statusEl.textContent = getStatusIcon(card);
+    statusEl.className = `grid-card-status status-${card.status}`;
+  }
+
+  // Update scanning badge visibility
+  const isScanning = scanningCardNum === card.cardNum;
+  el.classList.toggle('scanning', isScanning);
+  const badge = el.querySelector('.grid-card-scanning-badge');
+  if (badge) badge.classList.toggle('hidden', !isScanning);
+
+  // Update selected state
+  el.classList.toggle('selected', expandedCardNum === card.cardNum);
+}
+
+async function saveDetailCard() {
+  if (expandedCardNum === null) return;
+  const card = cards.get(expandedCardNum);
+  if (!card || !card.cardId) {
+    addLogEntry({ type: 'warning', message: `Card #${expandedCardNum} has no server ID yet` });
+    return;
+  }
+
+  // Collect field values and map to server's snake_case field names
+  const fieldToServer = {
+    player: 'player',
+    year: 'year',
+    cardNumber: 'card_number',
+    set: 'set_name',
+    parallel: 'parallel',
+    serialNumber: 'serial_number',
+    sport: 'sport',
+    price: 'price',
+    gradingCompany: 'grading_company',
+    grade: 'grade'
+  };
+  const updates = {};
+  elements.detailPanel.querySelectorAll('.detail-input').forEach(input => {
+    const serverField = fieldToServer[input.dataset.field] || input.dataset.field;
+    updates[serverField] = input.value;
+  });
+
+  const saveBtn = elements.detailSave;
+  saveBtn.disabled = true;
+  saveBtn.textContent = 'Saving...';
+
+  try {
+    const result = await window.api.updateCard(card.cardId, updates);
+    if (result.success) {
+      Object.assign(card, updates);
+      card.name = updates.player;
+
+      // Clear dirty state
+      dirtyCards.delete(expandedCardNum);
+      elements.detailPanel.querySelectorAll('.detail-input.dirty').forEach(input => {
+        input.classList.remove('dirty');
+      });
+
+      // Update the grid card tile
+      const el = document.getElementById(`grid-${expandedCardNum}`);
+      if (el) updateGridCardDOM(el, card);
+
+      saveBtn.textContent = 'Saved!';
+      setTimeout(() => { saveBtn.textContent = 'Save'; }, 1500);
+      addLogEntry({ type: 'success', message: `Card #${expandedCardNum} updated` });
+    } else {
+      saveBtn.disabled = false;
+      saveBtn.textContent = 'Save';
+      addLogEntry({ type: 'error', message: `Update failed: ${result.error}` });
+    }
+  } catch (error) {
+    saveBtn.disabled = false;
+    saveBtn.textContent = 'Save';
+    addLogEntry({ type: 'error', message: `Save error: ${error.message}` });
+  }
+}
+
+async function handleDetailApprove() {
+  if (expandedCardNum === null) return;
+  const card = cards.get(expandedCardNum);
+  if (!card || !card.cardId) return;
+
+  const result = await window.api.approveCard(card.cardId);
+  if (result.success) {
+    card.status = 'approved';
+    const el = document.getElementById(`grid-${expandedCardNum}`);
+    if (el) updateGridCardDOM(el, card);
+    addLogEntry({ type: 'success', message: `Card #${expandedCardNum} approved` });
+  }
+}
+
+async function handleDetailDelete() {
+  if (expandedCardNum === null) return;
+  const cardNum = expandedCardNum;
+  const card = cards.get(cardNum);
+  if (!card || !card.cardId) return;
+
+  if (!confirm(`Delete card #${cardNum}? This cannot be undone.`)) return;
+
+  const result = await window.api.deleteCard(card.cardId);
+  if (result.success) {
+    cards.delete(cardNum);
+    dirtyCards.delete(cardNum);
+    selectedCards.delete(cardNum);
+    const el = document.getElementById(`grid-${cardNum}`);
+    if (el) el.remove();
+    closeDetailPanel();
+    updateFeedCount();
+    addLogEntry({ type: 'info', message: `Card #${cardNum} deleted` });
+  }
+}
+
+// =====================================================
+// Card Detail Panel (click-to-expand)
+// =====================================================
+
+function expandCard(cardNum) {
+  const card = cards.get(cardNum);
+  if (!card) return;
+
+  // Deselect previous card
+  if (expandedCardNum !== null) {
+    const prevEl = document.getElementById(`grid-${expandedCardNum}`);
+    if (prevEl) prevEl.classList.remove('selected');
+  }
+
+  // If clicking the same card, toggle closed
+  if (expandedCardNum === cardNum) {
+    closeDetailPanel();
+    return;
+  }
+
+  expandedCardNum = cardNum;
+
+  // Highlight the selected grid card
+  const el = document.getElementById(`grid-${cardNum}`);
+  if (el) el.classList.add('selected');
+
+  // Populate and show detail panel
+  populateDetailPanel(card);
+  elements.detailPanel.classList.remove('hidden');
+}
+
+function populateDetailPanel(card) {
+  elements.detailPanelTitle.textContent = `Card #${card.cardNum} — ${getStatusText(card)}`;
+
+  // Images
+  const frontSrc = card.thumbnail || filePathToUrl(card.frontPath) || '';
+  const backSrc = card.back || filePathToUrl(card.backPath) || '';
+  elements.detailFront.src = frontSrc;
+  elements.detailBack.src = backSrc;
+
+  // Fields — only update if not dirty
+  const dirtyFields = dirtyCards.get(card.cardNum) || new Set();
+  const fieldMap = {
+    player: card.player || card.name || '',
+    year: card.year || '',
+    cardNumber: card.cardNumber || '',
+    set: card.set || '',
+    parallel: card.parallel || '',
+    serialNumber: card.serialNumber || '',
+    sport: card.sport || '',
+    price: card.price || '',
+    gradingCompany: card.gradingCompany || '',
+    grade: card.grade || ''
+  };
+
+  elements.detailPanel.querySelectorAll('.detail-input').forEach(input => {
+    const field = input.dataset.field;
+    if (dirtyFields.has(field) || document.activeElement === input) return;
+    input.value = fieldMap[field] || '';
+    input.classList.toggle('dirty', dirtyFields.has(field));
+  });
+
+  // Confidence badge
+  const confEl = document.getElementById('detail-confidence');
+  if (confEl && card.confidence) {
+    const confClass = card.confidence === 'high' ? 'conf-high' : card.confidence === 'medium' ? 'conf-medium' : 'conf-low';
+    confEl.innerHTML = `<span class="confidence-badge ${confClass}">${card.confidence} confidence</span>`;
+    if (card.isAutograph) confEl.innerHTML += ' <span class="tag-badge">Autograph</span>';
+    if (card.isGraded) confEl.innerHTML += ` <span class="tag-badge">Graded</span>`;
+  } else if (confEl) {
+    confEl.innerHTML = '';
+  }
+
+  // Enable/disable save button
+  elements.detailSave.disabled = !dirtyCards.has(card.cardNum);
+}
+
+function closeDetailPanel() {
+  if (expandedCardNum !== null) {
+    const prevEl = document.getElementById(`grid-${expandedCardNum}`);
+    if (prevEl) prevEl.classList.remove('selected');
+  }
+  expandedCardNum = null;
+  elements.detailPanel.classList.add('hidden');
+}
+
+function wireDetailPanelEvents() {
+  // Close button
+  elements.detailClose.addEventListener('click', closeDetailPanel);
+
+  // Save button
+  elements.detailSave.addEventListener('click', saveDetailCard);
+
+  // Approve button
+  elements.detailApprove.addEventListener('click', handleDetailApprove);
+
+  // Delete button
+  elements.detailDelete.addEventListener('click', handleDetailDelete);
+
+  // Input change listeners — mark dirty
+  elements.detailPanel.querySelectorAll('.detail-input').forEach(input => {
+    input.addEventListener('input', () => {
+      if (expandedCardNum === null) return;
+      const field = input.dataset.field;
+      if (!dirtyCards.has(expandedCardNum)) {
+        dirtyCards.set(expandedCardNum, new Set());
+      }
+      dirtyCards.get(expandedCardNum).add(field);
+      input.classList.add('dirty');
+      elements.detailSave.disabled = false;
+    });
+  });
+}
+
+// =====================================================
+// Status & Helpers
+// =====================================================
 
 function getStatusText(card) {
   switch (card.status) {
-    case 'queued': return 'Queued...';
+    case 'queued': return 'Queued';
     case 'uploading': return 'Uploading...';
     case 'identifying': return 'Identifying...';
-    case 'identified': return card.name || 'Identified';
+    case 'identified': return 'Identified';
+    case 'approved': return 'Approved';
     case 'error': return card.error || 'Error';
     default: return card.status;
   }
@@ -798,9 +1127,15 @@ function getStatusText(card) {
 
 function clearCards() {
   cards.clear();
-  elements.cardFeed.innerHTML = '';
+  dirtyCards.clear();
+  selectedCards.clear();
+  scanningCardNum = null;
+  closeDetailPanel();
+  // Remove all grid cards
+  elements.cardGrid.querySelectorAll('.grid-card').forEach(el => el.remove());
   showEmptyState();
   updateFeedCount();
+  updateBulkToolbar();
 }
 
 function updateFeedCount() {
@@ -816,189 +1151,16 @@ function hideEmptyState() {
   elements.emptyState.classList.add('hidden');
 }
 
-// View Toggle
-function toggleView(mode) {
-  viewMode = mode;
-  elements.viewTableBtn.classList.toggle('active', mode === 'table');
-  elements.viewGridBtn.classList.toggle('active', mode === 'grid');
-  elements.cardTableContainer.classList.toggle('hidden', mode !== 'table');
-  elements.cardFeed.classList.toggle('hidden', mode !== 'grid');
-
-  if (mode === 'table') {
-    renderTableView();
-  }
-}
-
 function refreshCurrentView() {
-  if (viewMode === 'table') {
-    renderTableView();
+  // Re-render all grid cards
+  for (const [cardNum] of cards) {
+    renderGridCard(cardNum);
   }
 }
 
-// Table View
-function renderTableView() {
-  elements.cardTableBody.innerHTML = '';
-  const filtered = getFilteredCards();
-
-  filtered.forEach(([cardNum]) => {
-    renderTableRow(cardNum);
-  });
-}
-
-function renderTableRow(cardNum) {
-  const card = cards.get(cardNum);
-  if (!card) return;
-
-  // Check filter
-  if (!cardMatchesFilter(card)) {
-    const existing = document.getElementById(`row-${cardNum}`);
-    if (existing) existing.remove();
-    return;
-  }
-
-  let row = document.getElementById(`row-${cardNum}`);
-  const isNew = !row;
-
-  if (isNew) {
-    row = document.createElement('tr');
-    row.id = `row-${cardNum}`;
-    row.className = 'card-row';
-  }
-
-  const isSelected = selectedCards.has(cardNum);
-  row.classList.toggle('selected', isSelected);
-
-  const statusClass = card.status || 'queued';
-  const displayName = card.player || card.name || '';
-
-  row.innerHTML = `
-    <td class="td-checkbox"><input type="checkbox" class="row-select" data-card="${cardNum}" ${isSelected ? 'checked' : ''}></td>
-    <td class="td-thumb">
-      ${card.thumbnail
-        ? `<img src="${card.thumbnail}" class="table-thumb" alt="">`
-        : `<span class="table-thumb-placeholder">#${cardNum}</span>`
-      }
-    </td>
-    <td class="td-num">${cardNum}</td>
-    <td class="td-player editable" data-field="player" data-card="${cardNum}">${escapeHtml(displayName)}</td>
-    <td class="td-year editable" data-field="year" data-card="${cardNum}">${escapeHtml(card.year || '')}</td>
-    <td class="td-set editable" data-field="set" data-card="${cardNum}">${escapeHtml(card.set || '')}</td>
-    <td class="td-cardnum editable" data-field="cardNumber" data-card="${cardNum}">${escapeHtml(card.cardNumber || '')}</td>
-    <td class="td-parallel editable" data-field="parallel" data-card="${cardNum}">${escapeHtml(card.parallel || '')}</td>
-    <td class="td-price editable" data-field="price" data-card="${cardNum}">${card.price ? '$' + card.price : ''}</td>
-    <td class="td-status"><span class="status-pill status-${statusClass}">${statusClass}</span></td>
-    <td class="td-actions">
-      <button class="btn btn-ghost btn-small action-view" data-card="${cardNum}" title="View">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="2"/></svg>
-      </button>
-      ${card.status === 'identified' ? `<button class="btn btn-ghost btn-small action-approve" data-card="${cardNum}" title="Approve">&#10003;</button>` : ''}
-    </td>
-  `;
-
-  // Attach event listeners
-  const selectBox = row.querySelector('.row-select');
-  selectBox.addEventListener('change', (e) => {
-    if (e.target.checked) {
-      selectedCards.add(cardNum);
-    } else {
-      selectedCards.delete(cardNum);
-    }
-    row.classList.toggle('selected', e.target.checked);
-    updateBulkToolbar();
-  });
-
-  const viewBtn = row.querySelector('.action-view');
-  if (viewBtn) viewBtn.addEventListener('click', () => openCardDetail(cardNum));
-
-  const approveBtn = row.querySelector('.action-approve');
-  if (approveBtn) approveBtn.addEventListener('click', async () => {
-    if (card.cardId) {
-      const result = await window.api.approveCard(card.cardId);
-      if (result.success) {
-        card.status = 'approved';
-        renderTableRow(cardNum);
-        renderCard(cardNum);
-      }
-    }
-  });
-
-  // Double-click to edit
-  row.querySelectorAll('.editable').forEach(cell => {
-    cell.addEventListener('dblclick', () => startInlineEdit(cell));
-  });
-
-  // Click row to select
-  row.addEventListener('click', (e) => {
-    if (e.target.tagName !== 'INPUT' && e.target.tagName !== 'BUTTON' && !e.target.closest('button')) {
-      openCardDetail(cardNum);
-    }
-  });
-
-  if (isNew) {
-    // Insert at top or at appropriate position
-    if (elements.cardTableBody.firstChild) {
-      elements.cardTableBody.insertBefore(row, elements.cardTableBody.firstChild);
-    } else {
-      elements.cardTableBody.appendChild(row);
-    }
-  }
-}
-
-// Inline Editing
-function startInlineEdit(cell) {
-  if (cell.querySelector('input')) return; // Already editing
-
-  const field = cell.dataset.field;
-  const cardNum = parseInt(cell.dataset.card, 10);
-  const card = cards.get(cardNum);
-  if (!card) return;
-
-  const currentValue = card[field] || '';
-  const originalText = cell.textContent;
-
-  const input = document.createElement('input');
-  input.type = 'text';
-  input.className = 'inline-edit-input';
-  input.value = currentValue;
-
-  cell.textContent = '';
-  cell.appendChild(input);
-  input.focus();
-  input.select();
-
-  const finishEdit = async () => {
-    const newValue = input.value.trim();
-    cell.textContent = newValue || originalText;
-
-    if (newValue !== currentValue) {
-      card[field] = newValue;
-      // Save to server if card has an ID
-      if (card.cardId) {
-        const result = await window.api.updateCard(card.cardId, { [field]: newValue });
-        if (!result.success) {
-          addLogEntry({ type: 'error', message: `Failed to update card: ${result.error}` });
-          card[field] = currentValue;
-          cell.textContent = originalText;
-        }
-      }
-    }
-  };
-
-  input.addEventListener('blur', finishEdit);
-  input.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') { input.blur(); }
-    if (e.key === 'Escape') {
-      input.value = currentValue;
-      input.blur();
-    }
-  });
-}
-
+// =====================================================
 // Filtering
-function getFilteredCards() {
-  const entries = Array.from(cards.entries());
-  return entries.filter(([, card]) => cardMatchesFilter(card)).reverse();
-}
+// =====================================================
 
 function cardMatchesFilter(card) {
   if (filterStatus !== 'all' && card.status !== filterStatus) return false;
@@ -1011,136 +1173,18 @@ function cardMatchesFilter(card) {
 }
 
 function applyFilters() {
-  if (viewMode === 'table') {
-    renderTableView();
-  }
-  // For grid view, we could also filter but keeping it simple — grid shows all
-}
-
-// Card Detail Modal
-function openCardDetail(cardNum) {
-  const card = cards.get(cardNum);
-  if (!card) return;
-
-  detailCardNum = cardNum;
-  elements.detailTitle.textContent = `Card #${cardNum}`;
-
-  // Images
-  elements.detailFrontImg.src = card.thumbnail || '';
-  elements.detailFrontImg.style.display = card.thumbnail ? 'block' : 'none';
-  elements.detailBackImg.src = card.back || '';
-  elements.detailBackImg.style.display = card.back ? 'block' : 'none';
-
-  // Fields
-  elements.detailPlayer.value = card.player || card.name || '';
-  elements.detailYear.value = card.year || '';
-  elements.detailSet.value = card.set || '';
-  elements.detailCardNumber.value = card.cardNumber || '';
-  elements.detailParallel.value = card.parallel || '';
-  elements.detailPrice.value = card.price || '';
-
-  // Status
-  const status = card.status || 'queued';
-  elements.detailStatus.textContent = status;
-  elements.detailStatus.className = `status-pill status-${status}`;
-
-  // Show/hide action buttons based on status
-  elements.detailApprove.style.display = ['identified', 'error'].includes(status) ? '' : 'none';
-  elements.detailReject.style.display = ['identified', 'approved'].includes(status) ? '' : 'none';
-
-  elements.cardDetailModal.classList.remove('hidden');
-}
-
-function closeCardDetail() {
-  elements.cardDetailModal.classList.add('hidden');
-  detailCardNum = null;
-}
-
-function navigateDetail(direction) {
-  if (detailCardNum === null) return;
-
-  const cardNums = Array.from(cards.keys()).sort((a, b) => a - b);
-  const idx = cardNums.indexOf(detailCardNum);
-  const newIdx = idx + direction;
-
-  if (newIdx >= 0 && newIdx < cardNums.length) {
-    openCardDetail(cardNums[newIdx]);
+  for (const [cardNum, card] of cards) {
+    const el = document.getElementById(`grid-${cardNum}`);
+    if (el) {
+      el.style.display = cardMatchesFilter(card) ? '' : 'none';
+    }
   }
 }
 
-async function handleDetailApprove() {
-  const card = cards.get(detailCardNum);
-  if (!card || !card.cardId) return;
-
-  const result = await window.api.approveCard(card.cardId);
-  if (result.success) {
-    card.status = 'approved';
-    openCardDetail(detailCardNum); // Refresh
-    renderCard(detailCardNum);
-    if (viewMode === 'table') renderTableRow(detailCardNum);
-    addLogEntry({ type: 'success', message: `Card #${detailCardNum} approved` });
-  }
-}
-
-async function handleDetailReject() {
-  const card = cards.get(detailCardNum);
-  if (!card || !card.cardId) return;
-
-  const result = await window.api.rejectCard(card.cardId);
-  if (result.success) {
-    card.status = 'rejected';
-    openCardDetail(detailCardNum);
-    renderCard(detailCardNum);
-    if (viewMode === 'table') renderTableRow(detailCardNum);
-    addLogEntry({ type: 'info', message: `Card #${detailCardNum} rejected` });
-  }
-}
-
-async function handleDetailDelete() {
-  const card = cards.get(detailCardNum);
-  if (!card || !card.cardId) return;
-
-  if (!confirm(`Delete card #${detailCardNum}? This cannot be undone.`)) return;
-
-  const result = await window.api.deleteCard(card.cardId);
-  if (result.success) {
-    cards.delete(detailCardNum);
-    const cardEl = document.getElementById(`card-${detailCardNum}`);
-    if (cardEl) cardEl.remove();
-    const rowEl = document.getElementById(`row-${detailCardNum}`);
-    if (rowEl) rowEl.remove();
-    closeCardDetail();
-    updateFeedCount();
-    addLogEntry({ type: 'info', message: `Card #${detailCardNum} deleted` });
-  }
-}
-
-async function handleDetailSave() {
-  const card = cards.get(detailCardNum);
-  if (!card || !card.cardId) return;
-
-  const updates = {
-    player: elements.detailPlayer.value,
-    year: elements.detailYear.value,
-    set: elements.detailSet.value,
-    cardNumber: elements.detailCardNumber.value,
-    parallel: elements.detailParallel.value,
-    price: elements.detailPrice.value
-  };
-
-  const result = await window.api.updateCard(card.cardId, updates);
-  if (result.success) {
-    Object.assign(card, updates);
-    card.name = updates.player;
-    renderCard(detailCardNum);
-    if (viewMode === 'table') renderTableRow(detailCardNum);
-    addLogEntry({ type: 'success', message: `Card #${detailCardNum} updated` });
-  } else {
-    addLogEntry({ type: 'error', message: `Update failed: ${result.error}` });
-  }
-}
-
+// =====================================================
 // Bulk Toolbar
+// =====================================================
+
 function updateBulkToolbar() {
   const count = selectedCards.size;
   if (count > 0) {
@@ -1176,11 +1220,16 @@ async function handleBulkApprove() {
     // Update local state
     selectedCards.forEach(cardNum => {
       const card = cards.get(cardNum);
-      if (card && card.cardId) card.status = 'approved';
+      if (card && card.cardId) {
+        card.status = 'approved';
+        const el = document.getElementById(`grid-${cardNum}`);
+        if (el) updateGridCardDOM(el, card);
+      }
     });
     selectedCards.clear();
-    refreshCurrentView();
     updateBulkToolbar();
+    // Uncheck all checkboxes
+    elements.cardGrid.querySelectorAll('.grid-checkbox:checked').forEach(cb => { cb.checked = false; });
     addLogEntry({ type: 'success', message: `Approved ${result.success} cards (${result.failed} failed)` });
   }
 }
@@ -1197,10 +1246,9 @@ async function handleBulkDelete() {
   if (result.success) {
     selectedCards.forEach(cardNum => {
       cards.delete(cardNum);
-      const el = document.getElementById(`card-${cardNum}`);
+      dirtyCards.delete(cardNum);
+      const el = document.getElementById(`grid-${cardNum}`);
       if (el) el.remove();
-      const row = document.getElementById(`row-${cardNum}`);
-      if (row) row.remove();
     });
     selectedCards.clear();
     updateFeedCount();
@@ -1239,7 +1287,10 @@ async function handleBulkSendToSlabTrack() {
   }
 }
 
+// =====================================================
 // Batch Summary
+// =====================================================
+
 function showBatchSummary() {
   const total = cards.size;
   let identified = 0;
@@ -1276,9 +1327,12 @@ async function handleBatchApproveAll() {
 
   if (result.success) {
     cards.forEach(card => {
-      if (card.status === 'identified') card.status = 'approved';
+      if (card.status === 'identified') {
+        card.status = 'approved';
+        const el = document.getElementById(`grid-${card.cardNum}`);
+        if (el) updateGridCardDOM(el, card);
+      }
     });
-    refreshCurrentView();
     showBatchSummary(); // Refresh counts
     addLogEntry({ type: 'success', message: `Approved ${result.success} cards` });
   }
@@ -1300,7 +1354,10 @@ async function handleBatchExportAll() {
   }
 }
 
+// =====================================================
 // Keyboard Shortcuts
+// =====================================================
+
 function handleKeyboardShortcuts(e) {
   // Don't trigger while typing in inputs
   if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return;
@@ -1309,7 +1366,8 @@ function handleKeyboardShortcuts(e) {
   if (e.ctrlKey && e.key === 'a') {
     e.preventDefault();
     cards.forEach((card, key) => selectedCards.add(key));
-    refreshCurrentView();
+    // Check all checkboxes
+    elements.cardGrid.querySelectorAll('.grid-checkbox').forEach(cb => { cb.checked = true; });
     updateBulkToolbar();
   }
 
@@ -1325,20 +1383,22 @@ function handleKeyboardShortcuts(e) {
     handleBulkApprove();
   }
 
-  // Arrow keys for detail navigation
-  if (detailCardNum !== null) {
-    if (e.key === 'ArrowLeft') { e.preventDefault(); navigateDetail(-1); }
-    if (e.key === 'ArrowRight') { e.preventDefault(); navigateDetail(1); }
-    if (e.key === 'Escape') { e.preventDefault(); closeCardDetail(); }
-  } else if (e.key === 'Escape') {
-    // Clear selection
-    selectedCards.clear();
-    refreshCurrentView();
-    updateBulkToolbar();
+  // Escape: Close detail panel or clear selection
+  if (e.key === 'Escape') {
+    if (expandedCardNum !== null) {
+      closeDetailPanel();
+    } else {
+      selectedCards.clear();
+      elements.cardGrid.querySelectorAll('.grid-checkbox:checked').forEach(cb => { cb.checked = false; });
+      updateBulkToolbar();
+    }
   }
 }
 
+// =====================================================
 // Activity Log
+// =====================================================
+
 function addLogEntry(data) {
   const entry = document.createElement('div');
   entry.className = `log-entry ${data.type}`;
@@ -1361,7 +1421,15 @@ function escapeHtml(text) {
   return div.innerHTML;
 }
 
+function escapeAttr(text) {
+  if (!text) return '';
+  return String(text).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+// =====================================================
 // Preset handling
+// =====================================================
+
 function handlePresetChange() {
   const presetName = elements.scanPreset.value;
   if (presetName === 'custom') return; // Don't change anything
@@ -1394,7 +1462,10 @@ function applyPreset(presetName) {
   addLogEntry({ type: 'info', message: `Preset applied: ${presetName}` });
 }
 
+// =====================================================
 // Settings
+// =====================================================
+
 async function loadSettings() {
   settings = await window.api.getSettings();
 
