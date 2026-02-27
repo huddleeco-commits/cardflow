@@ -9,7 +9,8 @@
   "scripts": {
     "start": "electron-forge start",
     "package": "electron-forge package",
-    "make": "electron-forge make"
+    "make": "electron-forge make",
+    "release": "electron-forge make && gh release create v%npm_package_version% \"out/make/squirrel.windows/x64/SlabTrack Desktop Scanner Setup.exe\" --title \"SlabTrack Scanner v%npm_package_version%\" --notes \"Desktop scanner for SlabTrack\""
   },
   "devDependencies": {
     "@electron-forge/cli": "^7.2.0",

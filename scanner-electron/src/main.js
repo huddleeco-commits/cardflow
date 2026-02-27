@@ -39,7 +39,7 @@ const store = new Store({
     credentials: null,
     authToken: null,
     slabtrackInfo: null,
-    appMode: 'standalone',
+    appMode: 'monitor',
     selectedCollectionId: null
   }
 });
@@ -280,6 +280,14 @@ function updateTrayMenu() {
       }
     },
     { type: 'separator' },
+    {
+      label: 'Restart',
+      click: () => {
+        app.isQuitting = true;
+        app.relaunch();
+        app.quit();
+      }
+    },
     {
       label: 'Quit',
       click: () => {
@@ -536,7 +544,7 @@ ipcMain.handle('save-selected-collection', (event, collectionId) => {
 });
 
 ipcMain.handle('get-app-mode', () => {
-  return store.get('appMode') || 'standalone';
+  return store.get('appMode') || 'monitor';
 });
 
 ipcMain.handle('get-selected-collection', () => {
@@ -761,6 +769,14 @@ ipcMain.handle('scan-direct', async (event, options = {}) => {
             dpi: msg.dpi,
             duplex: msg.duplex
           });
+          // Log DPI verification
+          if (msg.requestedDpi && msg.dpi) {
+            const dpiMatch = msg.requestedDpi === msg.dpi ? '✅' : '⚠️';
+            sendToRenderer('log', { type: 'info', message: `${dpiMatch} DPI: requested=${msg.requestedDpi}, actual=${msg.dpi}` });
+          }
+          if (msg.imageWidth && msg.imageHeight) {
+            sendToRenderer('log', { type: 'info', message: `Image: ${msg.imageWidth}x${msg.imageHeight}px (expected ~${msg.expectedWidth}x${msg.expectedHeight}px)` });
+          }
           break;
 
         case 'error':
@@ -858,14 +874,48 @@ ipcMain.handle('update-card', async (event, cardId, updates) => {
   }
 });
 
-ipcMain.handle('approve-card', async (event, cardId) => {
+ipcMain.handle('approve-card', async (event, { cardData, frontPath, backPath, collectionId }) => {
   try {
-    const response = await axios.post(`${API_BASE}/api/cards/${cardId}/approve`, {}, {
-      headers: { Authorization: `Bearer ${authToken}` }
+    // Read local image files as base64
+    let frontBase64 = null;
+    let backBase64 = null;
+    if (frontPath && fs.existsSync(frontPath)) {
+      frontBase64 = fs.readFileSync(frontPath).toString('base64');
+    }
+    if (backPath && fs.existsSync(backPath)) {
+      backBase64 = fs.readFileSync(backPath).toString('base64');
+    }
+
+    if (!frontBase64) {
+      return { success: false, error: 'Could not read front image file' };
+    }
+
+    // Determine auth header
+    const slabtrackInfo = store.get('slabtrackInfo');
+    const headers = { 'Content-Type': 'application/json' };
+    if (slabtrackInfo?.apiToken) {
+      headers['X-API-Token'] = slabtrackInfo.apiToken;
+    } else {
+      headers['Authorization'] = `Bearer ${authToken}`;
+    }
+
+    const requestBody = {
+      card: cardData,
+      frontImage: frontBase64,
+      backImage: backBase64
+    };
+    if (collectionId) requestBody.collection_id = collectionId;
+
+    const response = await axios.post(`${API_BASE}/api/desktop-scan/approve`, requestBody, {
+      headers,
+      maxContentLength: Infinity,
+      maxBodyLength: Infinity,
+      timeout: 60000
     });
-    return { success: true, card: response.data };
+
+    return { success: true, cardId: response.data.cardId, data: response.data };
   } catch (error) {
-    return { success: false, error: error.message };
+    return { success: false, error: error.response?.data?.error || error.message };
   }
 });
 
@@ -1237,15 +1287,13 @@ async function uploadCard({ frontPath, backPath, cardNum }) {
       headers['Authorization'] = `Bearer ${authToken}`;
     }
 
-    // Include collection_id if monitor mode + collection selected
-    const currentAppMode = store.get('appMode') || 'standalone';
+    // Always send to SlabTrack platform, include collection if selected
     const currentCollectionId = store.get('selectedCollectionId') || null;
     const requestBody = {
       frontImage: frontBase64,
       backImage: backBase64
     };
-    // Only auto-assign to collection in monitor mode
-    if (currentAppMode === 'monitor' && currentCollectionId) {
+    if (currentCollectionId) {
       requestBody.collection_id = currentCollectionId;
     }
 
@@ -1300,7 +1348,6 @@ async function uploadCard({ frontPath, backPath, cardNum }) {
           sgc10: card.sportscardspro_sgc10
         },
         collectionAssigned: result.collectionAssigned || false,
-        appMode: currentAppMode,
         status: 'identified',
         thumbnail: card.front_image_url || '',
         back: card.back_image_url || ''

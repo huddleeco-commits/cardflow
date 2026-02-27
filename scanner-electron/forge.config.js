@@ -1,16 +1,16 @@
 module.exports = {
   packagerConfig: {
-    name: 'CardFlow Scanner',
-    executableName: 'cardflow-scanner',
-    // icon: './assets/icon',  // Uncomment when icon.ico is added
+    name: 'SlabTrack Desktop Scanner',
+    executableName: 'slabtrack-desktop-scanner',
+    icon: './assets/icon',
     asar: true,
-    appBundleId: 'com.cardflow.scanner',
-    appCopyright: 'Copyright © 2024 CardFlow',
+    appBundleId: 'com.slabtrack.desktop-scanner',
+    appCopyright: 'Copyright © 2025 SlabTrack',
     win32metadata: {
-      CompanyName: 'CardFlow',
-      ProductName: 'CardFlow Scanner',
-      FileDescription: 'Desktop scanner agent for CardFlow',
-      OriginalFilename: 'cardflow-scanner.exe'
+      CompanyName: 'SlabTrack',
+      ProductName: 'SlabTrack Desktop Scanner',
+      FileDescription: 'Desktop scanner for SlabTrack - Bulk scan trading cards via ADF',
+      OriginalFilename: 'slabtrack-desktop-scanner.exe'
     }
   },
   rebuildConfig: {},
@@ -18,11 +18,11 @@ module.exports = {
     {
       name: '@electron-forge/maker-squirrel',
       config: {
-        name: 'CardFlowScanner',
-        authors: 'CardFlow',
-        description: 'Desktop scanner agent for CardFlow - Upload and identify trading cards',
-        // setupIcon: './assets/icon.ico',  // Uncomment when icon.ico is added
-        setupExe: 'CardFlow Scanner Setup.exe',
+        name: 'SlabTrackDesktopScanner',
+        authors: 'SlabTrack',
+        description: 'Desktop scanner for SlabTrack - Scan and identify trading cards via duplex ADF',
+        setupIcon: './assets/icon.ico',
+        setupExe: 'SlabTrack Desktop Scanner Setup.exe',
         noMsi: true
       }
     }
