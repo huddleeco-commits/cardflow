@@ -13,6 +13,13 @@ let selectedCards = new Set();
 let scanningCardNum = null; // Track which card is currently scanning (gets pulsing border)
 let expandedCardNum = null; // Track which card has the detail panel open
 let dirtyCards = new Map(); // cardNum -> Set of dirty field names
+let currentView = 'grid'; // 'grid' or 'list'
+let lastCardAddedTime = 0; // For staggered entrance animation
+let cardStaggerIndex = 0; // Counter for stagger delay
+let listDirtyCards = new Map(); // cardNum -> Set of dirty field names (list view)
+let appMode = 'standalone'; // 'monitor' or 'standalone'
+let collections = [];
+let selectedCollectionId = null;
 
 // DOM Elements
 const elements = {
@@ -88,6 +95,17 @@ const elements = {
   cardGrid: document.getElementById('card-grid'),
   cardGridContainer: document.getElementById('card-grid-container'),
 
+  // Card List View
+  cardListContainer: document.getElementById('card-list-container'),
+  cardList: document.getElementById('card-list'),
+
+  // View Toggle
+  viewGridBtn: document.getElementById('view-grid-btn'),
+  viewListBtn: document.getElementById('view-list-btn'),
+
+  // View Collection
+  btnViewCollection: document.getElementById('btn-view-collection'),
+
   // Pipeline Bar
   pipelineBar: document.getElementById('pipeline-bar'),
   pipelineScanCount: document.getElementById('pipeline-scan-count'),
@@ -142,7 +160,18 @@ const elements = {
 
   // Sidebar presets & holo
   scanPreset: document.getElementById('scan-preset'),
-  scanHoloMode: document.getElementById('scan-holo-mode')
+  scanHoloMode: document.getElementById('scan-holo-mode'),
+
+  // App Mode
+  modeMonitorBtn: document.getElementById('mode-monitor'),
+  modeStandaloneBtn: document.getElementById('mode-standalone'),
+
+  // Collection
+  collectionSelect: document.getElementById('collection-select'),
+  collectionHint: document.getElementById('collection-hint'),
+  collectionSection: document.getElementById('collection-section'),
+  detailPushCollection: document.getElementById('detail-push-collection'),
+  bulkPushCollection: document.getElementById('bulk-push-collection')
 };
 
 // Scan Presets — bundle of settings applied at once
@@ -177,6 +206,24 @@ function setupEventListeners() {
   // Login forms
   elements.slabtrackLoginForm.addEventListener('submit', handleSlabTrackLogin);
   elements.loginForm.addEventListener('submit', handleLogin);
+
+  // App mode toggle
+  elements.modeMonitorBtn.addEventListener('click', () => switchAppMode('monitor'));
+  elements.modeStandaloneBtn.addEventListener('click', () => switchAppMode('standalone'));
+
+  // Collection select
+  elements.collectionSelect.addEventListener('change', () => {
+    selectedCollectionId = elements.collectionSelect.value || null;
+    window.api.saveSelectedCollection(selectedCollectionId);
+  });
+
+  // Push to Collection buttons
+  if (elements.detailPushCollection) {
+    elements.detailPushCollection.addEventListener('click', handleDetailPushToCollection);
+  }
+  if (elements.bulkPushCollection) {
+    elements.bulkPushCollection.addEventListener('click', handleBulkPushToCollection);
+  }
 
   // Scanner mode toggle
   elements.modeDirectBtn.addEventListener('click', () => switchScanMode('direct'));
@@ -273,6 +320,17 @@ function setupEventListeners() {
     elements.batchSummary.classList.add('hidden');
   });
   elements.batchExportAll.addEventListener('click', handleBatchExportAll);
+
+  // View toggle
+  elements.viewGridBtn.addEventListener('click', () => switchView('grid'));
+  elements.viewListBtn.addEventListener('click', () => switchView('list'));
+
+  // View Collection
+  if (elements.btnViewCollection) {
+    elements.btnViewCollection.addEventListener('click', () => {
+      window.api.openExternal('https://slabtrack.io/collection');
+    });
+  }
 
   // Detail panel
   wireDetailPanelEvents();
@@ -481,6 +539,28 @@ function showMainView() {
   elements.mainView.classList.remove('hidden');
   // Fetch scan credits on login
   fetchScanCredits();
+  // Load collections and restore app mode
+  loadCollections();
+  restoreAppMode();
+}
+
+async function restoreAppMode() {
+  try {
+    const savedMode = await window.api.getAppMode();
+    const savedCollection = await window.api.getSelectedCollection();
+    if (savedMode) switchAppMode(savedMode);
+    if (savedCollection) {
+      selectedCollectionId = savedCollection;
+      // Dropdown will be populated after loadCollections resolves
+      setTimeout(() => {
+        if (elements.collectionSelect) {
+          elements.collectionSelect.value = savedCollection;
+        }
+      }, 500);
+    }
+  } catch (err) {
+    console.error('Failed to restore app mode:', err);
+  }
 }
 
 // Desktop scan credits display
@@ -533,6 +613,133 @@ function switchScanMode(mode) {
   }
 
   window.api.saveSettings({ scanMode: mode });
+}
+
+// App Mode (Monitor vs Standalone)
+function switchAppMode(mode) {
+  appMode = mode;
+  elements.modeMonitorBtn.classList.toggle('active', mode === 'monitor');
+  elements.modeStandaloneBtn.classList.toggle('active', mode === 'standalone');
+  window.api.saveAppMode(mode);
+
+  if (mode === 'monitor') {
+    document.body.classList.add('monitor-mode');
+    // Hide detail panel, force grid view
+    if (elements.detailPanel) elements.detailPanel.classList.add('hidden');
+    expandedCardNum = null;
+    switchView('grid');
+    // Update hint
+    if (elements.collectionHint) {
+      elements.collectionHint.textContent = 'Scanned cards auto-assign to this collection';
+    }
+  } else {
+    document.body.classList.remove('monitor-mode');
+    // Restore hint
+    if (elements.collectionHint) {
+      elements.collectionHint.textContent = 'Review cards first, then push to collection';
+    }
+  }
+}
+
+// Collections
+async function loadCollections() {
+  try {
+    const result = await window.api.fetchCollections();
+    if (result.success && result.collections) {
+      collections = result.collections;
+      populateCollectionDropdown();
+    }
+  } catch (err) {
+    console.error('Failed to load collections:', err);
+  }
+}
+
+function populateCollectionDropdown() {
+  const select = elements.collectionSelect;
+  if (!select) return;
+
+  // Preserve current value
+  const currentVal = selectedCollectionId || '';
+  select.innerHTML = '<option value="">No collection (cards only)</option>';
+
+  collections.forEach(c => {
+    const opt = document.createElement('option');
+    opt.value = c.id;
+    opt.textContent = c.name || `Collection #${c.id}`;
+    select.appendChild(opt);
+  });
+
+  // Restore selection
+  if (currentVal) {
+    select.value = currentVal;
+  }
+}
+
+async function handleDetailPushToCollection() {
+  if (expandedCardNum === null) return;
+  const card = cards.get(expandedCardNum);
+  if (!card || !card.cardId) {
+    addLogEntry({ type: 'warning', message: 'Card has no server ID yet' });
+    return;
+  }
+  if (!selectedCollectionId) {
+    addLogEntry({ type: 'warning', message: 'Select a collection first' });
+    return;
+  }
+
+  try {
+    const result = await window.api.pushToCollection(selectedCollectionId, [card.cardId]);
+    if (result.success) {
+      card.collectionAssigned = true;
+      if (card.status === 'review') card.status = 'identified';
+      renderGridCard(card.cardNum);
+      // Refresh detail panel to reflect new status
+      if (expandedCardNum === card.cardNum) populateDetailPanel(card);
+      addLogEntry({ type: 'success', message: `Card #${card.cardNum} added to collection` });
+    } else {
+      addLogEntry({ type: 'error', message: `Failed: ${result.error}` });
+    }
+  } catch (err) {
+    addLogEntry({ type: 'error', message: `Push failed: ${err.message}` });
+  }
+}
+
+async function handleBulkPushToCollection() {
+  if (selectedCards.size === 0) return;
+  if (!selectedCollectionId) {
+    addLogEntry({ type: 'warning', message: 'Select a collection first' });
+    return;
+  }
+
+  const cardIds = [];
+  for (const cardNum of selectedCards) {
+    const card = cards.get(cardNum);
+    if (card && card.cardId) cardIds.push(card.cardId);
+  }
+
+  if (cardIds.length === 0) {
+    addLogEntry({ type: 'warning', message: 'No cards with server IDs to push' });
+    return;
+  }
+
+  try {
+    const result = await window.api.pushToCollection(selectedCollectionId, cardIds);
+    if (result.success) {
+      for (const cardNum of selectedCards) {
+        const card = cards.get(cardNum);
+        if (card) {
+          card.collectionAssigned = true;
+          if (card.status === 'review') card.status = 'identified';
+          renderGridCard(cardNum);
+        }
+      }
+      addLogEntry({ type: 'success', message: `${cardIds.length} card(s) added to collection` });
+    } else {
+      addLogEntry({ type: 'error', message: `Failed: ${result.error}` });
+    }
+  } catch (err) {
+    addLogEntry({ type: 'error', message: `Bulk push failed: ${err.message}` });
+  }
 }
 
 // Scanner Discovery
@@ -746,9 +953,17 @@ function addCard(data) {
     }
   }
 
+  // Stagger entrance animation — reset counter if >5s gap
+  const now = Date.now();
+  if (now - lastCardAddedTime > 5000) cardStaggerIndex = 0;
+  lastCardAddedTime = now;
+  const staggerDelay = cardStaggerIndex * 150;
+  cardStaggerIndex++;
+
   // New card goes directly into the grid with scanning state
   scanningCardNum = data.cardNum;
-  renderGridCard(data.cardNum, true); // true = scanning
+  renderGridCard(data.cardNum, true, staggerDelay);
+  if (currentView === 'list') renderListCard(data.cardNum, staggerDelay);
   updateFeedCount();
   hideEmptyState();
 }
@@ -768,6 +983,9 @@ function updateCardStatus(data) {
     updateGridCardDOM(gridEl, card);
   }
 
+  // Update list row if list view exists
+  updateListRow(card.cardNum);
+
   // Update detail panel if this card is expanded
   if (expandedCardNum === card.cardNum) {
     populateDetailPanel(card);
@@ -778,7 +996,7 @@ function updateCardIdentified(data) {
   const card = cards.get(data.cardNum) || findCardByCardId(data.cardId);
   if (!card) return;
 
-  card.status = 'identified';
+  card.status = (data.appMode === 'monitor') ? 'identified' : 'review';
   card.name = data.name;
   card.player = data.player;
   card.year = data.year;
@@ -786,6 +1004,8 @@ function updateCardIdentified(data) {
   card.cardNumber = data.cardNumber || '';
   card.parallel = data.parallel || '';
   card.serialNumber = data.serialNumber || '';
+  card.numbered = data.numbered || false;
+  card.numberedTo = data.numbered_to || data.numberedTo || '';
   card.sport = data.sport || '';
   card.confidence = data.confidence || '';
   card.isGraded = data.isGraded || false;
@@ -795,6 +1015,13 @@ function updateCardIdentified(data) {
   card.isAutograph = data.isAutograph || false;
   card.price = data.price || '';
   card.pricing = data.pricing || null;
+  card.team = data.team || '';
+  card.condition = data.condition || '';
+  card.subsetName = data.subset_name || data.subsetName || '';
+  card.ebaySearchString = data.ebay_search_string || data.ebaySearchString || '';
+  card.syncedToSlabTrack = true; // Cards are auto-saved via API with entry_method='desktop_scan'
+  card.collectionAssigned = data.collectionAssigned || false;
+  if (data.cardId) card.cardId = data.cardId;
   if (data.thumbnail) card.thumbnail = data.thumbnail;
   if (data.back) card.back = data.back;
 
@@ -805,6 +1032,9 @@ function updateCardIdentified(data) {
 
   // Render/update grid card
   renderGridCard(card.cardNum);
+
+  // Update list view
+  renderListCard(card.cardNum);
 
   // Update detail panel if this card is expanded
   if (expandedCardNum === card.cardNum) {
@@ -823,7 +1053,7 @@ function findCardByCardId(cardId) {
 // Card Grid
 // =====================================================
 
-function renderGridCard(cardNum, isScanning = false) {
+function renderGridCard(cardNum, isScanning = false, staggerDelay = 0) {
   const card = cards.get(cardNum);
   if (!card) return;
 
@@ -831,6 +1061,13 @@ function renderGridCard(cardNum, isScanning = false) {
   if (!el) {
     el = buildGridCardElement(card, isScanning);
     wireGridCardEvents(el, cardNum);
+
+    // Add entrance animation with stagger
+    if (staggerDelay > 0) {
+      el.style.animationDelay = `${staggerDelay}ms`;
+    }
+    el.classList.add('card-entrance');
+
     // Prepend (newest first)
     const firstCard = elements.cardGrid.querySelector('.grid-card');
     if (firstCard) {
@@ -864,6 +1101,11 @@ function buildGridCardElement(card, isScanning = false) {
   const year = card.year || '';
   const statusClass = card.status || 'queued';
   const statusIcon = getStatusIcon(card);
+  const serialBadge = card.numbered && card.serialNumber ? `<span class="grid-card-serial">${escapeHtml(formatSerialNumber(card))}</span>` : '';
+  const syncedIcon = card.syncedToSlabTrack ? '<span class="grid-card-synced" title="Synced to SlabTrack">&#9729;</span>' : '';
+  const collectionBadge = card.collectionAssigned ? '<span class="grid-card-collection-badge" title="In collection">&#128194;</span>' : '';
+  const reviewBadge = card.status === 'review' ? '<span class="grid-card-review-badge">Review</span>' : '';
+  const overlayHtml = getStatusOverlay(card.status);
 
   el.innerHTML = `
     <div class="grid-card-select">
@@ -871,8 +1113,13 @@ function buildGridCardElement(card, isScanning = false) {
     </div>
     <div class="grid-card-image">
       <img src="${frontSrc}" alt="" loading="lazy">
+      ${serialBadge}
+      ${syncedIcon}
+      ${collectionBadge}
+      ${reviewBadge}
       <span class="grid-card-num-badge">#${card.cardNum}</span>
       <div class="grid-card-scanning-badge ${isScanning ? '' : 'hidden'}">SCANNING</div>
+      ${overlayHtml}
     </div>
     <div class="grid-card-info">
       <span class="grid-card-name">${escapeHtml(player) || 'Unidentified'}</span>
@@ -890,6 +1137,7 @@ function getStatusIcon(card) {
     case 'uploading': return '\u2B06'; // up arrow
     case 'identifying': return '\uD83D\uDD0D'; // magnifying glass (🔍)
     case 'identified': return '\u2705'; // green check
+    case 'review': return '\uD83D\uDD0E'; // magnifying glass tilted right (🔎) — needs review
     case 'approved': return '\u2714'; // check mark
     case 'error': return '\u26A0'; // warning
     default: return '\u23F3';
@@ -900,6 +1148,14 @@ function wireGridCardEvents(el, cardNum) {
   // Click on card tile → expand detail panel (but not on checkbox)
   el.addEventListener('click', (e) => {
     if (e.target.classList.contains('grid-checkbox')) return;
+    // Monitor mode: open card on SlabTrack in browser instead of detail panel
+    if (appMode === 'monitor') {
+      const card = cards.get(cardNum);
+      if (card && card.cardId && !String(card.cardId).startsWith('desktop_')) {
+        window.api.openExternal(`https://slabtrack.io/cards/${card.cardId}`);
+      }
+      return;
+    }
     expandCard(cardNum);
   });
 
@@ -938,13 +1194,69 @@ function updateGridCardDOM(el, card) {
   }
 
   // Update scanning badge visibility
-  const isScanning = scanningCardNum === card.cardNum;
-  el.classList.toggle('scanning', isScanning);
+  const isCardScanning = scanningCardNum === card.cardNum;
+  el.classList.toggle('scanning', isCardScanning);
   const badge = el.querySelector('.grid-card-scanning-badge');
-  if (badge) badge.classList.toggle('hidden', !isScanning);
+  if (badge) badge.classList.toggle('hidden', !isCardScanning);
 
   // Update selected state
   el.classList.toggle('selected', expandedCardNum === card.cardNum);
+
+  // Update status overlay
+  const imageDiv = el.querySelector('.grid-card-image');
+  let overlay = el.querySelector('.grid-card-overlay');
+  const overlayHtml = getStatusOverlay(card.status);
+  if (overlayHtml) {
+    if (!overlay) {
+      imageDiv.insertAdjacentHTML('beforeend', overlayHtml);
+    } else {
+      overlay.outerHTML = overlayHtml;
+    }
+  } else if (overlay) {
+    overlay.remove();
+  }
+
+  // Update serial badge
+  let serialEl = el.querySelector('.grid-card-serial');
+  if (card.numbered && card.serialNumber) {
+    if (!serialEl) {
+      imageDiv.insertAdjacentHTML('afterbegin', `<span class="grid-card-serial">${escapeHtml(formatSerialNumber(card))}</span>`);
+    } else {
+      serialEl.textContent = formatSerialNumber(card);
+    }
+  } else if (serialEl) {
+    serialEl.remove();
+  }
+
+  // Update synced icon
+  let syncedEl = el.querySelector('.grid-card-synced');
+  if (card.syncedToSlabTrack) {
+    if (!syncedEl) {
+      imageDiv.insertAdjacentHTML('beforeend', '<span class="grid-card-synced" title="Synced to SlabTrack">&#9729;</span>');
+    }
+  } else if (syncedEl) {
+    syncedEl.remove();
+  }
+
+  // Update collection badge
+  let collBadge = el.querySelector('.grid-card-collection-badge');
+  if (card.collectionAssigned) {
+    if (!collBadge) {
+      imageDiv.insertAdjacentHTML('beforeend', '<span class="grid-card-collection-badge" title="In collection">&#128194;</span>');
+    }
+  } else if (collBadge) {
+    collBadge.remove();
+  }
+
+  // Update review badge
+  let reviewBadge = el.querySelector('.grid-card-review-badge');
+  if (card.status === 'review') {
+    if (!reviewBadge) {
+      imageDiv.insertAdjacentHTML('beforeend', '<span class="grid-card-review-badge">Review</span>');
+    }
+  } else if (reviewBadge) {
+    reviewBadge.remove();
+  }
 }
 
 async function saveDetailCard() {
@@ -966,12 +1278,32 @@ async function saveDetailCard() {
     sport: 'sport',
     price: 'price',
     gradingCompany: 'grading_company',
-    grade: 'grade'
+    grade: 'grade',
+    team: 'team',
+    condition: 'condition',
+    subsetName: 'subset_name',
+    numberedTo: 'numbered_to',
+    ebaySearchString: 'ebay_search_string'
   };
   const updates = {};
   elements.detailPanel.querySelectorAll('.detail-input').forEach(input => {
-    const serverField = fieldToServer[input.dataset.field] || input.dataset.field;
-    updates[serverField] = input.value;
+    const field = input.dataset.field;
+    const serverField = fieldToServer[field] || field;
+
+    // Parse combined serial "24/49" back to separate fields
+    if (field === 'serialNumber') {
+      const val = input.value.trim();
+      if (val.includes('/')) {
+        const [serial, numTo] = val.split('/');
+        updates['serial_number'] = serial.trim();
+        updates['numbered_to'] = numTo.trim();
+        updates['numbered'] = true;
+      } else {
+        updates['serial_number'] = val;
+      }
+    } else {
+      updates[serverField] = input.value;
+    }
   });
 
   const saveBtn = elements.detailSave;
@@ -982,7 +1314,15 @@ async function saveDetailCard() {
     const result = await window.api.updateCard(card.cardId, updates);
     if (result.success) {
       Object.assign(card, updates);
-      card.name = updates.player;
+      if (updates.player) card.name = updates.player;
+      // Sync snake_case server fields back to camelCase card state
+      if (updates.serial_number) card.serialNumber = updates.serial_number;
+      if (updates.numbered_to) card.numberedTo = updates.numbered_to;
+      if (updates.set_name) card.set = updates.set_name;
+      if (updates.card_number) card.cardNumber = updates.card_number;
+      if (updates.grading_company) card.gradingCompany = updates.grading_company;
+      if (updates.subset_name) card.subsetName = updates.subset_name;
+      if (updates.ebay_search_string) card.ebaySearchString = updates.ebay_search_string;
 
       // Clear dirty state
       dirtyCards.delete(expandedCardNum);
@@ -993,6 +1333,9 @@ async function saveDetailCard() {
       // Update the grid card tile
       const el = document.getElementById(`grid-${expandedCardNum}`);
       if (el) updateGridCardDOM(el, card);
+
+      // Update the list row
+      updateListRow(expandedCardNum);
 
       saveBtn.textContent = 'Saved!';
       setTimeout(() => { saveBtn.textContent = 'Save'; }, 1500);
@@ -1092,11 +1435,16 @@ function populateDetailPanel(card) {
     cardNumber: card.cardNumber || '',
     set: card.set || '',
     parallel: card.parallel || '',
-    serialNumber: card.serialNumber || '',
+    serialNumber: formatSerialNumber(card),
     sport: card.sport || '',
     price: card.price || '',
     gradingCompany: card.gradingCompany || '',
-    grade: card.grade || ''
+    grade: card.grade || '',
+    team: card.team || '',
+    condition: card.condition || '',
+    subsetName: card.subsetName || '',
+    numberedTo: card.numberedTo || '',
+    ebaySearchString: card.ebaySearchString || ''
   };
 
   elements.detailPanel.querySelectorAll('.detail-input').forEach(input => {
@@ -1177,11 +1525,14 @@ function getStatusText(card) {
 function clearCards() {
   cards.clear();
   dirtyCards.clear();
+  listDirtyCards.clear();
   selectedCards.clear();
   scanningCardNum = null;
   closeDetailPanel();
   // Remove all grid cards
   elements.cardGrid.querySelectorAll('.grid-card').forEach(el => el.remove());
+  // Remove all list rows
+  if (elements.cardList) elements.cardList.innerHTML = '';
   showEmptyState();
   updateFeedCount();
   updateBulkToolbar();
@@ -1189,7 +1540,14 @@ function clearCards() {
 
 function updateFeedCount() {
   const count = cards.size;
-  elements.feedCount.textContent = `${count} card${count !== 1 ? 's' : ''}`;
+  let syncedCount = 0;
+  cards.forEach(c => { if (c.syncedToSlabTrack) syncedCount++; });
+
+  let html = `${count} card${count !== 1 ? 's' : ''}`;
+  if (syncedCount > 0) {
+    html += ` <span class="feed-synced"><span class="synced-dot"></span>${syncedCount} synced</span>`;
+  }
+  elements.feedCount.innerHTML = html;
 }
 
 function showEmptyState() {
@@ -1204,6 +1562,10 @@ function refreshCurrentView() {
   // Re-render all grid cards
   for (const [cardNum] of cards) {
     renderGridCard(cardNum);
+  }
+  // Also rebuild list view if active
+  if (currentView === 'list') {
+    rebuildListView();
   }
 }
 
@@ -1223,10 +1585,13 @@ function cardMatchesFilter(card) {
 
 function applyFilters() {
   for (const [cardNum, card] of cards) {
-    const el = document.getElementById(`grid-${cardNum}`);
-    if (el) {
-      el.style.display = cardMatchesFilter(card) ? '' : 'none';
-    }
+    const matches = cardMatchesFilter(card);
+    // Grid view
+    const gridEl = document.getElementById(`grid-${cardNum}`);
+    if (gridEl) gridEl.style.display = matches ? '' : 'none';
+    // List view
+    const listEl = document.getElementById(`list-${cardNum}`);
+    if (listEl) listEl.style.display = matches ? '' : 'none';
   }
 }
 
@@ -1560,6 +1925,11 @@ async function loadSettings() {
   // Sidebar holo toggle
   elements.scanHoloMode.checked = settings.holoMode || false;
 
+  // Restore view preference
+  if (settings.viewPreference && settings.viewPreference !== currentView) {
+    switchView(settings.viewPreference);
+  }
+
   // Auto-discover scanners
   discoverScanners();
 }
@@ -1606,6 +1976,386 @@ async function saveSettings() {
 
   closeSettings();
   addLogEntry({ type: 'success', message: 'Settings saved' });
+}
+
+// =====================================================
+// Serial Number Helper
+// =====================================================
+
+function formatSerialNumber(card) {
+  if (!card) return '';
+  const serial = card.serialNumber || '';
+  const numTo = card.numberedTo || '';
+  if (serial && numTo) return `${serial}/${numTo}`;
+  return serial;
+}
+
+// =====================================================
+// Status Overlay Helper (streaming feel)
+// =====================================================
+
+function getStatusOverlay(status) {
+  if (status === 'queued') {
+    return `<div class="grid-card-overlay"><div class="overlay-spinner"></div><span class="overlay-text">Queued</span></div>`;
+  }
+  if (status === 'uploading') {
+    return `<div class="grid-card-overlay"><div class="overlay-spinner uploading"></div><span class="overlay-text uploading">Uploading</span></div>`;
+  }
+  if (status === 'identifying') {
+    return `<div class="grid-card-overlay"><div class="overlay-spinner"></div><span class="overlay-text">Identifying</span></div>`;
+  }
+  return ''; // No overlay for identified/approved/error
+}
+
+// =====================================================
+// View Toggle (Grid vs List)
+// =====================================================
+
+function switchView(view) {
+  currentView = view;
+  elements.viewGridBtn.classList.toggle('active', view === 'grid');
+  elements.viewListBtn.classList.toggle('active', view === 'list');
+  elements.cardGridContainer.classList.toggle('hidden', view !== 'grid');
+  elements.cardListContainer.classList.toggle('hidden', view !== 'list');
+
+  if (view === 'list') {
+    rebuildListView();
+  }
+
+  // Persist preference
+  window.api.saveSettings({ viewPreference: view });
+}
+
+// =====================================================
+// List View
+// =====================================================
+
+function rebuildListView() {
+  if (!elements.cardList) return;
+  elements.cardList.innerHTML = '';
+
+  // Sort cards descending by cardNum
+  const sorted = [...cards.entries()].sort((a, b) => b[0] - a[0]);
+  for (const [cardNum, card] of sorted) {
+    if (!cardMatchesFilter(card)) continue;
+    const row = buildListRow(card);
+    elements.cardList.appendChild(row);
+  }
+}
+
+function buildListRow(card) {
+  const row = document.createElement('div');
+  row.id = `list-${card.cardNum}`;
+  row.className = 'list-row';
+  if (card.status === 'identified' || card.status === 'approved') {
+    row.classList.add('list-row-ready');
+  }
+
+  const frontSrc = card.thumbnail || filePathToUrl(card.frontPath) || '';
+  const overlayHtml = getStatusOverlay(card.status);
+  const statusClass = card.status || 'queued';
+  const serialVal = formatSerialNumber(card);
+  const syncedBadge = card.syncedToSlabTrack ? '<span class="list-synced-badge">Synced</span>' : '';
+
+  row.innerHTML = `
+    <div class="list-row-thumb">
+      <img src="${frontSrc}" alt="" loading="lazy">
+      ${overlayHtml}
+    </div>
+    <div class="list-row-fields">
+      <div class="list-fields-row">
+        <div class="list-field">
+          <label>Player</label>
+          <input class="list-input" data-field="player" value="${escapeAttr(card.player || card.name || '')}">
+        </div>
+        <div class="list-field-sm">
+          <label>Year</label>
+          <input class="list-input" data-field="year" value="${escapeAttr(card.year || '')}">
+        </div>
+        <div class="list-field-sm">
+          <label>Card #</label>
+          <input class="list-input" data-field="cardNumber" value="${escapeAttr(card.cardNumber || '')}">
+        </div>
+      </div>
+      <div class="list-fields-row">
+        <div class="list-field">
+          <label>Set</label>
+          <input class="list-input" data-field="set" value="${escapeAttr(card.set || '')}">
+        </div>
+        <div class="list-field-sm">
+          <label>Parallel</label>
+          <input class="list-input" data-field="parallel" value="${escapeAttr(card.parallel || '')}">
+        </div>
+        <div class="list-field-sm">
+          <label>Serial</label>
+          <input class="list-input" data-field="serialNumber" value="${escapeAttr(serialVal)}">
+        </div>
+      </div>
+      <div class="list-fields-row">
+        <div class="list-field-sm">
+          <label>Team</label>
+          <input class="list-input" data-field="team" value="${escapeAttr(card.team || '')}">
+        </div>
+        <div class="list-field-sm">
+          <label>Sport</label>
+          <input class="list-input" data-field="sport" value="${escapeAttr(card.sport || '')}">
+        </div>
+        <div class="list-field-sm">
+          <label>Subset</label>
+          <input class="list-input" data-field="subsetName" value="${escapeAttr(card.subsetName || '')}">
+        </div>
+        <div class="list-field-sm">
+          <label>Condition</label>
+          <input class="list-input" data-field="condition" value="${escapeAttr(card.condition || '')}">
+        </div>
+      </div>
+      <div class="list-fields-row">
+        <div class="list-field-sm">
+          <label>Grading</label>
+          <input class="list-input" data-field="gradingCompany" value="${escapeAttr(card.gradingCompany || '')}">
+        </div>
+        <div class="list-field-sm">
+          <label>Grade</label>
+          <input class="list-input" data-field="grade" value="${escapeAttr(card.grade || '')}">
+        </div>
+        <div class="list-field-sm">
+          <label>Price</label>
+          <input class="list-input" data-field="price" value="${escapeAttr(card.price || '')}">
+        </div>
+      </div>
+    </div>
+    <div class="list-row-actions">
+      <span class="list-card-num">#${card.cardNum}</span>
+      <span class="status-pill status-${statusClass}">${getStatusText(card)}</span>
+      ${syncedBadge}
+      <div class="list-row-btns">
+        <button class="btn btn-primary btn-small list-save-btn" disabled>Save</button>
+        <button class="btn btn-secondary btn-small list-approve-btn" ${card.status !== 'identified' ? 'disabled' : ''}>OK</button>
+      </div>
+    </div>
+  `;
+
+  wireListRowEvents(row, card.cardNum);
+  return row;
+}
+
+function wireListRowEvents(row, cardNum) {
+  // Dirty tracking on inputs
+  row.querySelectorAll('.list-input').forEach(input => {
+    input.addEventListener('input', () => {
+      if (!listDirtyCards.has(cardNum)) {
+        listDirtyCards.set(cardNum, new Set());
+      }
+      listDirtyCards.get(cardNum).add(input.dataset.field);
+      input.classList.add('dirty');
+      const saveBtn = row.querySelector('.list-save-btn');
+      if (saveBtn) saveBtn.disabled = false;
+    });
+  });
+
+  // Save button
+  const saveBtn = row.querySelector('.list-save-btn');
+  if (saveBtn) {
+    saveBtn.addEventListener('click', () => saveListRow(cardNum));
+  }
+
+  // Approve button
+  const approveBtn = row.querySelector('.list-approve-btn');
+  if (approveBtn) {
+    approveBtn.addEventListener('click', () => approveListRow(cardNum));
+  }
+
+  // Click thumbnail to expand detail panel
+  const thumb = row.querySelector('.list-row-thumb');
+  if (thumb) {
+    thumb.addEventListener('click', () => expandCard(cardNum));
+    thumb.style.cursor = 'pointer';
+  }
+}
+
+async function saveListRow(cardNum) {
+  const card = cards.get(cardNum);
+  if (!card || !card.cardId) {
+    addLogEntry({ type: 'warning', message: `Card #${cardNum} has no server ID yet` });
+    return;
+  }
+
+  const row = document.getElementById(`list-${cardNum}`);
+  if (!row) return;
+
+  const fieldToServer = {
+    player: 'player', year: 'year', cardNumber: 'card_number',
+    set: 'set_name', parallel: 'parallel', serialNumber: 'serial_number',
+    sport: 'sport', price: 'price', gradingCompany: 'grading_company',
+    grade: 'grade', team: 'team', condition: 'condition',
+    subsetName: 'subset_name'
+  };
+
+  const updates = {};
+  row.querySelectorAll('.list-input').forEach(input => {
+    const field = input.dataset.field;
+    const serverField = fieldToServer[field] || field;
+
+    if (field === 'serialNumber') {
+      const val = input.value.trim();
+      if (val.includes('/')) {
+        const [serial, numTo] = val.split('/');
+        updates['serial_number'] = serial.trim();
+        updates['numbered_to'] = numTo.trim();
+        updates['numbered'] = true;
+      } else {
+        updates['serial_number'] = val;
+      }
+    } else {
+      updates[serverField] = input.value;
+    }
+  });
+
+  const saveBtn = row.querySelector('.list-save-btn');
+  if (saveBtn) {
+    saveBtn.disabled = true;
+    saveBtn.textContent = '...';
+  }
+
+  try {
+    const result = await window.api.updateCard(card.cardId, updates);
+    if (result.success) {
+      // Update local card state
+      Object.assign(card, updates);
+      card.name = updates.player || card.name;
+      if (updates.serial_number) card.serialNumber = updates.serial_number;
+      if (updates.numbered_to) card.numberedTo = updates.numbered_to;
+      if (updates.set_name) card.set = updates.set_name;
+      if (updates.card_number) card.cardNumber = updates.card_number;
+      if (updates.grading_company) card.gradingCompany = updates.grading_company;
+      if (updates.subset_name) card.subsetName = updates.subset_name;
+
+      // Clear dirty
+      listDirtyCards.delete(cardNum);
+      row.querySelectorAll('.list-input.dirty').forEach(i => i.classList.remove('dirty'));
+
+      // Update grid card too
+      const gridEl = document.getElementById(`grid-${cardNum}`);
+      if (gridEl) updateGridCardDOM(gridEl, card);
+
+      if (saveBtn) {
+        saveBtn.textContent = 'Done';
+        setTimeout(() => { saveBtn.textContent = 'Save'; }, 1200);
+      }
+      addLogEntry({ type: 'success', message: `Card #${cardNum} updated` });
+    } else {
+      if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = 'Save'; }
+      addLogEntry({ type: 'error', message: `Update failed: ${result.error}` });
+    }
+  } catch (err) {
+    if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = 'Save'; }
+    addLogEntry({ type: 'error', message: `Save error: ${err.message}` });
+  }
+}
+
+async function approveListRow(cardNum) {
+  const card = cards.get(cardNum);
+  if (!card || !card.cardId) return;
+
+  const result = await window.api.approveCard(card.cardId);
+  if (result.success) {
+    card.status = 'approved';
+    updateListRow(cardNum);
+    const gridEl = document.getElementById(`grid-${cardNum}`);
+    if (gridEl) updateGridCardDOM(gridEl, card);
+    addLogEntry({ type: 'success', message: `Card #${cardNum} approved` });
+  }
+}
+
+function updateListRow(cardNum) {
+  const row = document.getElementById(`list-${cardNum}`);
+  if (!row) return;
+  const card = cards.get(cardNum);
+  if (!card) return;
+
+  // Update thumbnail
+  const img = row.querySelector('.list-row-thumb img');
+  const frontSrc = card.thumbnail || filePathToUrl(card.frontPath) || '';
+  if (img && frontSrc && img.src !== frontSrc) img.src = frontSrc;
+
+  // Update status pill
+  const pill = row.querySelector('.status-pill');
+  if (pill) {
+    pill.className = `status-pill status-${card.status}`;
+    pill.textContent = getStatusText(card);
+  }
+
+  // Update ready border
+  row.classList.toggle('list-row-ready', card.status === 'identified' || card.status === 'approved');
+
+  // Update overlay
+  const thumbDiv = row.querySelector('.list-row-thumb');
+  let overlay = row.querySelector('.grid-card-overlay');
+  const overlayHtml = getStatusOverlay(card.status);
+  if (overlayHtml) {
+    if (!overlay) {
+      thumbDiv.insertAdjacentHTML('beforeend', overlayHtml);
+    } else {
+      overlay.outerHTML = overlayHtml;
+    }
+  } else if (overlay) {
+    overlay.remove();
+  }
+
+  // Update synced badge
+  const actionsDiv = row.querySelector('.list-row-actions');
+  let syncedBadge = row.querySelector('.list-synced-badge');
+  if (card.syncedToSlabTrack && !syncedBadge) {
+    const btnsDiv = row.querySelector('.list-row-btns');
+    if (btnsDiv) btnsDiv.insertAdjacentHTML('beforebegin', '<span class="list-synced-badge">Synced</span>');
+  }
+
+  // Update approve button state
+  const approveBtn = row.querySelector('.list-approve-btn');
+  if (approveBtn) approveBtn.disabled = card.status !== 'identified';
+
+  // Update non-dirty inputs
+  const dirtyFields = listDirtyCards.get(cardNum) || new Set();
+  const fieldMap = {
+    player: card.player || card.name || '', year: card.year || '',
+    cardNumber: card.cardNumber || '', set: card.set || '',
+    parallel: card.parallel || '', serialNumber: formatSerialNumber(card),
+    sport: card.sport || '', price: card.price || '',
+    gradingCompany: card.gradingCompany || '', grade: card.grade || '',
+    team: card.team || '', condition: card.condition || '',
+    subsetName: card.subsetName || ''
+  };
+
+  row.querySelectorAll('.list-input').forEach(input => {
+    const field = input.dataset.field;
+    if (dirtyFields.has(field) || document.activeElement === input) return;
+    if (fieldMap[field] !== undefined) input.value = fieldMap[field];
+  });
+}
+
+function renderListCard(cardNum, staggerDelay = 0) {
+  if (!elements.cardList) return;
+  const card = cards.get(cardNum);
+  if (!card) return;
+
+  const existing = document.getElementById(`list-${cardNum}`);
+  if (existing) {
+    updateListRow(cardNum);
+    return;
+  }
+
+  // Only add if currently in list view or creating for first time
+  const row = buildListRow(card);
+  if (staggerDelay > 0) {
+    row.style.animationDelay = `${staggerDelay}ms`;
+  }
+
+  // Prepend (newest first)
+  if (elements.cardList.firstChild) {
+    elements.cardList.insertBefore(row, elements.cardList.firstChild);
+  } else {
+    elements.cardList.appendChild(row);
+  }
 }
 
 // Initialize when DOM is ready

@@ -33,11 +33,14 @@ const store = new Store({
       scanMode: 'folder',       // 'direct' or 'folder'
       scannerId: null,          // Selected WIA scanner device ID
       scanDpi: 300,
-      scanDuplex: true
+      scanDuplex: true,
+      viewPreference: 'grid'
     },
     credentials: null,
     authToken: null,
-    slabtrackInfo: null
+    slabtrackInfo: null,
+    appMode: 'standalone',
+    selectedCollectionId: null
   }
 });
 
@@ -51,6 +54,15 @@ const store = new Store({
     console.log('[migrate] Updated scan dimensions to 4.5x5.0 for feeder margin');
   }
 }
+
+// File logging for debug
+const logFile = path.join(os.tmpdir(), 'slabtrack-scanner-debug.log');
+function debugLog(...args) {
+  const msg = `[${new Date().toISOString()}] ${args.join(' ')}\n`;
+  fs.appendFileSync(logFile, msg);
+  console.log(...args);
+}
+debugLog('=== SlabTrack Scanner starting ===');
 
 // App state
 let mainWindow = null;
@@ -163,22 +175,9 @@ async function createWindow() {
   });
 
   const htmlPath = path.join(__dirname, 'renderer/index.html');
-  console.log('[DEBUG] Loading HTML from:', htmlPath);
-  console.log('[DEBUG] File exists:', fs.existsSync(htmlPath));
-  console.log('[DEBUG] __dirname:', __dirname);
-  // Read first 500 chars to check content
-  const htmlContent = fs.readFileSync(htmlPath, 'utf8');
-  console.log('[DEBUG] HTML contains scan-preview:', htmlContent.includes('scan-preview'));
-  console.log('[DEBUG] HTML contains card-detail-panel:', htmlContent.includes('card-detail-panel'));
-  console.log('[DEBUG] HTML contains grid-card-image:', htmlContent.includes('grid-card-image'));
-
-  // Clear ALL caches before loading to ensure latest files
-  await mainWindow.webContents.session.clearCache();
-  await mainWindow.webContents.session.clearStorageData({ storages: ['cachestorage'] });
-
   mainWindow.loadFile(htmlPath);
 
-  // Show window when ready, then open DevTools
+  // Show window when ready
   mainWindow.once('ready-to-show', () => {
     const settings = store.get('settings');
     if (!settings.startMinimized) {
@@ -198,6 +197,27 @@ async function createWindow() {
 
   mainWindow.on('closed', () => {
     mainWindow = null;
+  });
+
+  // Dev shortcuts
+  mainWindow.webContents.on('before-input-event', (event, input) => {
+    // Ctrl+Shift+R: force reload (clear cache + reload)
+    if (input.control && input.shift && input.key === 'R') {
+      event.preventDefault();
+      mainWindow.webContents.session.clearCache().then(() => {
+        mainWindow.webContents.reloadIgnoringCache();
+      });
+    }
+    // F5: normal reload
+    if (input.key === 'F5') {
+      event.preventDefault();
+      mainWindow.webContents.reloadIgnoringCache();
+    }
+    // F12: toggle DevTools
+    if (input.key === 'F12') {
+      event.preventDefault();
+      mainWindow.webContents.toggleDevTools();
+    }
   });
 }
 
@@ -312,6 +332,7 @@ ipcMain.on('window-close', () => mainWindow && mainWindow.hide());
 
 // Login
 ipcMain.handle('login', async (event, email, password) => {
+  debugLog('[LOGIN] Email login attempt:', email);
   try {
     const response = await axios.post(`${API_BASE}/api/auth/login`, {
       email,
@@ -323,10 +344,28 @@ ipcMain.handle('login', async (event, email, password) => {
       store.set('authToken', authToken);
       store.set('credentials', { email });
 
+      // Fetch tier + credits info via preflight
+      try {
+        const preflight = await axios.get(`${API_BASE}/api/desktop-scan/preflight`, {
+          headers: { Authorization: `Bearer ${authToken}` }
+        });
+        if (preflight.data.success) {
+          const slabtrackInfo = {
+            username: email,
+            tier: preflight.data.tier || 'free',
+            scansRemaining: preflight.data.scansRemaining,
+            batchLimit: preflight.data.batchLimit
+          };
+          store.set('slabtrackInfo', slabtrackInfo);
+        }
+      } catch (e) {
+        console.error('Preflight after login failed:', e.message);
+      }
+
       // Connect WebSocket after login
       connectWebSocket();
 
-      return { success: true, user: response.data.user };
+      return { success: true, user: response.data.user, slabtrackInfo: store.get('slabtrackInfo') };
     }
 
     return { success: false, error: 'Invalid response from server' };
@@ -339,37 +378,43 @@ ipcMain.handle('login', async (event, email, password) => {
   }
 });
 
-// SlabTrack Login (token-based)
+// SlabTrack Login (API token-based — validates via preflight endpoint)
 ipcMain.handle('slabtrack-login', async (event, token) => {
   try {
-    const response = await axios.post(`${API_BASE}/api/auth/slabtrack-login`, {
-      token
+    // Validate the API token by calling preflight with X-API-Token header
+    const response = await axios.get(`${API_BASE}/api/desktop-scan/preflight`, {
+      headers: { 'X-API-Token': token }
     });
 
-    if (response.data.token) {
-      authToken = response.data.token;
+    if (response.data.success) {
+      // Token is valid — store it as the primary auth method
+      authToken = token; // Use API token directly
       store.set('authToken', authToken);
 
-      // Store SlabTrack-specific info (tier, username, api token for desktop-scan)
       const slabtrackInfo = {
-        username: response.data.user?.username || response.data.user?.email,
-        tier: response.data.user?.tier || 'free',
-        slabtrackId: response.data.user?.slabtrackId,
-        apiToken: token // Store the API token for X-API-Token header
+        username: response.data.tier || 'user',
+        tier: response.data.tier || 'free',
+        apiToken: token,
+        scansRemaining: response.data.scansRemaining,
+        batchLimit: response.data.batchLimit
       };
       store.set('slabtrackInfo', slabtrackInfo);
 
       connectWebSocket();
 
-      return { success: true, user: response.data.user, slabtrackInfo };
+      return { success: true, user: { tier: response.data.tier }, slabtrackInfo };
     }
 
-    return { success: false, error: 'Invalid response from server' };
+    return { success: false, error: response.data.error || 'Invalid token' };
   } catch (error) {
     console.error('SlabTrack login error:', error.response?.data || error.message);
+    const errData = error.response?.data;
+    if (errData?.upgradeRequired) {
+      return { success: false, error: errData.error };
+    }
     return {
       success: false,
-      error: error.response?.data?.error || 'SlabTrack login failed. Check your token.'
+      error: errData?.error || 'SlabTrack login failed. Check your API token.'
     };
   }
 });
@@ -385,20 +430,37 @@ ipcMain.handle('logout', async () => {
   return { success: true };
 });
 
-// Check auth status
+// Check auth status — try API token first, then Bearer JWT
 ipcMain.handle('check-auth', async () => {
   if (!authToken) {
     return { authenticated: false };
   }
 
+  const slabtrackInfo = store.get('slabtrackInfo') || null;
+
   try {
+    // If we have an API token stored, validate via preflight
+    if (slabtrackInfo?.apiToken) {
+      const response = await axios.get(`${API_BASE}/api/desktop-scan/preflight`, {
+        headers: { 'X-API-Token': slabtrackInfo.apiToken }
+      });
+      if (response.data.success) {
+        connectWebSocket();
+        // Update cached credits
+        slabtrackInfo.tier = response.data.tier;
+        slabtrackInfo.scansRemaining = response.data.scansRemaining;
+        store.set('slabtrackInfo', slabtrackInfo);
+        return { authenticated: true, user: { tier: response.data.tier }, slabtrackInfo };
+      }
+    }
+
+    // Fallback: try Bearer JWT via /api/auth/me
     const response = await axios.get(`${API_BASE}/api/auth/me`, {
       headers: { Authorization: `Bearer ${authToken}` }
     });
 
     if (response.data.id) {
       connectWebSocket();
-      const slabtrackInfo = store.get('slabtrackInfo') || null;
       return { authenticated: true, user: response.data, slabtrackInfo };
     }
   } catch (error) {
@@ -458,6 +520,70 @@ ipcMain.handle('get-settings', () => {
 });
 
 // Save settings
+ipcMain.handle('open-external', (event, url) => {
+  shell.openExternal(url);
+});
+
+// App mode + collection persistence
+ipcMain.handle('save-app-mode', (event, mode) => {
+  store.set('appMode', mode);
+  return { success: true };
+});
+
+ipcMain.handle('save-selected-collection', (event, collectionId) => {
+  store.set('selectedCollectionId', collectionId);
+  return { success: true };
+});
+
+ipcMain.handle('get-app-mode', () => {
+  return store.get('appMode') || 'standalone';
+});
+
+ipcMain.handle('get-selected-collection', () => {
+  return store.get('selectedCollectionId') || null;
+});
+
+// Fetch user's collections from SlabTrack API
+ipcMain.handle('fetch-collections', async () => {
+  try {
+    const slabtrackInfo = store.get('slabtrackInfo');
+    const headers = { 'Content-Type': 'application/json' };
+    if (slabtrackInfo?.apiToken) {
+      headers['X-API-Token'] = slabtrackInfo.apiToken;
+    } else if (authToken) {
+      headers['Authorization'] = `Bearer ${authToken}`;
+    }
+
+    const response = await axios.get(`${API_BASE}/api/collections`, { headers, timeout: 15000 });
+    return { success: true, collections: response.data.collections || response.data || [] };
+  } catch (error) {
+    debugLog('[fetch-collections] ERROR:', error.message);
+    return { success: false, error: error.message, collections: [] };
+  }
+});
+
+// Push cards to a collection
+ipcMain.handle('push-to-collection', async (event, collectionId, cardIds) => {
+  try {
+    const slabtrackInfo = store.get('slabtrackInfo');
+    const headers = { 'Content-Type': 'application/json' };
+    if (slabtrackInfo?.apiToken) {
+      headers['X-API-Token'] = slabtrackInfo.apiToken;
+    } else if (authToken) {
+      headers['Authorization'] = `Bearer ${authToken}`;
+    }
+
+    const response = await axios.post(`${API_BASE}/api/collections/${collectionId}/cards`, {
+      cardIds
+    }, { headers, timeout: 30000 });
+
+    return { success: true, data: response.data };
+  } catch (error) {
+    debugLog('[push-to-collection] ERROR:', error.message);
+    return { success: false, error: error.response?.data?.error || error.message };
+  }
+});
+
 ipcMain.handle('save-settings', (event, newSettings) => {
   const settings = { ...store.get('settings'), ...newSettings };
   store.set('settings', settings);
@@ -1092,7 +1218,7 @@ async function processUploadQueue() {
 }
 
 async function uploadCard({ frontPath, backPath, cardNum }) {
-  console.log(`[uploadCard] Starting scan+upload for card #${cardNum} via SlabTrack`);
+  debugLog(`[uploadCard] Starting scan+upload for card #${cardNum} via SlabTrack`);
   try {
     sendToRenderer('card-status', { cardNum, status: 'uploading' });
     sendToRenderer('log', { type: 'info', message: `Scanning card #${cardNum} via SlabTrack...` });
@@ -1111,10 +1237,19 @@ async function uploadCard({ frontPath, backPath, cardNum }) {
       headers['Authorization'] = `Bearer ${authToken}`;
     }
 
-    const response = await axios.post(`${API_BASE}/api/desktop-scan/single`, {
+    // Include collection_id if monitor mode + collection selected
+    const currentAppMode = store.get('appMode') || 'standalone';
+    const currentCollectionId = store.get('selectedCollectionId') || null;
+    const requestBody = {
       frontImage: frontBase64,
       backImage: backBase64
-    }, {
+    };
+    // Only auto-assign to collection in monitor mode
+    if (currentAppMode === 'monitor' && currentCollectionId) {
+      requestBody.collection_id = currentCollectionId;
+    }
+
+    const response = await axios.post(`${API_BASE}/api/desktop-scan/single`, requestBody, {
       headers,
       maxContentLength: Infinity,
       maxBodyLength: Infinity,
@@ -1122,7 +1257,7 @@ async function uploadCard({ frontPath, backPath, cardNum }) {
     });
 
     const result = response.data;
-    console.log(`[uploadCard] Card #${cardNum} response:`, JSON.stringify(result).substring(0, 300));
+    debugLog(`[uploadCard] Card #${cardNum} response:`, JSON.stringify(result).substring(0, 300));
 
     if (result.success && result.card) {
       stats.scanned++;
@@ -1164,6 +1299,8 @@ async function uploadCard({ frontPath, backPath, cardNum }) {
           cgc10: card.sportscardspro_cgc10,
           sgc10: card.sportscardspro_sgc10
         },
+        collectionAssigned: result.collectionAssigned || false,
+        appMode: currentAppMode,
         status: 'identified',
         thumbnail: card.front_image_url || '',
         back: card.back_image_url || ''
@@ -1181,7 +1318,7 @@ async function uploadCard({ frontPath, backPath, cardNum }) {
       throw new Error(result.error || 'Scan failed');
     }
   } catch (error) {
-    console.error('Upload/scan error:', error.response?.data || error.message);
+    debugLog('[uploadCard] ERROR:', JSON.stringify(error.response?.data || error.message));
     const errMsg = error.response?.data?.error || error.message;
     stats.errors++;
     sendToRenderer('card-status', { cardNum, status: 'error', error: errMsg });
@@ -1198,6 +1335,14 @@ async function uploadCard({ frontPath, backPath, cardNum }) {
 // WebSocket connection for real-time updates
 
 function connectWebSocket() {
+  // SlabTrack desktop scan uses HTTP API (not WebSocket) for card identification.
+  // Skip WS connection entirely — just report "connected" to the UI.
+  debugLog('[WS] Skipping WebSocket — desktop scan uses HTTP API');
+  sendToRenderer('connection-status', { connected: true });
+  sendToRenderer('log', { type: 'success', message: 'Connected to SlabTrack' });
+  return;
+
+  // --- Legacy WS code below (kept for reference, never reached) ---
   if (ws && ws.readyState === WebSocket.OPEN) {
     return;
   }

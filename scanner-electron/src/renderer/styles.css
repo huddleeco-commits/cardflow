@@ -461,6 +461,7 @@ body {
 /* Main View Layout */
 #main-view {
   display: flex;
+  overflow: hidden;
 }
 
 /* Sidebar */
@@ -471,6 +472,14 @@ body {
   display: flex;
   flex-direction: column;
   padding: 20px;
+  overflow: hidden;
+}
+
+.sidebar-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 
 .sidebar-header {
@@ -579,7 +588,8 @@ body {
 
 /* Sidebar Footer */
 .sidebar-footer {
-  margin-top: auto;
+  flex-shrink: 0;
+  padding-top: 8px;
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -818,6 +828,7 @@ body {
 .grid-card-status.status-uploading { color: var(--warning); }
 .grid-card-status.status-identifying { color: var(--cyan); }
 .grid-card-status.status-identified { color: var(--success); }
+.grid-card-status.status-review { color: var(--warning); }
 .grid-card-status.status-approved { color: var(--cyan); }
 .grid-card-status.status-error { color: var(--error); }
 
@@ -1217,6 +1228,7 @@ body {
 .status-uploading { background: rgba(245, 158, 11, 0.15); color: var(--warning); }
 .status-identifying { background: var(--cyan-dim); color: var(--cyan); }
 .status-identified { background: rgba(34, 197, 94, 0.15); color: var(--success); }
+.status-review { background: rgba(234, 179, 8, 0.15); color: var(--warning); }
 .status-approved { background: rgba(0, 255, 200, 0.15); color: var(--cyan); }
 .status-rejected { background: rgba(239, 68, 68, 0.15); color: var(--error); }
 .status-error { background: rgba(239, 68, 68, 0.15); color: var(--error); }
@@ -1852,4 +1864,359 @@ body {
 /* Preset dropdown in sidebar */
 #scan-preset {
   width: 100%;
+}
+
+/* =====================================================
+   Serial Number Badge on Grid Card
+   ===================================================== */
+.grid-card-serial {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  background: rgba(168, 85, 247, 0.85);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 3px;
+  z-index: 1;
+}
+
+/* Synced cloud icon on grid card */
+.grid-card-synced {
+  position: absolute;
+  bottom: 4px;
+  left: 4px;
+  color: var(--success);
+  font-size: 14px;
+  filter: drop-shadow(0 1px 2px rgba(0,0,0,0.5));
+  z-index: 1;
+}
+
+/* =====================================================
+   Card Entrance Animation (streaming feel)
+   ===================================================== */
+@keyframes cardSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-12px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.card-entrance {
+  animation: cardSlideIn 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* =====================================================
+   Grid Card Status Overlay
+   ===================================================== */
+.grid-card-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  background: rgba(10, 10, 15, 0.65);
+  backdrop-filter: blur(3px);
+  z-index: 1;
+  transition: opacity 0.3s ease;
+}
+
+.grid-card-overlay.hidden {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.overlay-spinner {
+  width: 24px;
+  height: 24px;
+  border: 3px solid transparent;
+  border-top-color: var(--cyan);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+.overlay-text {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--cyan);
+}
+
+.overlay-text.uploading { color: var(--warning); }
+.overlay-spinner.uploading { border-top-color: var(--warning); }
+
+/* =====================================================
+   Synced Counter in Feed Header
+   ===================================================== */
+.feed-synced {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--success);
+  margin-left: 6px;
+}
+
+.synced-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--success);
+}
+
+/* =====================================================
+   List View Container & Rows
+   ===================================================== */
+.card-list-container {
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0;
+  padding-right: 4px;
+}
+
+.card-list-container::-webkit-scrollbar {
+  width: 6px;
+}
+
+.card-list-container::-webkit-scrollbar-track {
+  background: var(--bg-elevated);
+  border-radius: 3px;
+}
+
+.card-list-container::-webkit-scrollbar-thumb {
+  background: var(--text-muted);
+  border-radius: 3px;
+}
+
+.card-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.list-row {
+  display: flex;
+  gap: 12px;
+  padding: 10px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  animation: cardSlideIn 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
+  transition: border-color var(--transition-fast);
+}
+
+.list-row:hover {
+  border-color: var(--text-muted);
+}
+
+.list-row-ready {
+  border-left: 3px solid var(--success);
+}
+
+/* Thumbnail area */
+.list-row-thumb {
+  width: 80px;
+  flex-shrink: 0;
+  position: relative;
+}
+
+.list-row-thumb img {
+  width: 100%;
+  height: auto;
+  border-radius: var(--radius-sm);
+  display: block;
+  background: var(--bg-elevated);
+}
+
+.list-row-thumb .grid-card-overlay {
+  border-radius: var(--radius-sm);
+}
+
+/* Fields grid */
+.list-row-fields {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.list-fields-row {
+  display: flex;
+  gap: 8px;
+}
+
+.list-field {
+  flex: 1;
+  min-width: 0;
+}
+
+.list-field-sm {
+  flex: 0 0 90px;
+}
+
+.list-field label {
+  display: block;
+  font-size: 9px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  margin-bottom: 2px;
+}
+
+.list-input {
+  width: 100%;
+  padding: 4px 8px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text-primary);
+  font-size: 12px;
+  transition: border-color var(--transition-fast);
+}
+
+.list-input:focus {
+  outline: none;
+  border-color: var(--border-focus);
+  box-shadow: 0 0 0 2px var(--cyan-dim);
+}
+
+.list-input.dirty {
+  border-color: var(--warning);
+  background: rgba(245, 158, 11, 0.05);
+}
+
+/* Actions column */
+.list-row-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 4px;
+  min-width: 80px;
+}
+
+.list-card-num {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.list-synced-badge {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--success);
+  background: rgba(34, 197, 94, 0.1);
+  padding: 2px 6px;
+  border-radius: 8px;
+}
+
+.list-row-btns {
+  display: flex;
+  gap: 4px;
+}
+
+.list-row-btns .btn {
+  padding: 4px 8px;
+  font-size: 11px;
+}
+
+/* View Collection button in sidebar */
+.btn-view-collection {
+  color: var(--success);
+  gap: 6px;
+  font-size: 13px;
+}
+
+.btn-view-collection:hover {
+  background: rgba(34, 197, 94, 0.1);
+}
+
+/* =============================================
+   Monitor Mode
+   ============================================= */
+
+body.monitor-mode .card-detail-panel,
+body.monitor-mode .activity-log,
+body.monitor-mode .batch-summary,
+body.monitor-mode .card-list-container,
+body.monitor-mode .filter-bar,
+body.monitor-mode .view-toggle,
+body.monitor-mode .bulk-toolbar {
+  display: none !important;
+}
+
+body.monitor-mode .grid-card {
+  cursor: alias;
+}
+
+body.monitor-mode .grid-card-year {
+  display: none;
+}
+
+body.monitor-mode .content-header-right {
+  display: none;
+}
+
+/* Collection badge on grid card */
+.grid-card-collection-badge {
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  font-size: 14px;
+  line-height: 1;
+  filter: drop-shadow(0 1px 2px rgba(0,0,0,0.5));
+  z-index: 2;
+}
+
+.grid-card-review-badge {
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  background: rgba(234, 179, 8, 0.9);
+  color: #000;
+  font-size: 9px;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  z-index: 2;
+}
+
+/* Collection section */
+#collection-select {
+  width: 100%;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px 12px;
+  color: var(--text-primary);
+  font-size: 13px;
+}
+
+#collection-select:focus {
+  border-color: var(--cyan);
+  outline: none;
+}
+
+.section-hint {
+  display: block;
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 4px;
+}
+
+/* App Mode toggle reuses scan-mode-toggle styling */
+.app-mode-toggle {
+  margin-bottom: 0;
 }
